@@ -184,10 +184,19 @@ created_at: "{iso_time}"
         for cf in files[:max_days]:
             day = os.path.basename(cf).replace(".md", "")
             content = self._read_file(cf)
-            lines = [l for l in content.splitlines()
-                     if l.startswith("### [") or (l.strip() and not l.startswith(("#", "-", "---")))]
-            snippet = "\n".join(lines[-6:]) if lines else "No turns."
-            parts.append(f"#### [[conversations/{day}|{day}]]\n{snippet[:400]}")
+            if "status: summarized" in content or "type: conversation-summary" in content:
+                clean_body = re.sub(r"^---[\s\S]*?---\n", "", content).strip()
+                clean_body = re.sub(r"^# 💬[^\n]*\n", "", clean_body).strip()
+                clean_body = re.sub(r"^-\s+\*\*Operator\*\*:[^\n]*\n", "", clean_body).strip()
+                clean_body = re.sub(r"^-\s+\*\*System\*\*:[^\n]*\n", "", clean_body).strip()
+                clean_body = re.sub(r"^-\s+\*\*Index\*\*:[^\n]*\n", "", clean_body).strip()
+                clean_body = re.sub(r"^---\n", "", clean_body).strip()
+                parts.append(f"#### [[conversations/{day}|{day} (Summary)]]\n{clean_body[:800]}")
+            else:
+                lines = [l for l in content.splitlines()
+                         if l.startswith("### [") or (l.strip() and not l.startswith(("#", "-", "---")))]
+                snippet = "\n".join(lines[-6:]) if lines else "No turns."
+                parts.append(f"#### [[conversations/{day}|{day} (Active)]]\n{snippet[:400]}")
         return "\n\n".join(parts)
 
     # ─── Fact Notes CRUD ─────────────────────────────────────────────────

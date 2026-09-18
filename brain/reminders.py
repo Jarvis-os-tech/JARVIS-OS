@@ -239,8 +239,20 @@ async def run_reminder_scheduler(
     and triggers instant UI WebSocket chimes and proactive voice alerts.
     """
     log_info("Temporal Reminder Scheduler active (2s loop).", source="Reminders")
+    last_day_checked = time.strftime("%Y-%m-%d")
     while True:
         try:
+            # 0. Check for midnight day rollover to initialize new daily session and summarize prior days
+            current_day = time.strftime("%Y-%m-%d")
+            if current_day != last_day_checked:
+                last_day_checked = current_day
+                log_info(f"Midnight day rollover detected ({current_day}). Initializing new daily session...", source="Temporal")
+                try:
+                    from brain.memory import memory_engine
+                    memory_engine.init_daily_session()
+                except Exception as roll_err:
+                    log_error(f"Failed to handle daily session rollover: {roll_err}", source="Temporal")
+
             due_items = reminder_manager.check_due_reminders()
             for item in due_items:
                 log_reminder(f"🔔 DUE NOW: '{item['text']}' (Scheduled for {item['dueDateString']})", action="ALERT")

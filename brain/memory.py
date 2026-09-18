@@ -238,6 +238,18 @@ class DualStoreMemory:
             "full_status": self._fm.status(),
         }
 
+    async def summarize_conversation_day(self, date_str: str, force: bool = False) -> Dict[str, Any]:
+        """Summarize a specific conversation day log."""
+        from memory.python.summarizer import conversation_summarizer
+        from memory.python.config import CONVERSATIONS_DIR
+        target_path = os.path.join(CONVERSATIONS_DIR, f"{date_str}.md" if not date_str.endswith(".md") else date_str)
+        return await conversation_summarizer.summarize_file(target_path, force=force)
+
+    def trigger_background_conversation_summary(self, exclude_today: bool = True):
+        """Trigger background scan for unsummarized previous days."""
+        from memory.python.summarizer import conversation_summarizer
+        conversation_summarizer.trigger_background_scan(exclude_today=exclude_today)
+
 
 # ─── Singleton (backward-compatible export) ──────────────────────────────
 memory_engine = DualStoreMemory.get_instance()

@@ -1253,6 +1253,17 @@ class ActuatorDispatcher:
             st = cog.status() if cog else {"enabled": False, "connected": False}
             return {"success": True, "result": st}
 
+        elif tool in ["summarize_conversation", "summarize_daily_conversation"]:
+            target_date = args.get("date")
+            force = args.get("force", False)
+            if target_date:
+                res = await memory_engine.summarize_conversation_day(target_date, force=force)
+                return {"success": True, "result": res}
+            else:
+                from memory.python.summarizer import conversation_summarizer
+                res = await conversation_summarizer.summarize_unsummarized_days(exclude_today=not force)
+                return {"success": True, "result": res}
+
         # ─── CODEBASE INTELLIGENCE & KNOWLEDGE GRAPH ─────────────────────────
         elif tool in [
             "codebase_search_graph",
@@ -1616,6 +1627,7 @@ author: J.A.R.V.I.S. Capability Forge
             {"name": "cognee_remember", "description": "Store structured text, facts, or instructions directly in the Cognee Universal Knowledge Graph.", "parameters": {"type": "OBJECT", "properties": {"text": {"type": "STRING", "description": "Knowledge content or fact to ingest"}, "dataset": {"type": "STRING", "description": "Target dataset namespace (default: jarvis_knowledge)"}}, "required": ["text"]}},
             {"name": "cognee_recall", "description": "Query Cognee Universal Knowledge Graph using graph completion and semantic vector retrieval.", "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING", "description": "Natural language query to search"}, "dataset": {"type": "STRING", "description": "Target dataset namespace"}, "limit": {"type": "INTEGER", "description": "Max results to return"}}, "required": ["query"]}},
             {"name": "cognee_status", "description": "Inspect Cognee Universal Memory service connection, graph status, and MCP URL.", "parameters": {"type": "OBJECT", "properties": {}, "required": []}},
+            {"name": "summarize_conversation", "description": "Summarize a completed day's conversation log into an executive structured briefing in the memory vault (Option A). If date is omitted, summarizes all unsummarized previous days.", "parameters": {"type": "OBJECT", "properties": {"date": {"type": "STRING", "description": "Date to summarize in YYYY-MM-DD format (e.g. '2026-09-18')"}, "force": {"type": "BOOLEAN", "description": "Force re-summarization even if already marked summarized"}}, "required": []}},
             # ─── CAPABILITY FORGE TOOLS (Ada-SI) ─────────────────────────────────
             {"name": "forge_custom_tool", "description": "Synthesize, verify, and hot-reload a new custom tool into J.A.R.V.I.S. at runtime when a capability gap is detected.", "parameters": {"type": "OBJECT", "properties": {"name": {"type": "STRING", "description": "Identifier for the new tool (e.g. 'coingecko_price_tracker')"}, "description": {"type": "STRING", "description": "Tool functionality summary"}, "code": {"type": "STRING", "description": "Python source code implementing get_tool_schema() and run(**kwargs)"}, "test_code": {"type": "STRING", "description": "Python test code verifying the tool"}, "requirements": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Pip dependencies needed"}}, "required": ["name", "code"]}},
             {"name": "list_custom_tools", "description": "List all dynamically forged tools and their promotion status.", "parameters": {"type": "OBJECT", "properties": {}, "required": []}},

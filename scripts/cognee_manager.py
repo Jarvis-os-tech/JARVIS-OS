@@ -23,13 +23,123 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from dotenv import load_dotenv
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+except ImportError:
+    pass
 
 from memory.python.cognee_bridge import cognee_bridge, CogneeBridge
 
 
 COMPOSE_FILE = os.path.join(PROJECT_ROOT, "docker-compose.cognee.yml")
+
+
+def patch_cognee_environment(
+    email: str = None,
+    password: str = None,
+    name: str = None
+):
+    """
+    Ensure user credentials, superuser/verified flags, and UI presentation
+    match operator preferences across Cognee backend and frontend.
+    """
+    email = email or os.getenv("COGNEE_USER_EMAIL", "operator@jarvis-os.local")
+    password = password or os.getenv("COGNEE_USER_PASSWORD", "JarvisOperatorPass123!")
+    name = name or os.getenv("COGNEE_USER_NAME", "JARVIS Operator")
+    print(f"[Cognee Manager] 🔧 Synchronizing operator credentials ({email})...")
+
+    # 1. Update backend database permissions
+    try:
+        sql_cmd = (
+            f"import sqlite3; "
+            f"conn = sqlite3.connect('/cognee-storage/system/databases/cognee_db'); "
+            f"conn.execute(\"UPDATE users SET is_verified = 1, is_superuser = 1 WHERE email = '{email}'\"); "
+            f"conn.commit()"
+        )
+        res = subprocess.run(
+            ["docker", "exec", "jarvis-cognee", "python", "-c", sql_cmd],
+            capture_output=True, text=True
+        )
+        if res.returncode == 0:
+            print("   ✅ Backend user verified as superuser.")
+        else:
+            print(f"   ⚠️ Could not update user table: {res.stderr.strip()}")
+    except Exception as e:
+        print(f"   ⚠️ Error communicating with jarvis-cognee: {e}")
+
+    # 2. Patch Cognee UI chunks for user presentation and signout redirection
+    patch_script = f"""
+const fs = require('fs');
+const path = require('path');
+
+function walk(dir) {{
+  let results = [];
+  try {{
+    const list = fs.readdirSync(dir);
+    list.forEach(file => {{
+      file = path.join(dir, file);
+      const stat = fs.statSync(file);
+      if (stat && stat.isDirectory()) {{
+        results = results.concat(walk(file));
+      }} else if (file.endsWith('.js') || file.endsWith('.html') || file.endsWith('.json')) {{
+        results.push(file);
+      }}
+    }});
+  }} catch (e) {{}}
+  return results;
+}}
+
+const files = walk('/app/.next');
+let modified = 0;
+
+for (const file of files) {{
+  let content = fs.readFileSync(file, 'utf8');
+  let changed = false;
+
+  if (content.includes('local@cognee.local')) {{
+    content = content.replaceAll('local@cognee.local', '{email}');
+    changed = true;
+  }}
+  if (content.includes('Local User')) {{
+    content = content.replaceAll('Local User', '{name}');
+    changed = true;
+  }}
+  if (content.includes('default_user@example.com')) {{
+    content = content.replaceAll('default_user@example.com', '{email}');
+    changed = true;
+  }}
+  if (content.includes('default_password')) {{
+    content = content.replaceAll('default_password', '{password}');
+    changed = true;
+  }}
+  if (content.includes('new URL("/local-login",e.url)')) {{
+    content = content.replace(
+      'let n=t.NextResponse.redirect(new URL("/local-login",e.url));return n.cookies.set("fastapiusersauth","",{{maxAge:0,path:"/"}}),n',
+      'let h=e.headers.get("host")||"localhost:8025",proto=e.headers.get("x-forwarded-proto")||"http",n=t.NextResponse.redirect(proto+"://"+h+"/local-login");return n.cookies.set("fastapiusersauth","",{{maxAge:0,path:"/"}}),n.cookies.set("auth_token","",{{maxAge:0,path:"/"}}),n'
+    );
+    changed = true;
+  }}
+
+  if (changed) {{
+    fs.writeFileSync(file, content);
+    modified++;
+  }}
+}}
+console.log('Patched ' + modified + ' files in cognee-ui.');
+"""
+    try:
+        res = subprocess.run(
+            ["docker", "exec", "-u", "0", "jarvis-cognee-ui", "node", "-e", patch_script],
+            capture_output=True, text=True
+        )
+        if res.returncode == 0:
+            print("   ✅ Cognee UI patched with operator credentials and signout routing.")
+            subprocess.run(["docker", "restart", "jarvis-cognee-ui"], capture_output=True)
+        else:
+            print(f"   ⚠️ Could not patch UI chunks: {res.stderr.strip()}")
+    except Exception as e:
+        print(f"   ⚠️ Error communicating with jarvis-cognee-ui: {e}")
 
 
 def cmd_up():
@@ -42,6 +152,7 @@ def cmd_up():
             if cognee_bridge.is_available(force=True):
                 print(f"[Cognee Manager] 🟢 Cognee API is online and healthy at {cognee_bridge.api_url}!")
                 print(f"[Cognee Manager] 🔌 Cognee MCP endpoint: {cognee_bridge.mcp_url}")
+                patch_cognee_environment()
                 return
         print("[Cognee Manager] ⚠️ Cognee container started, but health check is taking longer than expected.")
     else:
@@ -118,6 +229,7 @@ def main():
     subparsers.add_parser("status", help="Check status of Cognee services")
     subparsers.add_parser("test", help="Test memory remember and recall operations")
     subparsers.add_parser("sync-vault", help="Sync Obsidian Vault Markdown files into Cognee")
+    subparsers.add_parser("patch-ui", help="Synchronize operator credentials and fix Cognee UI signout/profile")
 
     rem_p = subparsers.add_parser("remember", help="Store a memory in Cognee")
     rem_p.add_argument("text", type=str, help="Text to remember")
@@ -139,6 +251,8 @@ def main():
         cmd_test()
     elif args.action == "sync-vault":
         cmd_sync_vault()
+    elif args.action == "patch-ui":
+        patch_cognee_environment()
     elif args.action == "remember":
         res = cognee_bridge.remember(args.text, dataset_name=args.dataset)
         print(json.dumps(res, indent=2))
