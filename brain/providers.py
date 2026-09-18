@@ -474,6 +474,25 @@ class ProviderManager:
 
         return msg
 
+    async def chat_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        temperature: float = 0.5,
+        max_tokens: int = 2048,
+    ) -> Dict[str, Any]:
+        """Delegate chat completion to active provider with active model."""
+        provider = self.get_active_provider()
+        target_model = model or self.get_active_model()
+        return await provider.chat_completion(
+            messages=messages,
+            model=target_model,
+            tools=tools,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
 
 # Global singleton instance
 llm_manager = ProviderManager.get_instance()

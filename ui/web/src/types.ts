@@ -239,3 +239,39 @@ export interface TaskProgressEvent {
   error?: string;
 }
 
+export interface AgentLogEntry {
+  id: string;
+  timestamp: number | string;
+  agent: 'hermes' | 'ultron' | 'prime' | 'system' | string;
+  taskId?: string;
+  level: 'info' | 'step' | 'tool' | 'success' | 'warn' | 'error';
+  message: string;
+  details?: any;
+}
+
+export interface SubAgentQuickAction {
+  id?: string;
+  label: string;
+  icon?: string;
+  prompt: string;
+  actionType?: string;
+}
+
+export interface SubAgentMeta {
+  id: 'hermes' | 'ultron' | 'prime' | 'system';
+  name: string;
+  tagline: string;
+  role: string;
+  status: 'live' | 'idle' | 'busy' | 'offline' | 'online' | 'standby';
+  badge: string;
+  badgeColor: string;
+  description: string;
+  modelEndpoint?: string;
+  capabilities: string[];
+  quickActions: SubAgentQuickAction[];
+}
+
+export type SelectedTarget =
+  | { type: 'agent'; agentId: 'hermes' | 'ultron' | 'prime' | 'system' }
+  | { type: 'task'; taskId: string };
+

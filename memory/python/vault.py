@@ -45,7 +45,8 @@ class VaultManager:
 
         # Conversation log
         conv_path = os.path.join(CONVERSATIONS_DIR, f"{today}.md")
-        if not os.path.exists(conv_path):
+        new_day_created = not os.path.exists(conv_path)
+        if new_day_created:
             content = f"""---
 title: "Conversation Log: {today}"
 type: conversation-log
@@ -67,6 +68,13 @@ created_at: "{iso_time}"
 
 """
             self._write_file(conv_path, content)
+
+            # Automatically summarize previous unsummarized days
+            try:
+                from .summarizer import conversation_summarizer
+                conversation_summarizer.trigger_background_scan(exclude_today=True)
+            except Exception:
+                pass
 
         # Execution log
         exec_path = os.path.join(EXECUTION_DIR, f"{today}.md")

@@ -138,6 +138,30 @@ class ActuatorDispatcher:
             payload["error"] = error
         await self._broadcast_to_ui(payload)
 
+    async def emit_agent_log(
+        self,
+        agent: str,
+        message: str,
+        level: str = "info",
+        task_id: Optional[str] = None,
+        details: Optional[Any] = None
+    ):
+        """Broadcast live agent activity log entry to the UI execution console."""
+        log_id = f"log_{int(time.time() * 1000)}_{os.urandom(2).hex()}"
+        log_entry = {
+            "id": log_id,
+            "timestamp": int(time.time() * 1000),
+            "agent": agent,
+            "taskId": task_id,
+            "level": level,
+            "message": message,
+            "details": details,
+        }
+        await self._broadcast_to_ui({
+            "type": "agent_log",
+            "log": log_entry,
+        })
+
     def _validate_file_path(self, raw_path: str) -> tuple:
         resolved = os.path.realpath(os.path.expanduser(raw_path))
         for prefix in FORBIDDEN_PATH_PREFIXES:
@@ -1106,7 +1130,9 @@ class ActuatorDispatcher:
             prompt = (args.get("prompt") or args.get("task") or "").strip()
             task_id = f"task_{int(time.time() * 1000)}"
             await self.emit_task_started(task_id, f"Hermes ⟶ {prompt[:50] or 'Deep Reasoning'}", "hermes", prompt=prompt)
+            await self.emit_agent_log("hermes", f"Delegation dispatched: {prompt[:70]}", level="info", task_id=task_id)
             await self.emit_task_progress(task_id, 35, "Hermes deep reasoning & personal vault synthesis...")
+            await self.emit_agent_log("hermes", "Accessing memory vault and initializing reasoning turns...", level="step", task_id=task_id)
 
             res = await exec_hermes(prompt)
             card = {
@@ -1115,8 +1141,10 @@ class ActuatorDispatcher:
                 "data": {"text": res.get("text", ""), "prompt": prompt, "sessionId": res.get("sessionId")},
             }
             if res.get("success"):
+                await self.emit_agent_log("hermes", f"Task completed successfully (session {res.get('sessionId', 'default')})", level="success", task_id=task_id)
                 await self.emit_task_completed(task_id, True, res, display_card=card)
             else:
+                await self.emit_agent_log("hermes", f"Task error: {res.get('error')}", level="error", task_id=task_id)
                 await self.emit_task_completed(task_id, False, res, display_card=card, error=res.get("error"))
             return res
 
@@ -1128,7 +1156,9 @@ class ActuatorDispatcher:
 
             if prompt and (not action or action in ["ultron_delegate", "openclaw_delegate"]):
                 await self.emit_task_started(task_id, f"Ultron ⟶ {prompt[:50]}", "ultron", prompt=prompt)
+                await self.emit_agent_log("ultron", f"Sentinel task dispatched: {prompt[:70]}", level="info", task_id=task_id)
                 await self.emit_task_progress(task_id, 35, "Ultron autonomous execution underway...")
+                await self.emit_agent_log("ultron", "Executing via autonomous OpenClaw agent bridge...", level="step", task_id=task_id)
                 res = await exec_ultron(prompt)
                 card = {
                     "type": "ultron_response",
@@ -1136,16 +1166,24 @@ class ActuatorDispatcher:
                     "data": {"text": res.get("text", ""), "prompt": prompt, "sessionId": res.get("sessionId")},
                 }
                 if res.get("success"):
+                    await self.emit_agent_log("ultron", "Autonomous execution completed.", level="success", task_id=task_id)
                     await self.emit_task_completed(task_id, True, res, display_card=card)
                 else:
+                    await self.emit_agent_log("ultron", f"Execution error: {res.get('error')}", level="error", task_id=task_id)
                     await self.emit_task_completed(task_id, False, res, display_card=card, error=res.get("error"))
                 return res
 
             act = action or "deep_audit"
             await self.emit_task_started(task_id, f"Ultron ⟶ {act.replace('_', ' ').title()}", "ultron", prompt=prompt)
+            await self.emit_agent_log("ultron", f"Sentinel action initiated: {act}", level="info", task_id=task_id)
             await self.emit_task_progress(task_id, 40, f"Executing {act} sweep...")
+            await self.emit_agent_log("ultron", f"Scanning telemetry and executing {act} subroutines...", level="step", task_id=task_id)
             res = await run_ultron_system_action(act, {"subsystem": args.get("subsystem"), "prompt": prompt})
             card = res.get("displayCard")
+            if res.get("success"):
+                await self.emit_agent_log("ultron", f"Action {act} completed with optimal health verification.", level="success", task_id=task_id)
+            else:
+                await self.emit_agent_log("ultron", f"Action {act} encountered warnings: {res.get('error')}", level="warn", task_id=task_id)
             await self.emit_task_completed(task_id, res.get("success", False), res, display_card=card, error=res.get("error"))
             return res
 

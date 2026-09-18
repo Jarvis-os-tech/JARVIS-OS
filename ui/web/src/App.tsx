@@ -13,6 +13,9 @@ import {
   ReminderItem,
   SkillDisplayCard as SkillDisplayCardType,
   BackgroundTask,
+  AgentLogEntry,
+  SubAgentMeta,
+  SelectedTarget,
 } from './types';
 import { AudioStreamer } from './utils/audioStreamer';
 import { VoiceVisualizer } from './components/VoiceVisualizer';
@@ -25,6 +28,8 @@ import { SkillDisplayCard } from './components/SkillDisplayCard';
 import { RemindersDrawer } from './components/RemindersDrawer';
 import { SkillsHubModal } from './components/SkillsHubModal';
 import { ParallelTaskDock } from './components/ParallelTaskDock';
+import { AgentTaskSidebar } from './components/AgentTaskSidebar';
+import { LiveExecutionConsole } from './components/LiveExecutionConsole';
 import { VerbalFeedbackEngine, getContextualVerbalPhrase } from './utils/verbalFeedback';
 import { useVoiceControls } from './hooks/useVoiceControls';
 import {
@@ -54,7 +59,99 @@ import {
   Check,
   Key,
   Bot,
+  PanelLeft,
+  PanelRight,
 } from 'lucide-react';
+
+const DEFAULT_SUBAGENTS: SubAgentMeta[] = [
+  {
+    id: 'hermes',
+    name: 'Hermes Sub-Agent',
+    tagline: 'Autonomous Assistant & Task Executor',
+    role: 'Autonomous Reasoning & Skill Executor',
+    status: 'online',
+    badge: 'HERMES LIVE',
+    badgeColor: 'emerald',
+    description: 'Autonomous reasoning, skill harvesting, local workflow automation, and background task execution.',
+    modelEndpoint: 'Gemini 2.5 Flash',
+    capabilities: ['Autonomous Workflow', 'Skill Execution', 'File System Tools', 'Background Tasks'],
+    quickActions: [
+      { label: '⚡ Deep Audit System', prompt: 'Hermes, run a deep audit on all active background services and report bottlenecks.' },
+      { label: '🚀 Boost RAM & Cache', prompt: 'Hermes, clean system temporary cache and optimize memory allocation.' },
+    ],
+  },
+  {
+    id: 'ultron',
+    name: 'Ultron Sentinel',
+    tagline: 'Desktop Automation & Actuator',
+    role: 'Desktop Automation & Gateway Actuator',
+    status: 'online',
+    badge: 'ULTRON SENTINEL',
+    badgeColor: 'rose',
+    description: 'Hardware actuator, PipeWire recovery, system audio loopback, and high-frequency desktop events.',
+    modelEndpoint: 'localhost:18789',
+    capabilities: ['Actuator Dispatcher', 'PipeWire Routing', 'Sub-5ms C++ Workers', 'Desktop Sentinel'],
+    quickActions: [
+      { label: '🛡️ Heal Audio PipeWire', prompt: 'Ultron, inspect PipeWire audio streams and heal any dropped nodes.' },
+      { label: '🔍 Sentinel Health Scan', prompt: 'Ultron, run a rapid hardware diagnostic on CPU thermals and memory.' },
+    ],
+  },
+  {
+    id: 'prime',
+    name: 'Prime Architect',
+    tagline: 'Deep Reasoning & Synthesis Engine',
+    role: 'Deep Multi-Step Strategic Reasoning',
+    status: 'standby',
+    badge: 'PRIME ARCHITECT',
+    badgeColor: 'indigo',
+    description: 'Complex multi-turn strategic planning, code synthesis, and architectural consensus arbitration.',
+    modelEndpoint: 'Gemini 1.5 Pro',
+    capabilities: ['Deep Reasoning', 'Consensus Arbitration', 'Architectural Planning', 'Memory Synthesis'],
+    quickActions: [
+      { label: '🧠 Synthesize Vault Context', prompt: 'Prime, review today conversations in the memory vault and synthesize key takeaways.' },
+      { label: '🌐 Research AI Breakthroughs', prompt: 'Prime, conduct automated web research on recent AI agent developments.' },
+    ],
+  },
+  {
+    id: 'system',
+    name: 'JARVIS Core',
+    tagline: 'Central Sensory & Coordination Nexus',
+    role: 'Central Kernel & Real-Time Orchestrator',
+    status: 'online',
+    badge: 'CORE ONLINE',
+    badgeColor: 'cyan',
+    description: 'Bidirectional streaming audio gateway, tool router, and unified Python runtime orchestrator.',
+    modelEndpoint: 'Python 3.12+ (port 8000)',
+    capabilities: ['Gemini Live WebSocket', 'Zero-GC PipeWire Engine', 'Modular Tools Hub', 'Smart Reminders'],
+    quickActions: [
+      { label: '📊 System Status Report', prompt: 'Provide a concise overview of current system health and audio latency.' },
+    ],
+  },
+];
+
+const INITIAL_LOGS: AgentLogEntry[] = [
+  {
+    id: 'boot-1',
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    agent: 'system',
+    level: 'info',
+    message: 'J.A.R.V.I.S. Core Engine online. 3-column cybernetic workspace engaged.',
+  },
+  {
+    id: 'boot-2',
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    agent: 'hermes',
+    level: 'info',
+    message: 'Hermes subagent bridge ready. Listening for parallel delegations.',
+  },
+  {
+    id: 'boot-3',
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    agent: 'ultron',
+    level: 'info',
+    message: 'Ultron Sentinel daemon connected on port 18789. Actuators armed.',
+  },
+];
 
 const DEFAULT_SETTINGS: VoiceSettings = {
   voiceName: 'Zephyr',
@@ -181,15 +278,75 @@ export default function App() {
     }
   }, []);
 
+  // 3-Column Layout state: SubAgents, Selected Target, Agent Logs, and Sidebar visibility
+  const [subAgents, setSubAgents] = useState<SubAgentMeta[]>(DEFAULT_SUBAGENTS);
+  const [selectedTarget, setSelectedTarget] = useState<SelectedTarget>({
+    type: 'agent',
+    agentId: 'hermes',
+  });
+  const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>(INITIAL_LOGS);
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
+
+  // Sync sub-agents metadata with backend /api/agents
+  const fetchAgents = useCallback(async () => {
+    try {
+      const res = await fetch('/api/agents');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.agents) && data.agents.length > 0) {
+          setSubAgents(data.agents);
+        }
+      }
+    } catch (e) {
+      // Keep defaults on network error
+    }
+  }, []);
+
+  // Synchronize dynamic status badges with Hermes & Ultron health states
+  useEffect(() => {
+    setSubAgents((prev) =>
+      prev.map((agent) => {
+        if (agent.id === 'hermes') {
+          return {
+            ...agent,
+            status: hermesConn === 'live' ? 'online' : hermesConn === 'cli' ? 'standby' : 'offline',
+            badge: hermesConn === 'live' ? 'HERMES LIVE' : hermesConn === 'cli' ? 'HERMES CLI' : 'OFFLINE',
+            badgeColor: hermesConn === 'live' ? 'emerald' : hermesConn === 'cli' ? 'cyan' : 'rose',
+          };
+        }
+        if (agent.id === 'ultron') {
+          return {
+            ...agent,
+            status: ultronConn === 'live' ? 'online' : ultronConn === 'installed' ? 'standby' : 'offline',
+            badge: ultronConn === 'live' ? 'ULTRON LIVE' : ultronConn === 'installed' ? 'READY' : 'OFFLINE',
+            badgeColor: ultronConn === 'live' ? 'rose' : ultronConn === 'installed' ? 'cyan' : 'rose',
+          };
+        }
+        return agent;
+      })
+    );
+  }, [hermesConn, ultronConn]);
+
+  // Responsive sidebar collapse on smaller screen widths
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setIsLeftSidebarOpen(false);
+      setIsRightSidebarOpen(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchHermesHealth();
     fetchUltronHealth();
+    fetchAgents();
     const id = setInterval(() => {
       fetchHermesHealth();
       fetchUltronHealth();
+      fetchAgents();
     }, 30_000);
     return () => clearInterval(id);
-  }, [fetchHermesHealth, fetchUltronHealth]);
+  }, [fetchHermesHealth, fetchUltronHealth, fetchAgents]);
 
   const fetchActiveTasks = useCallback(async () => {
     try {
@@ -781,6 +938,18 @@ export default function App() {
             } else if (mode === 'camera' || action === 'start_camera') {
               startCameraFeed();
             }
+          } else if (msg.type === 'agent_log') {
+            const entry = msg.log || msg;
+            const newLog: AgentLogEntry = {
+              id: entry.id || `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              timestamp: entry.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+              agent: entry.agent || 'system',
+              taskId: entry.taskId || entry.task_id,
+              level: entry.level || 'info',
+              message: entry.message || '',
+              details: entry.details,
+            };
+            setAgentLogs((prev) => [...prev.slice(-499), newLog]);
           } else if (msg.type === 'task_started') {
             console.log('Parallel Background Task started:', msg.task);
             if (msg.task) {
@@ -788,6 +957,16 @@ export default function App() {
                 const exists = prev.some((t) => t.id === msg.task.id);
                 return exists ? prev.map((t) => (t.id === msg.task.id ? msg.task : t)) : [...prev, msg.task];
               });
+              setSelectedTarget({ type: 'task', taskId: msg.task.id });
+              const startLog: AgentLogEntry = {
+                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                agent: 'hermes',
+                taskId: msg.task.id,
+                level: 'info',
+                message: `Task started: ${msg.task.title} [${msg.task.category || 'task'}]`,
+              };
+              setAgentLogs((prev) => [...prev.slice(-499), startLog]);
               VerbalFeedbackEngine.playChime('task_started');
             }
           } else if (msg.type === 'task_progress') {
@@ -802,6 +981,17 @@ export default function App() {
                   : t
               )
             );
+            if (msg.progressMessage) {
+              const progLog: AgentLogEntry = {
+                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                agent: 'hermes',
+                taskId: msg.taskId,
+                level: 'info',
+                message: `Step (${msg.progressPercent ?? 0}%): ${msg.progressMessage}`,
+              };
+              setAgentLogs((prev) => [...prev.slice(-499), progLog]);
+            }
           } else if (msg.type === 'task_completed') {
             console.log('Parallel Background Task completed:', msg.task);
             setActiveTasks((prev) => prev.filter((t) => t.id !== msg.taskId));
@@ -809,6 +999,16 @@ export default function App() {
               setCompletedTasks((prev) => [msg.task, ...prev.filter((t) => t.id !== msg.taskId)]);
               setTaskCompletedToast(msg.task);
               setTimeout(() => setTaskCompletedToast((curr) => (curr?.id === msg.task.id ? null : curr)), 4000);
+              const doneLog: AgentLogEntry = {
+                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                agent: 'hermes',
+                taskId: msg.task.id,
+                level: 'success',
+                message: `Task completed successfully: ${msg.task.title}`,
+                details: msg.task.result,
+              };
+              setAgentLogs((prev) => [...prev.slice(-499), doneLog]);
             }
             if (msg.displayCard) {
               setActiveSkillCard(msg.displayCard);
@@ -819,6 +1019,15 @@ export default function App() {
             setActiveTasks((prev) => prev.filter((t) => t.id !== msg.taskId));
             if (msg.task) {
               setCompletedTasks((prev) => [msg.task, ...prev.filter((t) => t.id !== msg.taskId)]);
+              const failLog: AgentLogEntry = {
+                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                agent: 'hermes',
+                taskId: msg.task.id,
+                level: 'error',
+                message: `Task failed: ${msg.task.title} — ${msg.task.error || msg.error || 'Execution failed'}`,
+              };
+              setAgentLogs((prev) => [...prev.slice(-499), failLog]);
             }
           } else if (msg.type === 'task_cancelled') {
             setActiveTasks((prev) => prev.filter((t) => t.id !== msg.taskId));
@@ -1083,6 +1292,16 @@ export default function App() {
     };
 
     setActiveTasks((prev) => [...prev, newTask]);
+    setSelectedTarget({ type: 'task', taskId });
+    const sendLog: AgentLogEntry = {
+      id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      agent: text.toLowerCase().includes('ultron') ? 'ultron' : text.toLowerCase().includes('prime') ? 'prime' : 'hermes',
+      taskId,
+      level: 'info',
+      message: `Dispatched query: "${text.slice(0, 60)}${text.length > 60 ? '...' : ''}"`,
+    };
+    setAgentLogs((prev) => [...prev.slice(-499), sendLog]);
 
     // Add user turn to conversation feed
     const userMsg: MessageExchange = {
@@ -1136,7 +1355,7 @@ export default function App() {
       }
 
       const sources: GroundingSource[] = data.sources || [];
-      const autoSearchTriggered = Boolean(data.autoSearchTriggered);
+      const autoSearchTriggered = Boolean(data.autoSearchTriggered || sources.length > 0);
 
       if (data.autoTier) {
         setCurrentTier(data.autoTier);
@@ -1145,7 +1364,7 @@ export default function App() {
       // Update active research state
       setActiveResearch({
         isSearching: false,
-        keywordsDetected: data.matchedKeywords || [],
+        keywordsDetected: autoSearchTriggered ? ['grounded'] : (data.matchedKeywords || []),
         sources,
         lastSearchedAt: Date.now(),
       });
@@ -1168,6 +1387,16 @@ export default function App() {
       setTaskCompletedToast(completedTask);
       VerbalFeedbackEngine.playChime('task_completed');
       setTimeout(() => setTaskCompletedToast((curr) => (curr?.id === taskId ? null : curr)), 4000);
+      const doneLog: AgentLogEntry = {
+        id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        agent: text.toLowerCase().includes('ultron') ? 'ultron' : text.toLowerCase().includes('prime') ? 'prime' : 'hermes',
+        taskId,
+        level: 'success',
+        message: `Task completed: ${newTask.title} (${(durationMs / 1000).toFixed(1)}s)`,
+        details: data,
+      };
+      setAgentLogs((prev) => [...prev.slice(-499), doneLog]);
 
       // Add agent response to conversation feed
       if (data.text) {
@@ -1229,6 +1458,15 @@ export default function App() {
         progressMessage: `Failed: ${formattedError}`,
       };
       setCompletedTasks((prev) => [failedTask, ...prev]);
+      const failLog: AgentLogEntry = {
+        id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        agent: text.toLowerCase().includes('ultron') ? 'ultron' : text.toLowerCase().includes('prime') ? 'prime' : 'hermes',
+        taskId,
+        level: 'error',
+        message: `Task failed: ${newTask.title} — ${formattedError}`,
+      };
+      setAgentLogs((prev) => [...prev.slice(-499), failLog]);
 
       setErrorMessage(formattedError);
       setStatus(isConnected ? 'listening' : 'idle');
@@ -1239,27 +1477,44 @@ export default function App() {
   const isConnected = status !== 'idle' && status !== 'error';
 
   return (
-    <div className="min-h-screen jarvis-radial-bg text-slate-100 flex flex-col justify-between selection:bg-cyan-500/30 selection:text-cyan-200 p-4 sm:p-6 select-none">
-      {/* Top Header */}
+    <div className="h-screen max-h-screen flex flex-col jarvis-radial-bg text-slate-100 selection:bg-cyan-500/30 selection:text-cyan-200 select-none overflow-hidden font-sans">
+      {/* Top Application Header Bar */}
       <header
         id="app-header"
-        className="w-full max-w-2xl mx-auto flex items-center justify-between py-2"
+        className="w-full px-4 sm:px-6 py-2 flex items-center justify-between border-b border-cyan-950/50 bg-slate-950/60 backdrop-blur-md z-30 shrink-0"
       >
-        <div className="flex items-center gap-2.5">
-          <h1 className="text-sm font-extrabold font-mono tracking-[0.25em] jarvis-title-gradient uppercase">
-            JARVIS
-          </h1>
-          <span
-            className={`w-2 h-2 rounded-full shadow-lg ${
-              isConnected ? 'bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(6,182,212,0.9)]' : 'bg-slate-600'
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Left Sidebar Toggle Button */}
+          <button
+            id="toggle-left-sidebar-btn"
+            onClick={() => setIsLeftSidebarOpen((prev) => !prev)}
+            title={isLeftSidebarOpen ? 'Collapse Sub-Agents Sidebar' : 'Expand Sub-Agents Sidebar'}
+            className={`p-1.5 rounded-lg border transition-colors ${
+              isLeftSidebarOpen
+                ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300'
+                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200'
             }`}
-          />
+          >
+            <PanelLeft className="w-4 h-4" />
+          </button>
+
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-extrabold font-mono tracking-[0.25em] jarvis-title-gradient uppercase">
+              JARVIS
+            </h1>
+            <span
+              className={`w-2 h-2 rounded-full shadow-lg ${
+                isConnected ? 'bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(6,182,212,0.9)]' : 'bg-slate-600'
+              }`}
+            />
+          </div>
+
           {/* Hermes Gateway live status pill */}
           <button
             id="hermes-gateway-status"
             onClick={fetchHermesHealth}
             title="Hermes gateway status — click to refresh"
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition-colors ${
+            className={`hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition-colors ${
               hermesConn === 'live'
                 ? 'bg-violet-500/15 border-violet-400/50 text-violet-300 shadow-[0_0_10px_rgba(167,139,250,0.35)]'
                 : hermesConn === 'cli'
@@ -1294,7 +1549,7 @@ export default function App() {
             id="ultron-gateway-status"
             onClick={fetchUltronHealth}
             title="Ultron Sentinel & Gateway status (port 18789) — click to refresh"
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition-colors ${
+            className={`hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition-colors ${
               ultronConn === 'live'
                 ? 'bg-purple-500/15 border-purple-400/50 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.35)]'
                 : ultronConn === 'installed'
@@ -1322,12 +1577,21 @@ export default function App() {
           </button>
         </div>
 
+        {/* Center Tier / Live Duplex Badge */}
+        <div className="hidden md:flex items-center gap-2">
+          <span className="text-[10px] font-mono text-cyan-400/80 uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-cyan-950/40 border border-cyan-500/30">
+            {currentTier.badge || '⚡ ULTRA FAST DUPLEX'}
+          </span>
+        </div>
+
+        {/* Header Right Action Tools */}
         <div className="flex items-center gap-1.5">
           {/* Parallel Tasks HUD Status Indicator */}
           {activeTasks.length > 0 && (
-            <div className="px-2.5 py-1 rounded-full bg-cyan-950/90 border border-cyan-500/60 text-cyan-300 text-xs font-mono font-bold flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.4)] animate-pulse">
+            <div className="px-2.5 py-1 rounded-full bg-cyan-950/90 border border-cyan-500/60 text-cyan-300 text-xs font-mono font-bold flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.4)] animate-pulse mr-1">
               <Zap className="w-3 h-3 text-cyan-400 animate-spin" />
-              <span>{activeTasks.length} Parallel Task{activeTasks.length > 1 ? 's' : ''}</span>
+              <span className="hidden sm:inline">{activeTasks.length} Parallel Task{activeTasks.length > 1 ? 's' : ''}</span>
+              <span className="sm:hidden">{activeTasks.length}</span>
             </div>
           )}
 
@@ -1365,278 +1629,311 @@ export default function App() {
           >
             <SlidersHorizontal className="w-4 h-4" />
           </button>
+
+          {/* Right Console Toggle Button */}
+          <button
+            id="toggle-right-console-btn"
+            onClick={() => setIsRightSidebarOpen((prev) => !prev)}
+            title={isRightSidebarOpen ? 'Collapse Live Inspector' : 'Expand Live Inspector'}
+            className={`p-1.5 rounded-lg border transition-colors ml-1 ${
+              isRightSidebarOpen
+                ? 'bg-cyan-950/60 border-cyan-500/40 text-cyan-300'
+                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <PanelRight className="w-4 h-4" />
+          </button>
         </div>
       </header>
 
-      {/* Center Main Stage */}
-      <main className="w-full max-w-2xl mx-auto flex-1 flex flex-col items-center justify-center my-auto">
-        {/* Parallel Execution Background Tasks Dock */}
-        <ParallelTaskDock
-          activeTasks={activeTasks}
-          completedTasks={completedTasks}
-          onCancelTask={handleCancelTask}
-          onSelectDisplayCard={(card) => setActiveSkillCard(card)}
-        />
+      {/* 3-Column Application Workspace */}
+      <div className="flex-1 w-full min-h-0 flex overflow-hidden relative">
+        {/* Left Column: Sub-Agents & Parallel Tasks Dynamic Sidebar */}
+        {isLeftSidebarOpen && (
+          <div className="w-72 xl:w-80 h-full shrink-0 border-r border-cyan-950/50 bg-slate-950/70 backdrop-blur-xl z-20 flex flex-col overflow-hidden animate-fadeIn">
+            <AgentTaskSidebar
+              agents={subAgents}
+              activeTasks={activeTasks}
+              completedTasks={completedTasks}
+              selectedTarget={selectedTarget}
+              onSelectTarget={(target) => setSelectedTarget(target)}
+              onCancelTask={handleCancelTask}
+              onClearCompletedTasks={() => setCompletedTasks([])}
+            />
+          </div>
+        )}
 
-        {/* Parallel Task Completed Dynamic Notification Toast */}
-        {taskCompletedToast && (
-          <div
-            id="task-completed-toast"
-            className="w-full mb-3 p-3 rounded-2xl bg-gradient-to-r from-slate-950/95 via-cyan-950/90 to-slate-950/95 border border-cyan-400/60 text-slate-100 text-xs shadow-2xl flex items-center justify-between gap-3 animate-fadeIn"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="p-1.5 rounded-lg bg-cyan-500 text-slate-950 shrink-0">
-                <CheckCircle2 className="w-4 h-4" />
+        {/* Central Column: Interactive Core Stage, Glowing Visualizer & MultiInputBar */}
+        <div className="flex-1 min-w-0 h-full flex flex-col justify-between px-4 sm:px-6 py-3 overflow-y-auto custom-scrollbar relative">
+          <div className="w-full max-w-2xl mx-auto shrink-0">
+            {/* Parallel Task Completed Dynamic Notification Toast */}
+            {taskCompletedToast && (
+              <div
+                id="task-completed-toast"
+                className="w-full mb-3 p-3 rounded-2xl bg-gradient-to-r from-slate-950/95 via-cyan-950/90 to-slate-950/95 border border-cyan-400/60 text-slate-100 text-xs shadow-2xl flex items-center justify-between gap-3 animate-fadeIn"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-cyan-500 text-slate-950 shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div className="truncate">
+                    <span className="font-mono uppercase font-bold text-cyan-300 mr-2 text-[10px]">
+                      Background Task Ready:
+                    </span>
+                    <span className="font-semibold text-white truncate">{taskCompletedToast.title}</span>
+                    {taskCompletedToast.durationMs && (
+                      <span className="text-[10px] text-slate-400 font-mono ml-2">
+                        ({(taskCompletedToast.durationMs / 1000).toFixed(1)}s)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {taskCompletedToast.displayCard && (
+                    <button
+                      onClick={() => {
+                        setActiveSkillCard(taskCompletedToast.displayCard!);
+                        setTaskCompletedToast(null);
+                      }}
+                      className="px-2.5 py-1 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-[11px] font-mono transition-colors"
+                    >
+                      View Result
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setTaskCompletedToast(null)}
+                    className="p-1 text-slate-400 hover:text-white text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
-              <div className="truncate">
-                <span className="font-mono uppercase font-bold text-cyan-300 mr-2 text-[10px]">
-                  Background Task Ready:
-                </span>
-                <span className="font-semibold text-white truncate">{taskCompletedToast.title}</span>
-                {taskCompletedToast.durationMs && (
-                  <span className="text-[10px] text-slate-400 font-mono ml-2">
-                    ({(taskCompletedToast.durationMs / 1000).toFixed(1)}s)
-                  </span>
-                )}
+            )}
+
+            {/* Active Due Reminder Alert Toast Banner */}
+            {dueReminderAlert && (
+              <div className="w-full mb-3 p-3 rounded-2xl bg-amber-950/90 border border-amber-500/60 text-amber-100 text-xs shadow-2xl flex items-center justify-between gap-3 animate-bounce">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-amber-500 text-slate-950 shrink-0">
+                    <Bell className="w-4 h-4 animate-spin" />
+                  </div>
+                  <div className="truncate">
+                    <span className="font-mono uppercase font-bold text-amber-300 mr-2 text-[10px]">
+                      Reminder Due:
+                    </span>
+                    <span className="font-semibold text-white">{dueReminderAlert.text}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => handleCompleteReminder(dueReminderAlert.id)}
+                    className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] transition-colors"
+                  >
+                    Mark Done
+                  </button>
+                  <button
+                    onClick={() => setDueReminderAlert(null)}
+                    className="p-1 text-amber-400 hover:text-white text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Error Banner */}
+            {(errorMessage || visionError) && (
+              <div className="w-full mb-4 p-3 rounded-xl bg-rose-950/60 border border-rose-800/50 text-rose-200 text-xs flex items-center justify-between gap-3 animate-fadeIn flex-wrap sm:flex-nowrap">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span className="font-mono">{errorMessage || visionError}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-auto">
+                  <button
+                    onClick={() => {
+                      setErrorMessage(null);
+                      setVisionError(null);
+                    }}
+                    className="text-rose-400 hover:text-rose-100 text-xs font-mono px-2 py-0.5"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Active Modular Skill Live Display Card */}
+            {activeSkillCard && (
+              <SkillDisplayCard
+                card={activeSkillCard}
+                onDismiss={() => setActiveSkillCard(null)}
+                onAction={(action, payload) => {
+                  if (action === 'complete_reminder' && payload) {
+                    handleCompleteReminder(payload);
+                  }
+                }}
+              />
+            )}
+          </div>
+
+          {/* Center Stage: Title + Luminous Holographic Cyber Orb */}
+          <main className="w-full max-w-2xl mx-auto flex-1 flex flex-col items-center justify-center my-auto py-2">
+            <div className="w-full flex flex-col items-center justify-center">
+              <div className="text-center mb-1 animate-fadeIn">
+                <h2 className="text-2xl sm:text-3xl font-extrabold tracking-[0.25em] jarvis-title-gradient uppercase">
+                  JARVIS
+                </h2>
+              </div>
+
+              <VoiceVisualizer
+                status={status}
+                streamer={streamerRef.current}
+                isUserSpeaking={isUserSpeaking}
+                isMuted={isMuted}
+              />
+
+              {/* Cyber Status & Activity Indicator */}
+              <div className="text-center mt-2 mb-4 animate-fadeIn">
+                <p className="text-xs font-mono tracking-[0.2em] font-semibold uppercase">
+                  {status === 'speaking' && <span className="text-cyan-400">Transmitting Speech...</span>}
+                  {status === 'listening' && <span className="text-emerald-400">Listening to Voice...</span>}
+                  {status === 'thinking' && <span className="text-amber-400">Processing Neural Reasoning...</span>}
+                  {status === 'connecting' && <span className="text-sky-400">Connecting Neural Voice Interface...</span>}
+                  {status === 'interrupted' && <span className="text-rose-400">Speech Interrupted</span>}
+                  {status === 'idle' && <span className="text-slate-400">Ready • Plain Voice Interface</span>}
+                </p>
+                <div className="w-44 h-0.5 bg-white/10 rounded-full overflow-hidden mx-auto mt-2.5 relative">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isConnected
+                        ? 'w-full bg-gradient-to-r from-cyan-400 via-indigo-400 to-purple-400 shadow-[0_0_8px_rgba(56,189,248,0.9)]'
+                        : 'w-1/4 bg-slate-600/50'
+                    }`}
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              {taskCompletedToast.displayCard && (
+            {/* Plain Floating Controls */}
+            <div className="flex items-center justify-center gap-2.5 sm:gap-3 mb-4 flex-wrap">
+              {/* Mic Mute Toggle */}
+              <button
+                id="toggle-mic-mute-btn"
+                onClick={handleToggleMute}
+                disabled={!isConnected}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                  isMuted
+                    ? 'bg-rose-500 text-white'
+                    : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white'
+                } disabled:opacity-30 disabled:pointer-events-none`}
+                title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+              >
+                {isMuted ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4" />}
+              </button>
+
+              {/* Camera Feed Toggle */}
+              <button
+                id="toggle-camera-feed-btn"
+                onClick={cameraStream ? stopCameraFeed : () => startCameraFeed()}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                  cameraStream
+                    ? 'bg-cyan-500 text-white ring-2 ring-cyan-400/50'
+                    : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white'
+                }`}
+                title={cameraStream ? 'Stop Camera Feed ("camera off")' : 'Start Camera Feed ("camera on")'}
+              >
+                {cameraStream ? <Camera className="w-4 h-4 text-white" /> : <CameraOff className="w-4 h-4" />}
+              </button>
+
+              {/* Quick Flip Camera (Front/Rear) Button when Camera Active */}
+              {cameraStream && (
                 <button
-                  onClick={() => {
-                    setActiveSkillCard(taskCompletedToast.displayCard!);
-                    setTaskCompletedToast(null);
-                  }}
-                  className="px-2.5 py-1 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-[11px] font-mono transition-colors"
+                  id="flip-camera-toolbar-btn"
+                  onClick={toggleFacingMode}
+                  className="w-11 h-11 rounded-full flex items-center justify-center bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 hover:text-white border border-cyan-500/40 transition-all animate-fadeIn"
+                  title={`Flip to ${facingMode === 'user' ? 'Rear / Back' : 'Front / Selfie'} Camera ("flip camera")`}
                 >
-                  View Result
+                  <RefreshCw className="w-4 h-4 text-cyan-400" />
                 </button>
               )}
+
+              {/* Screen Share Toggle */}
               <button
-                onClick={() => setTaskCompletedToast(null)}
-                className="p-1 text-slate-400 hover:text-white text-xs"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Active Due Reminder Alert Toast Banner */}
-        {dueReminderAlert && (
-          <div className="w-full mb-3 p-3 rounded-2xl bg-amber-950/90 border border-amber-500/60 text-amber-100 text-xs shadow-2xl flex items-center justify-between gap-3 animate-bounce">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="p-1.5 rounded-lg bg-amber-500 text-slate-950 shrink-0">
-                <Bell className="w-4 h-4 animate-spin" />
-              </div>
-              <div className="truncate">
-                <span className="font-mono uppercase font-bold text-amber-300 mr-2 text-[10px]">
-                  Reminder Due:
-                </span>
-                <span className="font-semibold text-white">{dueReminderAlert.text}</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                onClick={() => handleCompleteReminder(dueReminderAlert.id)}
-                className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] transition-colors"
-              >
-                Mark Done
-              </button>
-              <button
-                onClick={() => setDueReminderAlert(null)}
-                className="p-1 text-amber-400 hover:text-white text-xs"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Error Banner */}
-        {(errorMessage || visionError) && (
-          <div className="w-full mb-4 p-3 rounded-xl bg-rose-950/60 border border-rose-800/50 text-rose-200 text-xs flex items-center justify-between gap-3 animate-fadeIn flex-wrap sm:flex-nowrap">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-              <span className="font-mono">{errorMessage || visionError}</span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 ml-auto">
-              <button
-                onClick={() => {
-                  setErrorMessage(null);
-                  setVisionError(null);
-                }}
-                className="text-rose-400 hover:text-rose-100 text-xs font-mono px-2 py-0.5"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Active Modular Skill Live Display Card (Weather, News, Reminders, Math) */}
-        {activeSkillCard && (
-          <SkillDisplayCard
-            card={activeSkillCard}
-            onDismiss={() => setActiveSkillCard(null)}
-            onAction={(action, payload) => {
-              if (action === 'complete_reminder' && payload) {
-                handleCompleteReminder(payload);
-              }
-            }}
-          />
-        )}
-
-        {/* Center Stage: Title + Luminous Holographic Cyber Orb from Splash Design */}
-        <div className="w-full flex flex-col items-center justify-center">
-          <div className="text-center mb-1 animate-fadeIn">
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-[0.25em] jarvis-title-gradient uppercase">
-              JARVIS
-            </h2>
-          </div>
-
-          <VoiceVisualizer
-            status={status}
-            streamer={streamerRef.current}
-            isUserSpeaking={isUserSpeaking}
-            isMuted={isMuted}
-          />
-
-          {/* Cyber Status & Activity Indicator */}
-          <div className="text-center mt-2 mb-6 animate-fadeIn">
-            <p className="text-xs font-mono tracking-[0.2em] font-semibold uppercase">
-              {status === 'speaking' && <span className="text-cyan-400">Transmitting Speech...</span>}
-              {status === 'listening' && <span className="text-emerald-400">Listening to Voice...</span>}
-              {status === 'thinking' && <span className="text-amber-400">Processing Neural Reasoning...</span>}
-              {status === 'connecting' && <span className="text-sky-400">Connecting Neural Voice Interface...</span>}
-              {status === 'interrupted' && <span className="text-rose-400">Speech Interrupted</span>}
-              {status === 'idle' && <span className="text-slate-400">Ready • Plain Voice Interface</span>}
-            </p>
-            <div className="w-44 h-0.5 bg-white/10 rounded-full overflow-hidden mx-auto mt-2.5 relative">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  isConnected
-                    ? 'w-full bg-gradient-to-r from-cyan-400 via-indigo-400 to-purple-400 shadow-[0_0_8px_rgba(56,189,248,0.9)]'
-                    : 'w-1/4 bg-slate-600/50'
+                id="toggle-screen-share-btn"
+                onClick={screenStream ? stopScreenShare : requestScreenShare}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                  screenStream
+                    ? 'bg-cyan-500 text-white ring-2 ring-cyan-400/50'
+                    : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white'
                 }`}
-              />
+                title={screenStream ? 'Stop Screen Share ("stop screen")' : 'Start Screen Share ("share screen")'}
+              >
+                {screenStream ? <Monitor className="w-4 h-4 text-white" /> : <MonitorOff className="w-4 h-4" />}
+              </button>
+
+              {/* Primary Connect / Engage Button */}
+              <button
+                id="primary-connect-disconnect-btn"
+                onClick={isConnected ? disconnectSession : connectSession}
+                className={`px-6 py-3 rounded-full font-mono text-xs font-semibold tracking-wider flex items-center gap-2.5 transition-all shadow-md ${
+                  isConnected
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                    : 'bg-cyan-500 hover:bg-cyan-400 text-white'
+                }`}
+              >
+                <Power className="w-4 h-4" />
+                <span>{isConnected ? 'End Session' : 'Engage J.A.R.V.I.S.'}</span>
+              </button>
+
+              {/* Interrupt Button */}
+              <button
+                id="interrupt-speech-btn"
+                onClick={handleInterrupt}
+                disabled={!isConnected || status !== 'speaking'}
+                className="w-11 h-11 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-all disabled:opacity-30 disabled:pointer-events-none"
+                title="Interrupt"
+              >
+                <StopCircle className="w-4 h-4 text-amber-400" />
+              </button>
             </div>
+
+            {/* Live Grounding Sources Indicator */}
+            <AutoResearchCard
+              isSearching={activeResearch.isSearching}
+              matchedKeywords={activeResearch.keywordsDetected}
+              sources={activeResearch.sources}
+            />
+          </main>
+
+          {/* Bottom Floating Plain Input Bar */}
+          <footer className="w-full max-w-2xl mx-auto pt-2 shrink-0">
+            <MultiInputBar
+              onSend={handleMultiSend}
+              disabled={status === 'connecting'}
+              isConnected={isConnected}
+              onPreviewAttachment={(att) => setPreviewAttachment(att)}
+            />
+          </footer>
+        </div>
+
+        {/* Right Column: Live Execution Console & Target Inspector */}
+        {isRightSidebarOpen && (
+          <div className="w-80 xl:w-96 h-full shrink-0 border-l border-cyan-950/50 bg-slate-950/80 backdrop-blur-xl z-20 flex flex-col overflow-hidden animate-fadeIn">
+            <LiveExecutionConsole
+              selectedTarget={selectedTarget}
+              agents={subAgents}
+              activeTasks={activeTasks}
+              completedTasks={completedTasks}
+              logs={agentLogs}
+              onTriggerQuickAction={(prompt) => handleMultiSend(prompt, [])}
+              onCancelTask={handleCancelTask}
+              onClearLogs={() => setAgentLogs([])}
+              onSelectDisplayCard={(card) => setActiveSkillCard(card)}
+            />
           </div>
-        </div>
-
-        {/* Plain Floating Controls */}
-        <div className="flex items-center justify-center gap-2.5 sm:gap-3 mb-6 flex-wrap">
-          {/* Mic Mute Toggle */}
-          <button
-            id="toggle-mic-mute-btn"
-            onClick={handleToggleMute}
-            disabled={!isConnected}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-              isMuted
-                ? 'bg-rose-500 text-white'
-                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white'
-            } disabled:opacity-30 disabled:pointer-events-none`}
-            title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
-          >
-            {isMuted ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4" />}
-          </button>
-
-          {/* Camera Feed Toggle */}
-          <button
-            id="toggle-camera-feed-btn"
-            onClick={cameraStream ? stopCameraFeed : () => startCameraFeed()}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-              cameraStream
-                ? 'bg-cyan-500 text-white ring-2 ring-cyan-400/50'
-                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white'
-            }`}
-            title={cameraStream ? 'Stop Camera Feed ("camera off")' : 'Start Camera Feed ("camera on")'}
-          >
-            {cameraStream ? <Camera className="w-4 h-4 text-white" /> : <CameraOff className="w-4 h-4" />}
-          </button>
-
-          {/* Quick Flip Camera (Front/Rear) Button when Camera Active */}
-          {cameraStream && (
-            <button
-              id="flip-camera-toolbar-btn"
-              onClick={toggleFacingMode}
-              className="w-11 h-11 rounded-full flex items-center justify-center bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 hover:text-white border border-cyan-500/40 transition-all animate-fadeIn"
-              title={`Flip to ${facingMode === 'user' ? 'Rear / Back' : 'Front / Selfie'} Camera ("flip camera")`}
-            >
-              <RefreshCw className="w-4 h-4 text-cyan-400" />
-            </button>
-          )}
-
-          {/* Screen Share Toggle */}
-          <button
-            id="toggle-screen-share-btn"
-            onClick={screenStream ? stopScreenShare : requestScreenShare}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all ${
-              screenStream
-                ? 'bg-cyan-500 text-white ring-2 ring-cyan-400/50'
-                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white'
-            }`}
-            title={screenStream ? 'Stop Screen Share ("stop screen")' : 'Start Screen Share ("share screen")'}
-          >
-            {screenStream ? <Monitor className="w-4 h-4 text-white" /> : <MonitorOff className="w-4 h-4" />}
-          </button>
-
-          {/* Primary Connect / Engage Button */}
-          <button
-            id="primary-connect-disconnect-btn"
-            onClick={isConnected ? disconnectSession : connectSession}
-            className={`px-6 py-3 rounded-full font-mono text-xs font-semibold tracking-wider flex items-center gap-2.5 transition-all shadow-md ${
-              isConnected
-                ? 'bg-rose-600 hover:bg-rose-500 text-white'
-                : 'bg-cyan-500 hover:bg-cyan-400 text-white'
-            }`}
-          >
-            <Power className="w-4 h-4" />
-            <span>{isConnected ? 'End Session' : 'Engage J.A.R.V.I.S.'}</span>
-          </button>
-
-          {/* Interrupt Button */}
-          <button
-            id="interrupt-speech-btn"
-            onClick={handleInterrupt}
-            disabled={!isConnected || status !== 'speaking'}
-            className="w-11 h-11 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition-all disabled:opacity-30 disabled:pointer-events-none"
-            title="Interrupt"
-          >
-            <StopCircle className="w-4 h-4 text-amber-400" />
-          </button>
-        </div>
-
-        {/* Live Grounding Sources Indicator */}
-        <AutoResearchCard
-          isSearching={activeResearch.isSearching}
-          matchedKeywords={activeResearch.keywordsDetected}
-          sources={activeResearch.sources}
-        />
-      </main>
-
-      {/* Live Vision Picture-in-Picture Preview Window */}
-      <LiveVisionPreview
-        cameraStream={cameraStream}
-        screenStream={screenStream}
-        facingMode={facingMode}
-        onCloseCamera={stopCameraFeed}
-        onCloseScreen={stopScreenShare}
-        onSwitchToCamera={() => startCameraFeed()}
-        onSwitchToScreen={requestScreenShare}
-        onFlipCamera={toggleFacingMode}
-      />
-
-      {/* Bottom Floating Plain Input Bar */}
-      <footer className="w-full max-w-2xl mx-auto pt-2">
-        <MultiInputBar
-          onSend={handleMultiSend}
-          disabled={status === 'connecting'}
-          isConnected={isConnected}
-          onPreviewAttachment={(att) => setPreviewAttachment(att)}
-        />
-      </footer>
+        )}
+      </div>
 
       {/* Attachment Preview Modal */}
       <AttachmentPreviewModal

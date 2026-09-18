@@ -624,6 +624,86 @@ async def ultron_execute_endpoint(req: Dict[str, Any] = Body(default={})):
     return await run_ultron_system_action(action, params)
 
 
+@app.get("/api/agents")
+async def get_agents_endpoint():
+    from .hermes_bridge import check_hermes_health
+    from .ultron_bridge import check_ultron_health
+
+    hermes_h = await check_hermes_health()
+    ultron_h = await check_ultron_health()
+
+    hermes_live = bool(hermes_h.get("connected"))
+    ultron_live = bool(ultron_h.get("ok")) and bool(ultron_h.get("gatewayRunning"))
+
+    agents = [
+        {
+            "id": "hermes",
+            "name": "Hermes Sub-Agent",
+            "tagline": "Autonomous Research & Reasoning",
+            "role": "Deep Multi-Step Research, Memory Vault Synthesis & Code",
+            "status": "live" if hermes_live else "offline",
+            "badge": "HERMES LIVE" if hermes_live else "OFFLINE",
+            "badgeColor": "emerald" if hermes_live else "rose",
+            "description": "NousResearch Hermes autonomous agent CLI capable of deep research, multi-turn reasoning, and memory synthesis.",
+            "modelEndpoint": "Hermes Agent v0.21.0 (127.0.0.1:9119)",
+            "capabilities": ["Deep Web Research", "Memory Vault Graph", "Multi-turn Code Generation", "Autonomous Tool Calling"],
+            "quickActions": [
+                {"id": "hermes_research", "label": "Deep Research Query", "prompt": "Research quantum error correction advances", "actionType": "chat"},
+                {"id": "hermes_vault", "label": "Inspect Memory Vault", "prompt": "Summarize key active project goals and facts from the vault", "actionType": "chat"}
+            ]
+        },
+        {
+            "id": "ultron",
+            "name": "Ultron Sentinel",
+            "tagline": "Autonomous Security & OS Sentinel",
+            "role": "Security Audits, Real-Time OS Diagnostics & Performance Boost",
+            "status": "live" if ultron_live else "offline",
+            "badge": "ULTRON LIVE" if ultron_live else "OFFLINE",
+            "badgeColor": "red" if ultron_live else "rose",
+            "description": "Chief Security Sentinel & Autonomous Gateway powered by OpenClaw with sub-5ms OS diagnostics and auto-healing.",
+            "modelEndpoint": f"OpenClaw Gateway ({ultron_h.get('primaryModel') or '127.0.0.1:18789'})",
+            "capabilities": ["Subsystem Self-Healing", "RAM Cache Boost", "Firewall & Port Audit", "Autonomous Coding Gateway"],
+            "quickActions": [
+                {"id": "ultron_audit", "label": "Run Deep Audit", "prompt": "deep_audit", "actionType": "execute"},
+                {"id": "ultron_boost", "label": "Boost System RAM", "prompt": "boost_system", "actionType": "execute"},
+                {"id": "ultron_security", "label": "Security Scan", "prompt": "security_audit", "actionType": "execute"},
+                {"id": "ultron_heal_sound", "label": "Heal Audio Server", "prompt": "heal_subsystem", "actionType": "execute"}
+            ]
+        },
+        {
+            "id": "prime",
+            "name": "Prime Agent",
+            "tagline": "Sovereign Generalist",
+            "role": "Cross-Domain Orchestration & Autonomous Multi-Agent Chaining",
+            "status": "live",
+            "badge": "READY",
+            "badgeColor": "indigo",
+            "description": "Sovereign multi-agent generalist capable of complex cross-system delegation and autonomous pipelines.",
+            "modelEndpoint": "Local AGY / Sovereign Pipeline",
+            "capabilities": ["Multi-Agent Pipeline", "Task Decomposition", "Arbitration", "Tool Synthesis"],
+            "quickActions": [
+                {"id": "prime_plan", "label": "Decompose Tactical Plan", "prompt": "Analyze system workload and propose optimization", "actionType": "chat"}
+            ]
+        },
+        {
+            "id": "system",
+            "name": "J.A.R.V.I.S. Core",
+            "tagline": "Autonomous OS Kernel",
+            "role": "75 Native Actuators, PipeWire Audio Gateway, Spatial Windowing",
+            "status": "live",
+            "badge": "CORE ONLINE",
+            "badgeColor": "cyan",
+            "description": "Python Core Engine with sub-5ms C++ workers, zero-GC Rust audio streaming, and smart temporal scheduler.",
+            "modelEndpoint": "Gemini Live Realtime Full-Duplex (port 8000)",
+            "capabilities": ["Sub-5ms Actuation", "Zero-GC PipeWire", "Smart Reminders Vault", "Hyprland Tiling"],
+            "quickActions": [
+                {"id": "core_diag", "label": "System Telemetry", "prompt": "run_full_system_diagnostics", "actionType": "execute"}
+            ]
+        }
+    ]
+    return {"agents": agents}
+
+
 @app.get("/api/llm/status")
 async def get_llm_status():
     from brain.providers import llm_manager
