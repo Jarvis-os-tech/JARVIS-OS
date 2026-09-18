@@ -1,0 +1,23 @@
+[Unit]
+Description=Friday-OS Python Gateway (Telegram + Heartbeat + Health)
+After=network-online.target openclaw-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/g0pi/Projects/Friday-OS-main/.venv/bin/python /home/g0pi/Projects/Friday-OS-main/core_engine/gateway.py
+WorkingDirectory=/home/g0pi/Projects/Friday-OS-main
+EnvironmentFile=-/home/g0pi/Projects/Friday-OS-main/.env
+Environment="PATH=/home/g0pi/Projects/Friday-OS-main/.venv/bin:/home/g0pi/.local/bin:/home/g0pi/.cargo/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="HOME=/home/g0pi"
+Restart=always
+RestartSec=5
+RestartPreventExitStatus=78
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=15
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

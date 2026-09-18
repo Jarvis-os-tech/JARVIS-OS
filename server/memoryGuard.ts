@@ -1,6 +1,6 @@
 /**
- * Friday-OS Memory Guard
- * Enforces write-scoping: only owning department + Friday can write to a department's memory folder.
+ * JARVIS-OS Memory Guard
+ * Enforces write-scoping: only owning department + JARVIS can write to a department's memory folder.
  * Reads are cross-department allowed.
  */
 
@@ -8,7 +8,14 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, relative, resolve } from "path";
 import { randomUUID } from "crypto";
 
-const MEMORY_ROOT = resolve("/home/gopi/Downloads/Friday-OS/friday-memory");
+const MEMORY_ROOT = resolve(
+  process.env.OBSIDIAN_VAULT_PATH ||
+  (existsSync(join(process.cwd(), "memory", "vault"))
+    ? join(process.cwd(), "memory", "vault")
+    : existsSync(join(process.cwd(), "jarvis-memory"))
+    ? join(process.cwd(), "jarvis-memory")
+    : join(process.cwd(), "friday-memory"))
+);
 const DEPARTMENTS = ["research", "coder", "personal", "finance", "creative", "ops", "default"];
 
 export type MemoryEntry = {
@@ -60,7 +67,7 @@ function loadIndex(dept: string): DepartmentIndex {
           path: "relative path from department root",
           created: "ISO timestamp",
           updated: "ISO timestamp",
-          owner: "dept|friday",
+          owner: "dept|jarvis|friday",
         },
     };
   }
@@ -80,7 +87,7 @@ function loadIndex(dept: string): DepartmentIndex {
           path: "relative path from department root",
           created: "ISO timestamp",
           updated: "ISO timestamp",
-          owner: "dept|friday",
+          owner: "dept|jarvis|friday",
         },
     };
   }
@@ -101,15 +108,15 @@ function ensureDeptDir(dept: string): void {
 
 /**
  * Check if a write is allowed.
- * - Caller must be "friday" OR the owning department.
+ * - Caller must be "jarvis" / "friday" OR the owning department.
  * - Throws if not allowed.
  */
-export function assertWriteAllowed(department: string, caller: "friday" | string): void {
+export function assertWriteAllowed(department: string, caller: "jarvis" | "friday" | string): void {
   if (!DEPARTMENTS.includes(department)) {
     throw new Error(`Unknown department: ${department}`);
   }
-  if (caller !== "friday" && caller !== department) {
-    throw new Error(`Write denied: ${caller} cannot write to ${department} memory. Only ${department} or friday may write.`);
+  if (caller !== "jarvis" && caller !== "friday" && caller !== department) {
+    throw new Error(`Write denied: ${caller} cannot write to ${department} memory. Only ${department}, jarvis, or friday may write.`);
   }
 }
 
@@ -119,7 +126,7 @@ export function assertWriteAllowed(department: string, caller: "friday" | string
  */
 export function writeMemoryEntry(
   department: string,
-  caller: "friday" | string,
+  caller: "jarvis" | "friday" | string,
   entry: Omit<MemoryEntry, "id" | "created" | "updated" | "path">
 ): MemoryEntry {
   assertWriteAllowed(department, caller);

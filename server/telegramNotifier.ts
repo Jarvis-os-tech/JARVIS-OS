@@ -1,7 +1,7 @@
 /**
- * Friday OS — Telegram Notification Service
+ * JARVIS OS — Telegram Notification Service
  *
- * Sends notifications to the user's personal Telegram when Friday
+ * Sends notifications to the user's personal Telegram when JARVIS
  * has something to report and the user is not at the browser.
  *
  * Zero dependencies — uses native fetch() with the Telegram Bot API.
@@ -201,7 +201,7 @@ async function sendTelegramPlaintext(
 export async function sendTelegramMessage(text: string, chatId?: string | number): Promise<boolean> {
   return sendTelegramNotification(
     {
-      title: "Friday",
+      title: "JARVIS",
       body: text,
       priority: "normal",
     },

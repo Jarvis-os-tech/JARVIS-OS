@@ -4,9 +4,12 @@ import net from "net";
 import path from "path";
 
 /**
- * Hermes Bridge — the connection layer that lets FRIDAY delegate work to Hermes.
+ * Hermes Bridge — the connection layer that lets JARVIS delegate work to Hermes.
  *
- * This version uses a single, default Hermes profile for all delegations.
+ * Hermes (NousResearch/Hermes-Function-Calling) is an autonomous agent CLI
+ * capable of multi-step tool calling, web search, terminal execution, and
+ * code writing. This bridge allows JARVIS to dispatch complex, multi-turn
+ * reasoning or research tasks to Hermes as a sub-agent.
  *
  * Two communication paths:
  *   1. CLI delegation (primary): `hermes chat --query-file` — spawns Hermes headless
@@ -90,7 +93,7 @@ export function execHermes(
   const timeout = opts?.timeout ?? TIMEOUT_MS;
   const maxTurns = opts?.maxTurns ?? MAX_TURNS;
   const yolo = opts?.yolo !== false; // default true for autonomous delegation
-  const sessionName = opts?.sessionName || `friday-delegated-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const sessionName = opts?.sessionName || `jarvis-delegated-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const bin = getHermesBin();
 
   return new Promise<HermesResult>((resolve) => {
@@ -263,6 +266,16 @@ export async function checkHermesHealth(): Promise<HermesHealth> {
 
 /** Vault path resolver — shared with obsidian skills. */
 export function getVaultPath(): string {
-  // Always use the single friday-memory vault
+  if (process.env.OBSIDIAN_VAULT_PATH) {
+    return path.resolve(process.env.OBSIDIAN_VAULT_PATH);
+  }
+  const memoryVaultPath = path.join(process.cwd(), "memory", "vault");
+  if (fs.existsSync(memoryVaultPath)) {
+    return memoryVaultPath;
+  }
+  const jarvisPath = path.join(process.cwd(), "jarvis-memory");
+  if (fs.existsSync(jarvisPath)) {
+    return jarvisPath;
+  }
   return path.join(process.cwd(), "friday-memory");
 }

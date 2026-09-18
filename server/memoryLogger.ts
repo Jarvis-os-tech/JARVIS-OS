@@ -52,9 +52,9 @@ function getTimestampParts() {
 }
 
 /**
- * Log a spoken or typed dialogue turn to friday-memory/conversations/YYYY-MM-DD.md.
+ * Log a spoken or typed dialogue turn to jarvis-memory/conversations/YYYY-MM-DD.md.
  */
-export function logDialogueTurn(speaker: "User" | "Friday" | "System", text: string): void {
+export function logDialogueTurn(speaker: "User" | "JARVIS" | "Friday" | "System", text: string): void {
   try {
     const vault = ensureMemoryVault();
     const { dateStr, timeStr } = getTimestampParts();
@@ -67,18 +67,18 @@ export function logDialogueTurn(speaker: "User" | "Friday" | "System", text: str
 title: "Daily Conversation Log: ${dateStr}"
 type: "conversation-log"
 date: "${dateStr}"
-session: "FRIDAY-SOVEREIGN-MK7"
+session: "JARVIS-SOVEREIGN-MK7"
 operator: "Gopi"
 status: "active"
 created_at: "${new Date().toISOString()}"
 ---
 
-# 💬 F.R.I.D.A.Y. Operational Conversation Log — ${dateStr}
+# 💬 J.A.R.V.I.S. Operational Conversation Log — ${dateStr}
 
 - **Operator**: [[USER.md|Gopi]]
-- **System**: [[MEMORY.md|F.R.I.D.A.Y. Sovereign MK-VII]]
+- **System**: [[MEMORY.md|J.A.R.V.I.S. Sovereign MK-VII]]
 - **Date**: ${dateStr}
-- **Master Vault**: [[INDEX.md|FRIDAY Universal Memory Vault]]
+- **Master Vault**: [[index.md|JARVIS Universal Memory Vault]]
 
 ---
 
@@ -88,19 +88,19 @@ created_at: "${new Date().toISOString()}"
       fs.writeFileSync(filePath, header, "utf-8");
     }
 
-    const speakerIcon = speaker === "Friday" ? "🤖 [Friday]" : speaker === "User" ? "👤 [Operator]" : "⚡ [System]";
+    const speakerIcon = (speaker === "Friday" || (speaker as string) === "JARVIS") ? "🤖 [JARVIS]" : speaker === "User" ? "👤 [Operator]" : "⚡ [System]";
     const cleanText = text.trim();
     if (!cleanText) return;
 
     const entry = `### [${timeStr}] ${speakerIcon}\n${cleanText}\n\n`;
     fs.appendFileSync(filePath, entry, "utf-8");
   } catch (err) {
-    console.warn("Failed to log dialogue turn to friday-memory:", err);
+    console.warn("Failed to log dialogue turn to jarvis-memory:", err);
   }
 }
 
 /**
- * Log a tool execution to friday-memory/execution/YYYY-MM-DD.md.
+ * Log a tool execution to jarvis-memory/execution/YYYY-MM-DD.md.
  */
 export function logExecutionTrace(
   toolName: string,
@@ -125,7 +125,7 @@ operator: "Gopi"
 created_at: "${new Date().toISOString()}"
 ---
 
-# 🛠️ F.R.I.D.A.Y. Daily Tool & Actuator Telemetry — ${dateStr}
+# 🛠️ J.A.R.V.I.S. Daily Tool & Actuator Telemetry — ${dateStr}
 
 - **Operator**: [[USER.md|Gopi]]
 - **Active Dialogue**: [[conversations/${dateStr}|Today's Dialogue]]
@@ -156,12 +156,12 @@ created_at: "${new Date().toISOString()}"
 `;
     fs.appendFileSync(filePath, entry, "utf-8");
   } catch (err) {
-    console.warn("Failed to log execution trace to friday-memory:", err);
+    console.warn("Failed to log execution trace to jarvis-memory:", err);
   }
 }
 
 /**
- * Load core operator profile and memory context to inject into Friday's system prompt.
+ * Load core operator profile and memory context to inject into LLM system prompt.
  */
 export function getCoreMemoryPromptContext(): string {
   try {
@@ -170,7 +170,7 @@ export function getCoreMemoryPromptContext(): string {
 
     const userProfilePath = path.join(vault, "USER.md");
     if (fs.existsSync(userProfilePath)) {
-      promptSections.push(`[OPERATOR PROFILE FROM FRIDAY-MEMORY]\n${fs.readFileSync(userProfilePath, "utf-8").trim()}`);
+      promptSections.push(`[OPERATOR PROFILE FROM JARVIS-MEMORY]\n${fs.readFileSync(userProfilePath, "utf-8").trim()}`);
     }
 
     const factsDir = path.join(vault, "facts");

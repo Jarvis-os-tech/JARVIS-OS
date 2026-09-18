@@ -1,14 +1,24 @@
 {
   "version": "1.0.0",
-  "name": "Friday-OS Master Registry",
-  "description": "Ground-truth inventory of verified Agents, Skills, and Native Tools in Friday OS",
+  "name": "JARVIS-OS Master Registry",
+  "description": "Ground-truth inventory of verified Agents, Skills, and Native Tools in JARVIS OS",
   "updatedAt": "2026-08-31T23:35:00.000Z",
 
   "agents": {
+    "jarvis-prime": {
+      "id": "jarvis-prime",
+      "name": "J.A.R.V.I.S. Prime",
+      "role": "Core Orchestrator & Live Voice Assistant",
+      "description": "Primary real-time speech-to-speech, vision, and intent routing agent powered by Gemini 3.1 Flash Live and Gemini 3.7 Flash.",
+      "platform": "gemini-live",
+      "model": "gemini-3.1-flash-live-preview",
+      "status": "online",
+      "capabilities": ["speech-to-speech", "multimodal-vision", "tool-calling", "task-routing", "proactive-heartbeat"]
+    },
     "friday-prime": {
       "id": "friday-prime",
-      "name": "F.R.I.D.A.Y. Prime",
-      "role": "Core Orchestrator & Live Voice Assistant",
+      "name": "F.R.I.D.A.Y. Prime (Compatibility Alias)",
+      "role": "Core Orchestrator & Live Voice Assistant Alias",
       "description": "Primary real-time speech-to-speech, vision, and intent routing agent powered by Gemini 3.1 Flash Live and Gemini 3.7 Flash.",
       "platform": "gemini-live",
       "model": "gemini-3.1-flash-live-preview",
@@ -22,7 +32,7 @@
       "description": "Dedicated coding agent (PrimeIntellect-ai/prime-agent). Specializes in software engineering, refactoring, building projects, writing code, and debugging.",
       "platform": "prime-agent",
       "bridge": "server/primeBridge.ts",
-      "path": "/home/gopi/.nvm/versions/node/v24.19.0/bin/prime-agent",
+      "path": "prime-agent",
       "status": "ready",
       "capabilities": ["fullstack-coding", "refactoring", "debugging", "ast-analysis", "code-generation"]
     },
@@ -33,7 +43,7 @@
       "description": "Delegated sub-agent for autonomous web research, Obsidian vault queries, file operations, and general problem solving via Hermes CLI.",
       "platform": "hermes",
       "bridge": "server/hermesBridge.ts",
-      "vaultDirectory": "friday-memory/",
+      "vaultDirectory": "jarvis-memory/",
       "status": "ready",
       "capabilities": ["web-research", "vault-queries", "source-grounding", "autonomous-cli"]
     },
@@ -245,7 +255,7 @@
       "name": "obsidian_search",
       "displayName": "Obsidian Vault Search",
       "category": "Productivity",
-      "description": "Searches Markdown notes, diary entries, research logs, and facts in the personal Obsidian vault (`friday-memory/`).",
+      "description": "Searches Markdown notes, diary entries, research logs, and facts in the personal Obsidian vault (`jarvis-memory/`).",
       "parameters": {
         "query": { "type": "string", "description": "Search keyword or phrase" }
       },
@@ -286,6 +296,19 @@
       },
       "executionMode": "sync",
       "source": "server/skills.ts"
+    },
+    "omarchy_control": {
+      "name": "omarchy_control",
+      "displayName": "Omarchy Desktop & System Control",
+      "category": "System",
+      "description": "Fast native Omarchy Linux & Hyprland OS desktop controls: window management (close, fullscreen, float, cycle), workspace switching (1-10), desktop theme & background changes, hardware toggles (nightlight, bar, touchpad, stay-awake), service restarts (audio, wifi, bluetooth, shell), screen capture, and launchers.",
+      "parameters": {
+        "domain": { "type": "string", "description": "hyprland, theme, toggle, restart, capture, launch, power, osd" },
+        "action": { "type": "string", "description": "Specific action command for the selected domain" },
+        "target": { "type": "string", "description": "Optional argument/target e.g. workspace number, theme name, or text" }
+      },
+      "executionMode": "sync-submillisecond",
+      "source": "server/skills.ts"
     }
   },
 
@@ -293,7 +316,7 @@
     "cpp_workers": {
       "category": "Native C++ Hardware Workers",
       "binDirectory": "workers_cpp/bin",
-      "totalWorkers": 18,
+      "totalWorkers": 19,
       "items": {
         "sys_telemetry": { "binary": "sys_telemetry", "description": "Sub-millisecond CPU %, RAM, and load average extractor" },
         "thermal_scan": { "binary": "thermal_scan", "description": "Linux thermal zone sensor scanner" },
@@ -307,6 +330,7 @@
         "firewall_audit": { "binary": "firewall_audit", "description": "iptables/ufw rule auditor and port listener scanner" },
         "desktop_control": { "binary": "desktop_control", "description": "X11/Wayland mouse, keyboard, and window automation" },
         "desktop_ctrl": { "binary": "desktop_ctrl", "description": "Fast window focus and desktop workspace switcher" },
+        "omarchy_ctrl": { "binary": "omarchy_ctrl", "description": "High-performance native Omarchy/Hyprland OS actuator with direct socket IPC" },
         "file_search": { "binary": "file_search", "description": "Multi-threaded filesystem crawler" },
         "open_app": { "binary": "open_app", "description": "Desktop application launcher via XDG desktop entries" },
         "media_ctrl": { "binary": "media_ctrl", "description": "MPRIS media player playback controller" },

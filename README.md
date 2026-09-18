@@ -1,4 +1,4 @@
-# 🤖 F.R.I.D.A.Y. — Sovereign AI Operating System & Live Voice Assistant
+# 🤖 J.A.R.V.I.S. — Sovereign AI Operating System & Live Voice Assistant
 
 [![Gemini Live](https://img.shields.io/badge/Gemini%20Live-3.1%20Flash%20%26%203.7%20Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -9,7 +9,7 @@
 [![Vite](https://img.shields.io/badge/Vite-6.2-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-v4.1-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
-**Friday-OS** is an ultra-low latency, sovereign, multi-agent AI operating system and conversational assistant. It combines real-time full-duplex speech-to-speech AI, live multimodal vision, sub-millisecond C++ Linux hardware workers, high-performance Rust audio and memory engines, and autonomous specialist agent delegation into a seamless personal intelligence hub.
+**JARVIS-OS** (formerly Friday-OS) is an ultra-low latency, sovereign, multi-agent AI operating system and conversational assistant. It combines real-time full-duplex speech-to-speech AI, live multimodal vision, sub-millisecond C++ Linux hardware workers, high-performance Rust audio and memory engines, and autonomous specialist agent delegation into a seamless personal intelligence hub.
 
 ---
 
@@ -21,7 +21,7 @@
 - [📂 Project Structure](#-project-structure)
 - [⚙️ Prerequisites](#️-prerequisites)
 - [🚀 Quick Start & Installation](#-quick-start--installation)
-- [🖥️ Running Friday-OS](#️-running-friday-os)
+- [🖥️ Running JARVIS-OS](#️-running-jarvis-os)
 - [🛠️ Modular Skills & Native Tools Catalog](#️-modular-skills--native-tools-catalog)
 - [🔒 Security, Privacy & Capability Forge](#-security-privacy--capability-forge)
 - [📋 Configuration Reference (`.env`)](#-configuration-reference-env)
@@ -42,7 +42,7 @@
   - **Hermes Agent** (`hermes`): Deep web research, note synthesis, source grounding, and Obsidian vault indexing.
   - **OpenClaw Gateway** (`openclaw`): Multimodal gateway and sandboxed workspace tooling on port 18789.
   - **Ultron Engine** (`ultron`): Deep Linux kernel diagnostics, performance tuning, and sound server auto-healing.
-- 🧠 **Sovereign Multi-Tier Memory Vault**: Local Markdown vault (`friday-memory/` / `jarvis-memory/`), timestamped conversation logs, daily agendas, and scoped department memory with anti-poisoning guards.
+- 🧠 **Sovereign Multi-Tier Memory Vault**: Local Markdown vault (`jarvis-memory/` (with `friday-memory/` compatibility alias)), timestamped conversation logs, daily agendas, and scoped department memory with anti-poisoning guards.
 - 💓 **24/7 Autonomous Heartbeat**: Proactive background monitoring for battery drops, thermal spikes, overdue reminders, and task completions.
 - 📱 **Mobile Telegram Control**: Full remote two-way assistant chat and command execution (`/status`, `/task`, `/remind`) directly from your phone.
 - 🛡️ **Capability Forge & AST Auditor**: Sandboxed Bubblewrap (`bwrap`) environment to dynamically synthesize, test, and register custom Python tools on the fly.
@@ -109,7 +109,7 @@ flowchart TB
 
 | Agent | Platform / Engine | Role & Capabilities | Bridge File |
 |---|---|---|---|
-| **F.R.I.D.A.Y. Prime** | Gemini 3.1 Live / 3.7 Flash | Master conversational voice orchestrator, real-time audio/vision comprehension, intent classifier, and task dispatcher. | `server.ts` / `core_engine/gemini_live.py` |
+| **J.A.R.V.I.S. Prime** | Gemini 3.1 Live / 3.7 Flash | Master conversational voice orchestrator, real-time audio/vision comprehension, intent classifier, and task dispatcher. | `server.ts` / `core_engine/gemini_live.py` |
 | **Prime Agent** | `prime-agent` CLI | Primary autonomous software engineer. Specializes in building applications, large refactors, code generation, and test-driven debugging. | `server/primeBridge.ts` |
 | **Hermes Agent** | `hermes` CLI (v0.20+) | Deep autonomous web research, fact extraction, source grounding, and multi-turn Obsidian knowledge navigation. | `server/hermesBridge.ts` |
 | **OpenClaw Gateway** | OpenClaw Gateway (:18789) | Multi-model agent gateway (Nemotron, Claude, MiniMax) with sandboxed workspace tooling and subagent sessions. | `server/openclawBridge.ts` |
@@ -120,9 +120,8 @@ flowchart TB
 ## 📂 Project Structure
 
 ```
-Friday-OS/
-├── .agents/                 # Agent rules, workflows, and harvested execution skills
-├── core_engine/             # Python Core Engine (FastAPI, Actuators, Security, MCP)
+JARVIS-OS/
+├── brain/                   # Python Core Intelligence Engine (FastAPI, Actuators, Security, MCP)
 │   ├── actuator_dispatcher.py # Master tool execution & C++ worker dispatcher
 │   ├── audio_bridge.py      # Unix domain socket bridge for low-latency PCM audio
 │   ├── forge_sandbox.py     # Bubblewrap (bwrap) dynamic tool creation sandbox
@@ -134,17 +133,18 @@ Friday-OS/
 │   ├── security.py          # Command sanitization and path traversal guard
 │   ├── server.py            # FastAPI REST & WebSocket server (:8000)
 │   ├── tool_ast_auditor.py  # Python AST security scanner for forged tools
-│   ├── templates/           # Jinja2 system prompt templates (friday, hermes, etc.)
+│   ├── templates/           # Jinja2 system prompt templates (jarvis, hermes, etc.)
 │   └── voice/               # FFT telemetry, VAD config, IPC tool sink
-├── custom_tools/            # Dynamically synthesized custom tools (.py + .json)
-├── friday-memory/           # Sovereign Obsidian Markdown vault (Journal, Facts, Plans)
-├── gateway_rust/            # Rust zero-GC microsecond audio gateway
-│   ├── src/                 # ALSA audio capture/playback & socket bridge
-│   └── Cargo.toml           # Optimized release profile with LTO
-├── memory_engine/           # Rust universal memory & context engine
-│   ├── src/                 # Axum server, SQLite FTS5, knowledge graph, miners
-│   └── Cargo.toml           # Memory engine dependencies & configuration
+├── memory/                  # Unified Memory Subsystem
+│   ├── vault/               # Sovereign Obsidian Markdown vault (Journal, Facts, Plans)
+│   ├── engine/              # Rust universal memory & context engine (SQLite FTS5, tree, MCP)
+│   └── python/              # Python memory drivers & bridges
+├── gateway/                 # Communication & Hardware Gateways
+│   ├── telegram/            # Python Telegram Channel Gateway bot
+│   ├── audio_rust/          # Rust zero-GC microsecond audio gateway
+│   └── services/            # Systemd service unit files & installers
 ├── server/                  # TypeScript server modules & agent bridges
+│   ├── server.ts            # Express & WebSocket master backend (:3000)
 │   ├── heartbeat.ts         # 24/7 background monitor for thermals, battery & tasks
 │   ├── hermesBridge.ts      # Multi-turn Hermes CLI delegation bridge
 │   ├── memoryGuard.ts       # Department memory scoping & write guardrails
@@ -156,23 +156,22 @@ Friday-OS/
 │   ├── skills.ts            # Declarations and execution handlers for modular skills
 │   ├── system_controller.ts # Linux system controller (volume, brightness, apps, etc.)
 │   ├── telegramBot.ts       # Inbound Telegram polling bot for remote mobile control
-│   ├── telegramNotifier.ts  # Outbound Telegram notification dispatcher
-│   └── ultronBridge.ts      # Ultron Linux diagnostics & sound auto-healing
-├── src/                     # React 19 Front-End Application
-│   ├── components/          # HUD, TaskDock, Visualizer, SkillsHub, VisionPreview
-│   ├── hooks/               # useVoiceControls (Live WebSocket & audio stream manager)
-│   ├── utils/               # AudioStreamer, verbal feedback audio synthesis
-│   ├── App.tsx              # Main UI layout & state orchestration
-│   └── index.css            # Tailwind CSS styling & sci-fi theme design
-├── workers_cpp/             # 18 Native C++ Linux System Workers
-│   ├── src/                 # C++ source files (telemetry, hardware, desktop, etc.)
-│   ├── bin/                 # Compiled native binaries
-│   └── Makefile             # C++17 compilation targets (-O3, -Wall)
-├── scripts/                 # Utility scripts (e.g. google_auth_setup.py)
+│   └── telegramNotifier.ts  # Outbound Telegram notification dispatcher
+├── ui/                      # User Interfaces
+│   ├── web/                 # React 19 Front-End Application (Vite + Tailwind)
+│   │   ├── src/             # Components, hooks, utils, App.tsx, CSS
+│   │   ├── public/          # Audio worklets, icons, manifest
+│   │   └── index.html       # Web app HTML entrypoint
+│   └── hud/                 # Native PySide6 & HTML desktop HUD overlay
+├── skills/                  # Actuators & Domain Skills
+│   ├── omarchy/             # Hyprland desktop automation skills (C++ & Python)
+│   └── native/              # 18 Native C++ Linux System Workers (workers_cpp)
+├── tools/                   # Custom Tools & Automation Scripts
+│   ├── custom/              # Dynamically synthesized custom tools (.py + .json)
+│   └── scripts/             # Developer utilities & setup scripts
+├── docs/                    # Architecture, Design & Documentation
 ├── agents.registry.json     # Ground-truth inventory of agents, skills, and tools
-├── FRIDAY-OS-DESIGN.md      # Canonical architectural specification
-├── main.py                  # Root orchestrator & Python launcher
-├── server.ts                # TypeScript Express & WebSocket backend entrypoint
+├── main.py                  # Root orchestrator launcher
 ├── package.json             # Node dependencies and build scripts
 ├── tsconfig.json            # TypeScript configuration
 └── vite.config.ts           # Vite frontend configuration
@@ -204,8 +203,8 @@ Optional tools for advanced features:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-username/Friday-OS.git
-cd Friday-OS
+git clone https://github.com/your-username/JARVIS-OS.git
+cd Jarvis-OS
 ```
 
 ### 2. Configure Environment Variables
@@ -262,9 +261,9 @@ python3 scripts/google_auth_setup.py
 
 ---
 
-## 🖥️ Running Friday-OS
+## 🖥️ Running JARVIS-OS
 
-Friday-OS can be run in several flexible modes depending on your workflow:
+JARVIS-OS can be run in several flexible modes depending on your workflow:
 
 ### Mode A: Full Web Experience (Voice + Multimodal Vision + Sci-Fi HUD)
 Starts the TypeScript Express server, WebSocket bridge, and Vite frontend:
@@ -330,7 +329,7 @@ All skills are registered in `agents.registry.json` and automatically declared t
 | `control_system` | System | Controls master volume, brightness, power management profiles, and screen locking. | Sync |
 | `launch_application` | System | Launches desktop applications, terminals, IDEs, or media tools via XDG entries. | Sync |
 | `manage_system_process` | System | Inspects top running processes by CPU/RAM, finds PIDs, and terminates runaway tasks. | Sync |
-| `obsidian_search` | Productivity | Full-text search across Markdown notes, facts, and daily logs in `friday-memory/`. | Sync |
+| `obsidian_search` | Productivity | Full-text search across Markdown notes, facts, and daily logs in `jarvis-memory/` (or legacy `friday-memory/`). | Sync |
 | `obsidian_read` | Productivity | Reads full Markdown content and YAML frontmatter of any vault note. | Sync |
 | `obsidian_create` | Productivity | Creates new Markdown notes with structured frontmatter in the user's vault. | Sync |
 | `obsidian_append` | Productivity | Appends timestamped research logs and findings to existing vault notes. | Sync |
@@ -365,12 +364,12 @@ Compiled natively to eliminate runtime interpreter overhead and provide sub-mill
 ## 🔒 Security, Privacy & Capability Forge
 
 ### 🛡️ Sovereign By Design
-- **100% Local File & System Execution**: Sensitive data, conversation transcripts, personal schedules, and knowledge notes remain entirely on your local machine in `friday-memory/`.
+- **100% Local File & System Execution**: Sensitive data, conversation transcripts, personal schedules, and knowledge notes remain entirely on your local machine in `jarvis-memory/` (or legacy `friday-memory/`).
 - **Memory Guardrails**: Department-scoped writes prevent cross-agent memory pollution or prompt injection poisoning.
 
 ### 🧪 Capability Forge (`core_engine/forge_sandbox.py`)
-Friday can dynamically write and test its own custom Python tools in response to new user requirements:
-1. **Dynamic Generation**: Friday writes `.py` code and a `.manifest.json` schema to `custom_tools/`.
+JARVIS can dynamically write and test its own custom Python tools in response to new user requirements:
+1. **Dynamic Generation**: JARVIS writes `.py` code and a `.manifest.json` schema to `custom_tools/`.
 2. **AST Security Audit (`tool_ast_auditor.py`)**: Checks for forbidden imports, dangerous system calls, network egress leaks, and path escapes.
 3. **Bubblewrap Isolation (`bwrap`)**: Runs the tool in an unprivileged, isolated sandbox with read-only system mounts and isolated virtual environments (`.forge_venv`).
 4. **Live Registration**: Upon passing verification, the tool is dynamically added to the Live agent's toolset without restarting the server.
@@ -395,13 +394,13 @@ Friday can dynamically write and test its own custom Python tools in response to
 | `HEARTBEAT_INTERVAL_MS` | `300000` | Heartbeat pulse frequency in ms (5 minutes). |
 | `BATTERY_LOW_THRESHOLD` | `15` | Battery percentage threshold for proactive Telegram warning. |
 | `THERMAL_HIGH_THRESHOLD`| `85` | CPU temperature (°C) threshold for thermal throttling alert. |
-| `OBSIDIAN_VAULT_PATH` | `./friday-memory` | Path to your personal sovereign Markdown memory vault. |
+| `OBSIDIAN_VAULT_PATH` | `./jarvis-memory` | Path to your personal sovereign Markdown memory vault. |
 
 ---
 
 ## 📱 Proactive Heartbeat & Telegram Sync
 
-Friday-OS operates even when the browser is closed:
+JARVIS-OS operates even when the browser is closed:
 
 1. **Heartbeat Daemon (`server/heartbeat.ts`)**:
    - Runs on a configurable background timer (default: every 5 minutes).
@@ -415,7 +414,7 @@ Friday-OS operates even when the browser is closed:
      - `/status`: Instant snapshot of battery, CPU load, RAM usage, thermals, and active background agents.
      - `/task <prompt>`: Dispatches an asynchronous multi-agent task to Prime Agent or Hermes from mobile.
      - `/remind <time> <text>`: Schedules a reminder directly into the persistent reminder store.
-     - Natural conversational messages: Chat with Friday on the go!
+     - Natural conversational messages: Chat with JARVIS on the go!
 
 ---
 

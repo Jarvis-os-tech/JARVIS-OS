@@ -1,7 +1,7 @@
 /**
- * Friday OS — Heartbeat Engine (Proactive Autonomy Layer)
+ * JARVIS OS — Heartbeat Engine (Proactive Autonomy Layer)
  *
- * The 24/7 "pulse" that makes Friday alive. Runs background checks on a schedule,
+ * The 24/7 "pulse" that makes JARVIS alive. Runs background checks on a schedule,
  * tracks the daily schedule, delivers morning briefings, and executes proactive
  * autonomous self-healing — keeping you informed via Voice when at the PC, or
  * Telegram when away.
@@ -119,7 +119,7 @@ export async function sendMorningDailyDigest(force: boolean = false): Promise<bo
       getBatteryStatus().catch(() => null),
     ]);
 
-    let msg = `🌅 **Good morning, Gopi — Friday OS Daily Agenda**\n\n`;
+    let msg = `🌅 **Good morning, Gopi — JARVIS OS Daily Agenda**\n\n`;
 
     const nowFormatted = now.toLocaleDateString("en-IN", {
       weekday: "long",
@@ -279,7 +279,7 @@ async function heartbeatTick(): Promise<HeartbeatResult> {
           }
         }
       }
-    } catch (err) {}
+    } catch (err) { }
   }
 
   // ── 4. Check Thermals (every 3rd tick) ────────────────────
@@ -307,7 +307,7 @@ async function heartbeatTick(): Promise<HeartbeatResult> {
             await runUltronSystemAction("boost_system");
             result.checks.selfHealing.attempted++;
             result.checks.selfHealing.resolved++;
-          } catch {}
+          } catch { }
 
           if (!isUserPresent && canSendAlert("thermal_high")) {
             const sent = await notifyProactiveAlert(
@@ -322,7 +322,7 @@ async function heartbeatTick(): Promise<HeartbeatResult> {
           }
         }
       }
-    } catch (err) {}
+    } catch (err) { }
   }
 
   // ── 5. Check Completed Background Tasks ───────────────────
@@ -391,7 +391,7 @@ async function heartbeatTick(): Promise<HeartbeatResult> {
           await runUltronSystemAction("heal_subsystem", { subsystem: "sound" });
           remediation = "Ultron auto-healed PipeWire sound server.";
           result.checks.selfHealing.resolved++;
-        } catch {}
+        } catch { }
       }
 
       // Log execution trace
@@ -470,7 +470,7 @@ export async function startHeartbeat(): Promise<void> {
       );
       // Send startup notification
       await sendTelegramNotification({
-        title: "🟢 Friday is Online (24/7 Autonomous Mode)",
+        title: "🟢 JARVIS is Online (24/7 Autonomous Mode)",
         body: `Heartbeat active. Continuous monitoring every ${HEARTBEAT_INTERVAL_MS / 60000} minutes.\nSpecialist Fleet (Prime Agent, Hermes, Ultron) is ready.`,
         priority: "low",
         category: "system",

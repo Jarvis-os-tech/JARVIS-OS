@@ -1,4 +1,4 @@
-# Friday-OS Hermes External Memory Provider Configs
+# JARVIS-OS Hermes External Memory Provider Configs
 # One per department profile — place in ~/.hermes/profiles/<dept>/config.yaml
 # or reference via HERMES_EXTERNAL_MEMORY_PROVIDER env var
 
@@ -8,7 +8,7 @@
 research:
   external_memory:
     provider: "obsidian"
-    vault_path: "/home/gopi/Downloads/Friday-OS/friday-memory/research"
+    vault_path: "/home/g0pi/Projects/Jarvis-OS/memory/vault/research"
     read_only: false
     scope: "department"
     index_file: "_index.json"
@@ -19,7 +19,7 @@ research:
 coder:
   external_memory:
     provider: "obsidian"
-    vault_path: "/home/gopi/Downloads/Friday-OS/friday-memory/coder"
+    vault_path: "/home/g0pi/Projects/Jarvis-OS/memory/vault/coder"
     read_only: false
     scope: "department"
     index_file: "_index.json"
@@ -30,7 +30,7 @@ coder:
 personal:
   external_memory:
     provider: "obsidian"
-    vault_path: "/home/gopi/Downloads/Friday-OS/friday-memory/personal"
+    vault_path: "/home/g0pi/Projects/Jarvis-OS/memory/vault/personal"
     read_only: false
     scope: "department"
     index_file: "_index.json"
@@ -41,7 +41,7 @@ personal:
 finance:
   external_memory:
     provider: "obsidian"
-    vault_path: "/home/gopi/Downloads/Friday-OS/friday-memory/finance"
+    vault_path: "/home/g0pi/Projects/Jarvis-OS/memory/vault/finance"
     read_only: false
     scope: "department"
     index_file: "_index.json"
@@ -52,7 +52,7 @@ finance:
 creative:
   external_memory:
     provider: "obsidian"
-    vault_path: "/home/gopi/Downloads/Friday-OS/friday-memory/creative"
+    vault_path: "/home/g0pi/Projects/Jarvis-OS/memory/vault/creative"
     read_only: false
     scope: "department"
     index_file: "_index.json"
@@ -63,7 +63,7 @@ creative:
 ops:
   external_memory:
     provider: "obsidian"
-    vault_path: "/home/gopi/Downloads/Friday-OS/friday-memory/ops"
+    vault_path: "/home/g0pi/Projects/Jarvis-OS/memory/vault/ops"
     read_only: false
     scope: "department"
     index_file: "_index.json"
@@ -74,7 +74,7 @@ ops:
 default:
   external_memory:
     provider: "obsidian"
-    vault_path: "/home/gopi/Downloads/Friday-OS/friday-memory/default"
+    vault_path: "/home/g0pi/Projects/Jarvis-OS/memory/vault/default"
     read_only: false
     scope: "department"
     index_file: "_index.json"

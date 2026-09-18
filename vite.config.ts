@@ -5,29 +5,35 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    root: path.resolve(__dirname, 'ui/web'),
+    publicDir: path.resolve(__dirname, 'ui/web/public'),
+    build: {
+      outDir: path.resolve(__dirname, 'dist'),
+      emptyOutDir: true,
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(__dirname, 'ui/web/src'),
       },
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: {
         ignored: [
-          '**/friday-memory/**',
+          '**/memory/**',
           '**/jarvis-memory/**',
           '**/.agents/**',
           '**/.gemini/**',
           '**/dist/**',
-          '**/core_engine/**',
-          '**/workers_cpp/**',
-          '**/gateway_rust/**',
-          '**/memory_engine/**',
-          '**/custom_tools/**',
-          '**/hud/**',
+          '**/brain/**',
+          '**/skills/**',
+          '**/gateway/**',
+          '**/tools/**',
           '**/data/**',
           '**/.venv/**',
+          '**/.git/**',
+          '**/*.log',
         ],
       },
     },

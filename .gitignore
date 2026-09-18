@@ -1,26 +1,153 @@
-node_modules/
-build/
-dist/
-coverage/
-.DS_Store
-*.log
-.env*
+# ==============================================================================
+# JARVIS-OS — Unified Master .gitignore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Environment Variables & API Secrets (CRITICAL)
+# ------------------------------------------------------------------------------
+.env
+.env.*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.cert
+*.crt
+token.json
+credentials.json
+client_secret*.json
+*.session
+*.session-journal
+telethon*.session
 
-# C++ compiled binaries
-workers_cpp/bin/
+# ------------------------------------------------------------------------------
+# 2. Personal Memory Vault & Storage (PRIVATE — NEVER PUSH TO GITHUB)
+# ------------------------------------------------------------------------------
+# Exclude all personal memories, facts, conversation logs, and vault contents
+memory/vault/*
+!memory/vault/.gitkeep
+jarvis-memory/
+friday-memory/
+memories/
 
-# Rust build artifacts
-gateway_rust/target/
-memory_engine/target/
-
-# Python
-__pycache__/
-*.pyc
-core_engine/.forge_venv/
-custom_tools/.forge_venv/
-
-# Data files
+# All SQLite databases, write-ahead logs, and memory indexes
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
 data/*.db*
+data/*.sqlite*
 data/*.json
 !data/.gitkeep
+
+# ------------------------------------------------------------------------------
+# 3. Node.js & Web UI Build Artifacts
+# ------------------------------------------------------------------------------
+node_modules/
+dist/
+build/
+dist-ssr/
+.vite/
+.cache/
+coverage/
+.nyc_output/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ------------------------------------------------------------------------------
+# 4. Python Virtual Environments, Bytecode & Caches
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+**/.forge_venv/
+brain/.forge_venv/
+tools/custom/.forge_venv/
+
+# ------------------------------------------------------------------------------
+# 5. Rust Build Targets (Cargo)
+# ------------------------------------------------------------------------------
+target/
+**/target/
+gateway/audio_rust/target/
+memory/engine/target/
+*.rs.bk
+
+# ------------------------------------------------------------------------------
+# 6. C++ Compiled Binaries, Objects & Workers
+# ------------------------------------------------------------------------------
+skills/native/bin/
+skills/native/obj/
+skills/omarchy/bin/
+skills/workers_cpp/bin/
+workers_cpp/bin/
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+*.a
+*.la
+*.lai
+
+# ------------------------------------------------------------------------------
+# 7. Sockets, Temporary Files & Audio/Video Dumps
+# ------------------------------------------------------------------------------
+*.sock
+/tmp/
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+*.pcm
+recordings/
+*.h264
+
+# ------------------------------------------------------------------------------
+# 8. Logs & Runtime Telemetry
+# ------------------------------------------------------------------------------
+logs/
+*.log
+
+# ------------------------------------------------------------------------------
+# 9. Operating System & IDE Files
+# ------------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-project
+*.sublime-workspace

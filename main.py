@@ -42,21 +42,37 @@ except ImportError:
 # Add current directory to path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from core_engine.main import main as core_main
+try:
+    from brain.main import main as core_main
+except ImportError:
+    from core_engine.main import main as core_main
 
-RUST_GATEWAY_BIN = os.path.join(os.path.dirname(__file__), "gateway_rust", "target", "release", "jarvis-gateway")
+RUST_GATEWAY_CANDIDATES = [
+    os.path.join(os.path.dirname(__file__), "gateway", "audio_rust", "target", "release", "jarvis-gateway"),
+    os.path.join(os.path.dirname(__file__), "gateway_rust", "target", "release", "jarvis-gateway"),
+]
+RUST_GATEWAY_BIN = next((p for p in RUST_GATEWAY_CANDIDATES if os.path.exists(p)), RUST_GATEWAY_CANDIDATES[0])
 
 
 def ensure_gateway_service():
     """Ensure the 24/7 Python Telegram & Heartbeat gateway service is running."""
     try:
-        res = subprocess.run(["systemctl", "--user", "is-active", "friday-gateway.service"],
+        service_name = "jarvis-gateway.service"
+        res = subprocess.run(["systemctl", "--user", "is-active", service_name],
                              capture_output=True, text=True)
-        if res.returncode != 0 or res.stdout.strip() != "active":
-            print("[Launcher] 🔄 Starting 24/7 Friday-OS Gateway service...")
-            subprocess.run(["systemctl", "--user", "start", "friday-gateway.service"], capture_output=True)
-        else:
-            print("[Launcher] 🟢 24/7 Friday-OS Gateway service active & running.")
+        if res.returncode == 0 and res.stdout.strip() == "active":
+            print("[Launcher] 🟢 24/7 JARVIS-OS Gateway service active & running.")
+            return
+
+        # Check legacy fallback
+        res_legacy = subprocess.run(["systemctl", "--user", "is-active", "friday-gateway.service"],
+                                    capture_output=True, text=True)
+        if res_legacy.returncode == 0 and res_legacy.stdout.strip() == "active":
+            print("[Launcher] 🟢 24/7 JARVIS-OS Gateway service active & running (via friday-gateway.service).")
+            return
+
+        print("[Launcher] 🔄 Starting 24/7 JARVIS-OS Gateway service...")
+        subprocess.run(["systemctl", "--user", "start", service_name], capture_output=True)
     except Exception:
         pass
 

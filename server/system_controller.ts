@@ -29,14 +29,16 @@ const execFileAsync = promisify(execFile);
 // delivering sub-millisecond execution instead of spawning slow shell commands.
 function getCppBinDir(): string {
   const candidates = [
+    path.join(process.cwd(), 'skills', 'native', 'bin'),
     path.join(process.cwd(), 'workers_cpp', 'bin'),
     path.join(process.cwd(), 'actuators', 'bin'),
+    path.resolve(path.join(_dirname, '..', 'skills', 'native', 'bin')),
     path.resolve(path.join(_dirname, '..', '..', 'workers_cpp', 'bin'))
   ];
   for (const dir of candidates) {
     if (fs.existsSync(dir)) return dir;
   }
-  return path.join(process.cwd(), 'workers_cpp', 'bin');
+  return path.join(process.cwd(), 'skills', 'native', 'bin');
 }
 
 const CPP_BIN = getCppBinDir();
@@ -85,6 +87,77 @@ export async function executeLinuxActuator(cmd: string, args: string[] = []): Pr
     return { success: true, stdout: stdout?.trim(), stderr: stderr?.trim() };
   } catch (err: any) {
     return { success: false, error: err.message || String(err) };
+  }
+}
+
+/**
+ * Execute native Omarchy / Hyprland desktop action via high-performance C++ actuator.
+ * Delivers sub-millisecond execution for Hyprland window/workspace actions,
+ * and sub-20ms execution for Omarchy system/theme toggles.
+ */
+export async function executeOmarchyAction(
+  domain: string,
+  action: string,
+  target: string = ''
+): Promise<{ success: boolean; domain: string; action: string; output: string; duration_ms: number; error?: string }> {
+  const args = [domain, action];
+  if (target) args.push(target);
+
+  // Try compiled C++ worker first (workers_cpp/bin/omarchy_ctrl)
+  const workerRes = await callCppWorker('omarchy_ctrl', args, 6000);
+  if (workerRes !== null) {
+    return workerRes;
+  }
+
+  // Fallback: check skills/omarchy/bin/omarchy_ctrl or omarchy_skills/bin/omarchy_ctrl
+  const customBins = [
+    path.join(process.cwd(), 'skills', 'omarchy', 'bin', 'omarchy_ctrl'),
+    path.join(process.cwd(), 'omarchy_skills', 'bin', 'omarchy_ctrl'),
+  ];
+  for (const customBin of customBins) {
+    if (fs.existsSync(customBin)) {
+      try {
+        const { stdout } = await execFileAsync(customBin, args, { timeout: 6000 });
+        return JSON.parse(stdout.trim());
+      } catch (e: any) {
+        return { success: false, domain, action, output: '', duration_ms: 0, error: e.message };
+      }
+    }
+  }
+
+  // Fallback to direct omarchy / hyprctl CLI
+  const t0 = Date.now();
+  try {
+    let cmd = 'omarchy';
+    let cmdArgs = [domain, action];
+    if (target) cmdArgs.push(target);
+
+    if (domain === 'hypr' || domain === 'hyprland') {
+      cmd = 'hyprctl';
+      if (action === 'close_window') cmdArgs = ['dispatch', 'hl.dsp.window.close()'];
+      else if (action === 'fullscreen') cmdArgs = ['dispatch', 'hl.dsp.window.fullscreen({ mode = "fullscreen" })'];
+      else if (action === 'float') cmdArgs = ['dispatch', 'hl.dsp.window.float({ action = "toggle" })'];
+      else if (action === 'workspace') cmdArgs = ['dispatch', `hl.dsp.focus({ workspace = "${target || '1'}" })`];
+      else cmdArgs = ['dispatch', action, target];
+    }
+
+    const { stdout } = await execFileAsync(cmd, cmdArgs, { timeout: 6000 });
+    return {
+      success: true,
+      domain,
+      action,
+      output: stdout.trim(),
+      duration_ms: Date.now() - t0
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      domain,
+      action,
+      output: '',
+      duration_ms: Date.now() - t0,
+      error: err.message || String(err)
+    };
   }
 }
 
@@ -1402,29 +1475,34 @@ export function resolveSmartFilePath(rawPath: string): string {
   const direct = path.resolve(clean);
   if (fs.existsSync(direct)) return direct;
 
-  // 3. Search candidate locations (Workspace, friday-memory, ~/.friday/memory/vault)
+  // 3. Search candidate locations (Workspace, memory/vault, jarvis-memory, friday-memory, ~/.jarvis/memory)
   const candidates = [
     direct,
     path.join(process.cwd(), clean),
+    path.join(process.cwd(), 'memory', 'vault', clean),
+    path.join(process.cwd(), 'memory', clean),
+    path.join(process.cwd(), 'jarvis-memory', clean),
     path.join(process.cwd(), 'friday-memory', clean),
-    path.join(process.cwd(), 'friday-memory', 'vault', clean),
     path.join(process.cwd(), 'JARVIS-MEMORY', clean),
-    path.join(process.cwd(), 'JARVIS-MEMORY', 'vault', clean),
-    path.join(os.homedir(), '.friday', 'memory', 'vault', clean),
-    path.join(os.homedir(), '.friday', 'memory', clean),
     path.join(os.homedir(), '.jarvis', 'memory', 'vault', clean),
     path.join(os.homedir(), '.jarvis', 'memory', clean),
+    path.join(os.homedir(), '.friday', 'memory', 'vault', clean),
+    path.join(os.homedir(), '.friday', 'memory', clean),
   ];
 
   const base = path.basename(clean);
   if (base.toLowerCase() === 'index.md') {
     candidates.push(
+      path.join(process.cwd(), 'memory', 'vault', 'INDEX.md'),
+      path.join(process.cwd(), 'memory', 'vault', 'index.md'),
+      path.join(process.cwd(), 'jarvis-memory', 'INDEX.md'),
+      path.join(process.cwd(), 'jarvis-memory', 'index.md'),
       path.join(process.cwd(), 'friday-memory', 'INDEX.md'),
       path.join(process.cwd(), 'friday-memory', 'index.md'),
       path.join(process.cwd(), 'JARVIS-MEMORY', 'INDEX.md'),
       path.join(process.cwd(), 'JARVIS-MEMORY', 'index.md'),
-      path.join(os.homedir(), '.friday', 'memory', 'vault', 'INDEX.md'),
-      path.join(os.homedir(), '.jarvis', 'memory', 'vault', 'INDEX.md')
+      path.join(os.homedir(), '.jarvis', 'memory', 'vault', 'INDEX.md'),
+      path.join(os.homedir(), '.friday', 'memory', 'vault', 'INDEX.md')
     );
   }
 

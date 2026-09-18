@@ -17,6 +17,7 @@ import {
   getRunningProcesses,
   manageProcess,
   controlMediaPlayback,
+  executeOmarchyAction,
 } from "./system_controller.js";
 
 export interface ModularSkill {
@@ -265,7 +266,7 @@ export const newsSkill: ModularSkill = {
       }
 
       const res = await fetch(rssUrl, {
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; FRIDAY-VoiceAgent/1.0)" },
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; JARVIS-VoiceAgent/1.0)" },
       });
       if (!res.ok) {
         throw new Error(`News feed responded with status ${res.status}`);
@@ -827,13 +828,13 @@ export const openclawSkill: ModularSkill = {
 export const openclawChatSkill = openclawSkill;
 
 // ─────────────────────────────────────────────────────────────
-// Instant Friday System Information Skill (Fast Path)
+// Instant JARVIS System Information Skill (Fast Path)
 // ─────────────────────────────────────────────────────────────
 export const systemInfoSkill: ModularSkill = {
   name: "get_system_info",
   displayName: "Instant System Telemetry",
   description:
-    "Instant real-time telemetry query for Friday: CPU usage, RAM usage, battery percent, thermal temperatures, disk storage, network connectivity, and PC specifications.",
+    "Instant real-time telemetry query for JARVIS: CPU usage, RAM usage, battery percent, thermal temperatures, disk storage, network connectivity, and PC specifications.",
   icon: "Activity",
   category: "System",
   declaration: {
@@ -875,7 +876,7 @@ export const systemInfoSkill: ModularSkill = {
         speechSummary: speech,
         displayCard: {
           type: "system_telemetry",
-          title: "Friday • Live System Telemetry",
+          title: "JARVIS • Live System Telemetry",
           data: { cpu, ramPct, ramUsed, ramTotal, temp, batt, telemetry },
         },
       };
@@ -886,13 +887,13 @@ export const systemInfoSkill: ModularSkill = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Instant Friday System Controller Skill (Fast Path)
+// Instant JARVIS System Controller Skill (Fast Path)
 // ─────────────────────────────────────────────────────────────
 export const systemControlSkill: ModularSkill = {
   name: "control_system",
   displayName: "Instant System Controller",
   description:
-    "Direct Linux OS control for Friday: volume adjustment, brightness, power profiles, power actions (lock/sleep/reboot/shutdown), or media playback.",
+    "Direct Linux OS control for JARVIS: volume adjustment, brightness, power profiles, power actions (lock/sleep/reboot/shutdown), or media playback.",
   icon: "Sliders",
   category: "System",
   declaration: {
@@ -983,12 +984,12 @@ export const systemControlSkill: ModularSkill = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Instant Friday Launch Application Skill (Fast Path)
+// Instant JARVIS Launch Application Skill (Fast Path)
 // ─────────────────────────────────────────────────────────────
 export const launchAppSkill: ModularSkill = {
   name: "launch_application",
   displayName: "Application Launcher",
-  description: "Instant desktop application launcher for Friday. Opens installed Linux applications (Chrome, VS Code, Terminal, Spotify, etc.).",
+  description: "Instant desktop application launcher for JARVIS. Opens installed Linux applications (Chrome, VS Code, Terminal, Spotify, etc.).",
   icon: "ExternalLink",
   category: "System",
   declaration: {
@@ -1022,7 +1023,7 @@ export const launchAppSkill: ModularSkill = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Instant Friday Process Management Skill (Fast Path)
+// Instant JARVIS Process Management Skill (Fast Path)
 // ─────────────────────────────────────────────────────────────
 export const manageProcessSkill: ModularSkill = {
   name: "manage_system_process",
@@ -1070,7 +1071,7 @@ export const manageProcessSkill: ModularSkill = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Obsidian / Memory Vault Direct Skills (fast path — backed by friday-memory)
+// Obsidian / Memory Vault Direct Skills (fast path — backed by jarvis-memory)
 // ─────────────────────────────────────────────────────────────────────────────
 import {
   ensureMemoryVault,
@@ -1087,12 +1088,12 @@ function sanitizeFileName(name: string): string {
 export const obsidianSearchSkill: ModularSkill = {
   name: "obsidian_search",
   displayName: "Memory & Vault Search",
-  description: "Search your Friday memory vault notes, facts, and research by keyword.",
+  description: "Search your JARVIS memory vault notes, facts, and research by keyword.",
   icon: "Search",
   category: "Productivity",
   declaration: {
     name: "obsidian_search",
-    description: "Search Friday memory vault notes and facts by keyword. Use when user says 'search my notes', 'find in memory', 'look up vault', 'search facts'.",
+    description: "Search JARVIS memory vault notes and facts by keyword. Use when user says 'search my notes', 'find in memory', 'look up vault', 'search facts'.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -1113,7 +1114,7 @@ export const obsidianSearchSkill: ModularSkill = {
         return {
           success: true,
           data: { query: q, results: [] },
-          speechSummary: `No memory notes found matching "${q}" in Friday's memory vault.`,
+          speechSummary: `No memory notes found matching "${q}" in JARVIS's memory vault.`,
           displayCard: { type: "obsidian_search", title: `Search: "${q}"`, data: { query: q, results: [] } },
         };
       }
@@ -1135,12 +1136,12 @@ export const obsidianSearchSkill: ModularSkill = {
 export const obsidianReadSkill: ModularSkill = {
   name: "obsidian_read",
   displayName: "Memory & Note Read",
-  description: "Read a specific note or fact file from Friday's memory vault.",
+  description: "Read a specific note or fact file from JARVIS's memory vault.",
   icon: "FileText",
   category: "Productivity",
   declaration: {
     name: "obsidian_read",
-    description: "Read a note or fact file by name from Friday's memory vault. Use when user says 'read my note', 'open note', 'check memory fact'.",
+    description: "Read a note or fact file by name from JARVIS's memory vault. Use when user says 'read my note', 'open note', 'check memory fact'.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -1156,7 +1157,7 @@ export const obsidianReadSkill: ModularSkill = {
       const { found, path: relPath, content } = readMemoryNote(p);
 
       if (!found) {
-        return { success: false, data: { path: p }, speechSummary: `Note "${p}" was not found in Friday's memory vault.` };
+        return { success: false, data: { path: p }, speechSummary: `Note "${p}" was not found in JARVIS's memory vault.` };
       }
 
       const preview = content.slice(0, 800);
@@ -1175,12 +1176,12 @@ export const obsidianReadSkill: ModularSkill = {
 export const obsidianCreateSkill: ModularSkill = {
   name: "obsidian_create",
   displayName: "Memory Note Create",
-  description: "Create a new note or save information into Friday's memory vault.",
+  description: "Create a new note or save information into JARVIS's memory vault.",
   icon: "FilePlus",
   category: "Productivity",
   declaration: {
     name: "obsidian_create",
-    description: "Create a new note in Friday's memory vault. Use when user says 'create a note', 'save to memory', 'make a note', 'remember note'.",
+    description: "Create a new note in JARVIS's memory vault. Use when user says 'create a note', 'save to memory', 'make a note', 'remember note'.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -1205,7 +1206,7 @@ export const obsidianCreateSkill: ModularSkill = {
       return {
         success: true,
         data: { path: rel },
-        speechSummary: `Created note "${title}" in Friday's memory vault.`,
+        speechSummary: `Created note "${title}" in JARVIS's memory vault.`,
         displayCard: { type: "obsidian_note", title: `Created: ${title}`, data: { path: rel, content: content.slice(0, 2000) } },
       };
     } catch (err: any) {
@@ -1217,12 +1218,12 @@ export const obsidianCreateSkill: ModularSkill = {
 export const obsidianAppendSkill: ModularSkill = {
   name: "obsidian_append",
   displayName: "Memory Note Append",
-  description: "Append content to an existing note in Friday's memory vault.",
+  description: "Append content to an existing note in JARVIS's memory vault.",
   icon: "FilePlus2",
   category: "Productivity",
   declaration: {
     name: "obsidian_append",
-    description: "Append content to a note in Friday's memory vault. Creates the note if it does not exist. Use for 'add to my note', 'append to memory', 'log note'.",
+    description: "Append content to a note in JARVIS's memory vault. Creates the note if it does not exist. Use for 'add to my note', 'append to memory', 'log note'.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -1261,7 +1262,7 @@ export interface ScheduleItem {
   time?: string;
   priority: "high" | "medium" | "low";
   completed: boolean;
-  assignedAgent?: "prime-agent" | "hermes" | "ultron" | "friday";
+  assignedAgent?: "prime-agent" | "hermes" | "ultron" | "jarvis" | "friday";
   createdAt: number;
 }
 
@@ -1378,7 +1379,7 @@ export const manageScheduleSkill: ModularSkill = {
         },
         assigned_agent: {
           type: Type.STRING,
-          description: "Optional assigned specialist agent: 'prime-agent', 'hermes', 'ultron', 'friday'.",
+          description: "Optional assigned specialist agent: 'prime-agent', 'hermes', 'ultron', 'jarvis'.",
         },
         id: {
           type: Type.STRING,
@@ -1392,7 +1393,7 @@ export const manageScheduleSkill: ModularSkill = {
     title?: string;
     time?: string;
     priority?: "high" | "medium" | "low";
-    assigned_agent?: "prime-agent" | "hermes" | "ultron" | "friday";
+    assigned_agent?: "prime-agent" | "hermes" | "ultron" | "jarvis" | "friday";
     id?: string;
   }) => {
     const action = args.action || "list";
@@ -1403,7 +1404,7 @@ export const manageScheduleSkill: ModularSkill = {
         title: args.title.trim(),
         time: args.time,
         priority: args.priority || "medium",
-        assignedAgent: args.assigned_agent || "friday",
+        assignedAgent: args.assigned_agent || "jarvis",
         completed: false,
         createdAt: Date.now(),
       };
@@ -1480,7 +1481,7 @@ export const delegateTaskSkill: ModularSkill = {
         target_agent: {
           type: Type.STRING,
           description:
-            "Optional explicit agent: 'prime_agent' (for coding/testing/scripts), 'hermes' (for research/vault/reasoning), 'openclaw' (for workspace/multimodal tools), 'ultron' (for system/diagnostics/boost). If omitted, Friday auto-routes to the best agent.",
+            "Optional explicit agent: 'prime_agent' (for coding/testing/scripts), 'hermes' (for research/vault/reasoning), 'openclaw' (for workspace/multimodal tools), 'ultron' (for system/diagnostics/boost). If omitted, JARVIS auto-routes to the best agent.",
         },
         profile: {
           type: Type.STRING,
@@ -1545,6 +1546,63 @@ export const delegateTaskSkill: ModularSkill = {
   },
 };
 
+// ── Omarchy Desktop & System Control Skill ──────────────────────────────────
+export const omarchySkill: ModularSkill = {
+  name: "omarchy_control",
+  displayName: "Omarchy Desktop & System Control",
+  description:
+    "Fast native Omarchy & Hyprland OS control: manage windows (close, fullscreen, float), switch workspaces (1-10), toggle themes & backgrounds, toggle nightlight/bar/touchpad/stay-awake, restart services (audio/wifi/bluetooth/shell), capture screen/OCR, or launch apps.",
+  icon: "Monitor",
+  category: "System",
+  declaration: {
+    name: "omarchy_control",
+    description:
+      "Direct OS-level control for Omarchy Linux & Hyprland. Sub-millisecond execution for window/workspace management, instant theme switching, hardware toggles, and service restarts.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        domain: {
+          type: Type.STRING,
+          description:
+            "Control domain: 'hyprland' (windows/workspaces), 'theme' (wallpaper/theme/switcher), 'toggle' (nightlight/bar/touchpad/stay_awake), 'restart' (audio/bluetooth/wifi/shell), 'capture' (screenshot/ocr/qr), 'launch' (terminal/browser/editor/spotify), 'power' (lock/sleep), or 'osd'.",
+        },
+        action: {
+          type: Type.STRING,
+          description:
+            "Action to execute. For hyprland: 'close_window', 'fullscreen', 'float', 'workspace', 'cycle', 'active'. For theme: 'next', 'next_bg', 'current', 'switcher', 'set'. For toggle: 'nightlight', 'bar', 'touchpad', 'stay_awake'. For restart: 'audio', 'bluetooth', 'wifi', 'shell'. For capture: 'screenshot', 'text', 'qr'. For launch: 'terminal', 'browser', 'editor', 'spotify'. For power: 'lock', 'sleep'. For osd: 'notify'.",
+        },
+        target: {
+          type: Type.STRING,
+          description:
+            "Optional argument or target, e.g. workspace number ('1', '2', etc.), theme name, notification message, or app name.",
+        },
+      },
+      required: ["domain", "action"],
+    },
+  },
+  execute: async (args: any) => {
+    const domain = String(args.domain || "hyprland").toLowerCase();
+    const action = String(args.action || "").toLowerCase();
+    const target = String(args.target || "");
+
+    const result = await executeOmarchyAction(domain, action, target);
+    const summary = result.success
+      ? `Executed Omarchy ${domain} ${action}${target ? ` (${target})` : ""} in ${result.duration_ms}ms.`
+      : `Failed to execute Omarchy ${domain} ${action}: ${result.error || result.output}`;
+
+    return {
+      success: result.success,
+      data: result,
+      speechSummary: summary,
+      displayCard: {
+        type: "omarchy_action",
+        title: `Omarchy ${domain.toUpperCase()}: ${action}`,
+        data: result,
+      },
+    };
+  },
+};
+
 // Skill Registry
 export const MODULAR_SKILLS: Record<string, ModularSkill> = {
   get_weather_forecast: weatherSkill,
@@ -1570,6 +1628,8 @@ export const MODULAR_SKILLS: Record<string, ModularSkill> = {
   obsidian_read: obsidianReadSkill,
   obsidian_create: obsidianCreateSkill,
   obsidian_append: obsidianAppendSkill,
+  omarchy_control: omarchySkill,
+  omarchy_action: omarchySkill,
 };
 
 export function getAllSkillDeclarations(): FunctionDeclaration[] {

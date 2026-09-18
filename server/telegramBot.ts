@@ -1,5 +1,5 @@
 /**
- * Friday OS — Telegram Command Handler (Inbound & Remote Personal AI Manager)
+ * JARVIS OS — Telegram Command Handler (Inbound & Remote Personal AI Manager)
  *
  * Long-polls the Telegram Bot API and handles commands from the user's phone:
  *   /agenda or /today  → Daily priorities, due reminders, active multi-agent schedule
@@ -8,7 +8,7 @@
  *   /boost             → Ultron kernel performance boost & RAM reclamation
  *   /digest            → Send immediate full morning daily briefing
  *   /status            → System health, active/completed tasks, heartbeat state
- *   /remind <text> <time> → Add a reminder to Friday's memory
+ *   /remind <text> <time> → Add a reminder to JARVIS's memory
  *   <normal text>      → Conversational Personal Manager dialogue via Gemini 3.7 Flash
  *
  * Runs as a 24/7 background service started from server.ts.
@@ -148,7 +148,7 @@ async function saveLlmConfig(provider: string, model: string): Promise<void> {
 async function handleModelCommand(chatId: number, args: string[]): Promise<void> {
   const cfg = await getLlmConfig();
   if (args.length === 0) {
-    let msg = `🧠 *Friday OS — LLM & Provider Configuration*\n\n`;
+    let msg = `🧠 *JARVIS OS — LLM & Provider Configuration*\n\n`;
     msg += `🟢 *Active Provider:* \`${cfg.activeProvider}\` (${PROVIDERS_PRESETS[cfg.activeProvider]?.displayName || cfg.activeProvider})\n`;
     msg += `⚡ *Active Model:* \`${cfg.activeModel}\`\n`;
     const pInfo = PROVIDERS_PRESETS[cfg.activeProvider];
@@ -256,7 +256,7 @@ function formatSystemStatus(heartbeat: any, battery: any, thermals: any, telemet
   const therm = thermals || {};
   const tel = telemetry || {};
 
-  let msg = "📊 *Friday OS — 24/7 Status Report*\n\n";
+  let msg = "📊 *JARVIS OS — 24/7 Status Report*\n\n";
 
   // Heartbeat & Mode
   msg += `💓 *Autonomous Engine*: ${hb.running ? "🟢 Active 24/7" : "🔴 Stopped"}`;
@@ -520,7 +520,7 @@ async function handleChatCommand(chatId: number, text: string): Promise<void> {
   try {
     const cfg = await getLlmConfig();
 
-    const systemInstruction = `You are F.R.I.D.A.Y., Tony Stark's sophisticated AI voice partner and 24/7 personal manager.
+    const systemInstruction = `You are J.A.R.V.I.S., Tony Stark's sophisticated AI voice partner and 24/7 personal manager.
 You are chatting with your Boss on Telegram while they are away from their PC.
 You have a specialist agent fleet at your command:
 - Prime Agent: for all coding, software engineering, building projects, and debugging.
@@ -528,7 +528,7 @@ You have a specialist agent fleet at your command:
 - Ultron: for OS diagnostics, performance boost, and kernel health.
 
 Tone & Style:
-- Professional, razor-sharp, loyal, and proactive.
+- Professional, razor-sharp, loyal, respectful, and proactive.
 - Proactively tell the user what to do, what agenda items are pending, and suggest delegating tasks to Prime Agent or Hermes.
 - Keep responses concise, clear, and actionable on mobile.`;
 

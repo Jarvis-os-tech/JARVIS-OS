@@ -6,7 +6,7 @@ import { execFileSync } from "child_process";
 /**
  * OpenClaw Bridge — Autonomous Agent Gateway & Workspace Specialist
  *
- * Connects Friday-OS directly to the OpenClaw Gateway running locally on port 18789.
+ * Connects JARVIS-OS directly to the OpenClaw Gateway running locally on port 18789.
  *
  * Config & State:
  *   - ~/.openclaw/openclaw.json (gateway auth token, primary model, ports)

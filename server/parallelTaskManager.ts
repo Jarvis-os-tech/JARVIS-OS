@@ -241,7 +241,7 @@ class ParallelTaskManager {
         const hp = options.args?.prompt || options.prompt;
         title = hp ? `Hermes ⟶ ${hp.slice(0, 60)}` : "Hermes Complex Delegation";
       } else if (options.skillName === "get_system_info") {
-        title = "Friday System Telemetry";
+        title = "JARVIS System Telemetry";
       } else if (options.skillName === "control_system") {
         title = `System Control: ${options.args?.action || "Setting"}`;
       } else if (options.skillName === "launch_application") {
@@ -330,14 +330,18 @@ class ParallelTaskManager {
         task.displayCard = executionResult.displayCard;
         task.sources = executionResult.sources;
 
-        // Automatically log execution to friday-memory/execution/YYYY-MM-DD.md
-        logExecutionTrace(
-          options.skillName || task.title,
-          options.args || options.prompt || {},
-          executionResult,
-          task.durationMs,
-          executionResult.success
-        );
+        // Automatically log execution to jarvis-memory/execution/YYYY-MM-DD.md
+        try {
+          logExecutionTrace(
+            options.skillName || task.title,
+            options.args || options.prompt || {},
+            executionResult,
+            task.durationMs,
+            executionResult.success
+          );
+        } catch (traceErr) {
+          console.warn("[ParallelTask] Trace logging notice:", traceErr);
+        }
 
         this.activeTasks.delete(taskId);
         this.completedTasks.unshift(task);
@@ -378,13 +382,15 @@ class ParallelTaskManager {
         task.progressMessage = `Failed: ${task.error}`;
 
         // Log failed execution trace
-        logExecutionTrace(
-          options.skillName || task.title,
-          options.args || options.prompt || {},
-          { error: task.error },
-          task.durationMs,
-          false
-        );
+        try {
+          logExecutionTrace(
+            options.skillName || task.title,
+            options.args || options.prompt || {},
+            { error: task.error },
+            task.durationMs,
+            false
+          );
+        } catch {}
 
         this.activeTasks.delete(taskId);
         this.completedTasks.unshift(task);

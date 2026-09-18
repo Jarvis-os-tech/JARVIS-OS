@@ -1,12 +1,11 @@
 import { execFile, execFileSync, type ChildProcess } from "child_process";
 import fs from "fs";
 import path from "path";
+import os from "os";
 import dotenv from "dotenv";
 
 /**
  * Prime Agent Bridge — PrimeIntellect-ai/prime-agent v0.8.1
- *
- * Installed at: /home/gopi/.nvm/versions/node/v24.19.0/bin/prime-agent
  *
  * Delegation flow:
  *   prime-agent -p --mode text "<prompt>"
@@ -22,8 +21,10 @@ function getPrimeAgentBin(): string {
     return process.env.PRIME_AGENT_BIN;
   }
 
+  const userHome = process.env.HOME || os.homedir();
+
   // 2. Known NVM install path (installed by curl installer)
-  const nvmBin = "/home/gopi/.nvm/versions/node/v24.19.0/bin/prime-agent";
+  const nvmBin = path.join(userHome, ".nvm/versions/node/v24.19.0/bin/prime-agent");
   if (fs.existsSync(nvmBin)) return nvmBin;
 
   // 3. Other common locations
@@ -145,7 +146,7 @@ async function execIntegratedPrimeEngine(prompt: string, workDir: string): Promi
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
 
-    const systemInstruction = `You are Prime Agent, the Senior Autonomous Software Engineer in Friday OS.
+    const systemInstruction = `You are Prime Agent, the Senior Autonomous Software Engineer in JARVIS OS.
 Write complete, production-ready code. No placeholders, no TODOs.
 Operating System: Linux. Working directory: ${workDir}
 Include file paths in code block headers (e.g. \`\`\`typescript src/utils.ts).`;
@@ -225,7 +226,7 @@ export async function execPrimeAgent(
         env: {
           ...process.env,
           // Ensure NVM node is on PATH for prime-agent's own child processes
-          PATH: `/home/gopi/.nvm/versions/node/v24.19.0/bin:${process.env.PATH}`,
+          PATH: `${path.join(process.env.HOME || os.homedir(), ".nvm/versions/node/v24.19.0/bin")}:${process.env.PATH}`,
           FORCE_COLOR: "0",
         },
       });

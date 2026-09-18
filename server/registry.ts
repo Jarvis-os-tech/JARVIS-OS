@@ -1,8 +1,8 @@
 /**
- * Friday-OS — Master Agent, Skills, and Tools Registry
+ * JARVIS-OS — Master Agent, Skills, and Tools Registry
  *
  * Provides typed access to all available agents, sub-agents, modular skills,
- * and native tool actuators in the Friday-OS ecosystem.
+ * and native tool actuators in the JARVIS-OS ecosystem.
  *
  * Backed by `agents.registry.json`.
  */
@@ -107,7 +107,7 @@ export function getRegisteredAgents(): AgentRegistryEntry[] {
 }
 
 /**
- * Get a specific agent by its ID (e.g. 'prime-agent', 'friday-prime', 'hermes', 'ultron').
+ * Get a specific agent by its ID (e.g. 'prime-agent', 'jarvis-prime', 'hermes', 'ultron').
  */
 export function getAgentById(id: string): AgentRegistryEntry | undefined {
   const reg = loadRegistry();
@@ -161,9 +161,9 @@ export function getRegistryStats() {
 
 /**
  * Formats a condensed, markdown representation of all available Agents, Skills,
- * and Tools for injection into Friday's LLM system prompt context.
+ * and Tools for injection into JARVIS's LLM system prompt context.
  *
- * This allows Friday to always be self-aware of what tools and sub-agents it can invoke.
+ * This allows JARVIS to always be self-aware of what tools and sub-agents it can invoke.
  */
 export function generateSystemPromptRegistry(): string {
   const reg = loadRegistry();
@@ -179,7 +179,7 @@ export function generateSystemPromptRegistry(): string {
   const cppWorkerCount = Object.keys(reg.tools.cpp_workers.items).length;
 
   return `
-### 🛠️ Friday-OS Capabilities & Sub-Agent Registry
+### 🛠️ JARVIS-OS Capabilities & Sub-Agent Registry
 **Delegatable Sub-Agents & Departments:**
 ${agentLines}
 
