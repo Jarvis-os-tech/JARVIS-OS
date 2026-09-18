@@ -11,9 +11,11 @@ const ACKNOWLEDGMENT_VARIATIONS: Record<string, string[]> = {
     "Handing off development task to Prime Agent.",
   ],
   ultron: [
-    "Engaging Ultron for deep OS diagnostics and performance optimization.",
-    "Initiating Ultron system monitoring and awareness sweep.",
+    "Engaging Ultron for system diagnostics and autonomous gateway execution.",
+    "Initiating Ultron system monitoring and security sweep.",
+    "Routing task to Ultron autonomous gateway.",
     "Ultron is analyzing system telemetry and hardware governors.",
+    "Connecting to Ultron workspace.",
   ],
   system: [
     "Executing system control command.",
@@ -22,11 +24,6 @@ const ACKNOWLEDGMENT_VARIATIONS: Record<string, string[]> = {
   hermes: [
     "Routing task to Hermes personal intelligence.",
     "Delegating complex workflow to Hermes.",
-  ],
-  openclaw: [
-    "Dispatching task to OpenClaw autonomous gateway.",
-    "Routing request to OpenClaw multimodal agent.",
-    "Connecting to OpenClaw workspace.",
   ],
   weather: [
     "Checking live weather conditions and forecast now.",
@@ -76,7 +73,7 @@ export function getContextualVerbalPhrase(intentOrSkill?: string, target?: strin
 
   if (lower.includes("prime") || lower.includes("coding") || lower.includes("program") || lower.includes("script")) {
     category = "prime_agent";
-  } else if (lower.includes("ultron") || lower.includes("boost") || lower.includes("diagnostic") || lower.includes("heal")) {
+  } else if (lower.includes("ultron") || lower.includes("openclaw") || lower.includes("claw") || lower.includes("boost") || lower.includes("diagnostic") || lower.includes("heal") || lower.includes("firewall") || lower.includes("security")) {
     category = "ultron";
   } else if (lower.includes("system") || lower.includes("volume") || lower.includes("brightness") || lower.includes("power")) {
     category = "system";
@@ -90,8 +87,6 @@ export function getContextualVerbalPhrase(intentOrSkill?: string, target?: strin
     category = "obsidian";
   } else if (lower.includes("hermes") || lower.includes("memory")) {
     category = "hermes";
-  } else if (lower.includes("openclaw") || lower.includes("claw")) {
-    category = "openclaw";
   } else if (lower.includes("reminder") || lower.includes("alarm") || lower.includes("schedule")) {
     category = "productivity";
   } else if (lower.includes("calc") || lower.includes("math") || lower.includes("solve")) {

@@ -22,6 +22,7 @@ from .vault import VaultManager
 from .hermes_bridge import HermesBridge
 from .agent_memory import AgentMemory
 from .miner import MemoryMiner
+from .cognee_bridge import CogneeBridge, cognee_bridge
 from .config import DB_PATH, VAULT_ROOT, DEFAULT_AGENT_ID
 from .types import (
     MemoryNode, ConversationTurn, Session,
@@ -56,6 +57,7 @@ class JarvisMemory:
         self.hermes = HermesBridge(self.engine)
         self.agents = AgentMemory(self.engine, self.vault)
         self.miner = MemoryMiner(self.engine)
+        self.cognee = CogneeBridge.get_instance()
 
         # Bootstrap daily session
         self.vault.init_daily_session()
@@ -65,8 +67,8 @@ class JarvisMemory:
     def log_turn(self, speaker: str, text: str, role: str = "user",
                  agent_id: str = DEFAULT_AGENT_ID):
         """
-        Log a conversation turn to both vault (Markdown) and engine (SQLite).
-        Also runs the memory miner on the text.
+        Log a conversation turn to vault (Markdown), engine (SQLite),
+        and Cognee (Knowledge Graph).
         """
         import time
 
@@ -82,14 +84,24 @@ class JarvisMemory:
         )
         self.engine.store_turn(turn)
 
+        # 3. Non-blocking sync to Cognee Knowledge Graph
+        if hasattr(self, "cognee") and self.cognee.is_available():
+            self.cognee.remember(
+                f"{speaker}: {text.strip()}",
+                dataset_name="jarvis_dialogue",
+                metadata={"role": role, "speaker": speaker, "agent_id": agent_id}
+            )
+
     def search(self, query: str, limit: int = 10):
-        """Search across both SQLite FTS and vault files."""
+        """Search across SQLite FTS, vault files, and Cognee Knowledge Graph."""
         db_results = self.engine.search_nodes(query, limit=limit)
         vault_results = self.vault.search_vault(query, limit=limit)
+        cognee_results = self.cognee.recall(query, limit=limit) if hasattr(self, "cognee") and self.cognee.is_available() else []
         return {
             "db": [{"id": n.id, "kind": n.kind, "content": n.content[:300],
                      "tier": n.tier, "agent": n.agent_id} for n in db_results],
             "vault": vault_results,
+            "cognee": cognee_results,
         }
 
     def get_context_for_prompt(self, agent_id: str = DEFAULT_AGENT_ID) -> str:
@@ -131,6 +143,7 @@ class JarvisMemory:
             "vault": self.vault.get_status(),
             "hermes": self.hermes.get_hermes_status(),
             "agents": self.agents.get_agent_stats(),
+            "cognee": self.cognee.status() if hasattr(self, "cognee") else {},
         }
 
 

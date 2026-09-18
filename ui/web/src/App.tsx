@@ -162,34 +162,34 @@ export default function App() {
     }
   }, []);
 
-  // OpenClaw Gateway connection status (consumes /api/openclaw/health)
-  type OpenClawConnState = 'checking' | 'live' | 'installed' | 'offline';
-  const [openclawConn, setOpenclawConn] = useState<OpenClawConnState>('checking');
-  const fetchOpenClawHealth = useCallback(async () => {
+  // Ultron Sentinel & Gateway connection status (consumes /api/ultron/health)
+  type UltronConnState = 'checking' | 'live' | 'installed' | 'offline';
+  const [ultronConn, setUltronConn] = useState<UltronConnState>('checking');
+  const fetchUltronHealth = useCallback(async () => {
     try {
-      const res = await fetch('/api/openclaw/health');
+      const res = await fetch('/api/ultron/health');
       if (!res.ok) {
-        setOpenclawConn('offline');
+        setUltronConn('offline');
         return;
       }
       const data = await res.json();
-      if (data?.connected) setOpenclawConn('live');
-      else if (data?.delegation === 'ready') setOpenclawConn('installed');
-      else setOpenclawConn('offline');
+      if (data?.connected) setUltronConn('live');
+      else if (data?.delegation === 'ready') setUltronConn('installed');
+      else setUltronConn('offline');
     } catch (e) {
-      setOpenclawConn('offline');
+      setUltronConn('offline');
     }
   }, []);
 
   useEffect(() => {
     fetchHermesHealth();
-    fetchOpenClawHealth();
+    fetchUltronHealth();
     const id = setInterval(() => {
       fetchHermesHealth();
-      fetchOpenClawHealth();
+      fetchUltronHealth();
     }, 30_000);
     return () => clearInterval(id);
-  }, [fetchHermesHealth, fetchOpenClawHealth]);
+  }, [fetchHermesHealth, fetchUltronHealth]);
 
   const fetchActiveTasks = useCallback(async () => {
     try {
@@ -1289,35 +1289,32 @@ export default function App() {
             />
           </button>
 
-          {/* OpenClaw Gateway live status pill */}
+          {/* Ultron Sentinel & Gateway live status pill */}
           <button
-            id="openclaw-gateway-status"
-            onClick={fetchOpenClawHealth}
-            title="OpenClaw gateway status (port 18789) — click to refresh"
+            id="ultron-gateway-status"
+            onClick={fetchUltronHealth}
+            title="Ultron Sentinel & Gateway status (port 18789) — click to refresh"
             className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition-colors ${
-              openclawConn === 'live'
-                ? 'bg-emerald-500/15 border-emerald-400/50 text-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.35)]'
-                : openclawConn === 'installed'
+              ultronConn === 'live'
+                ? 'bg-purple-500/15 border-purple-400/50 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.35)]'
+                : ultronConn === 'installed'
                 ? 'bg-amber-500/15 border-amber-400/50 text-amber-300'
-                : openclawConn === 'offline'
+                : ultronConn === 'offline'
                 ? 'bg-rose-500/15 border-rose-400/50 text-rose-300'
                 : 'bg-slate-800/40 border-slate-600/50 text-slate-400'
             }`}
           >
-            <Cpu className="w-3 h-3" />
+            <Cpu className="w-3 h-3 text-purple-400" />
             <span>
-              {openclawConn === 'live' && 'OPENCLAW LIVE'}
-              {openclawConn === 'installed' && 'OPENCLAW READY'}
-              {openclawConn === 'offline' && 'OPENCLAW OFFLINE'}
-              {openclawConn === 'checking' && 'OPENCLAW…'}
+              {`ULTRON ${ultronConn === 'checking' ? '…' : ultronConn === 'installed' ? 'READY' : ultronConn.toUpperCase()}`}
             </span>
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                openclawConn === 'live'
-                  ? 'bg-emerald-400 animate-pulse'
-                  : openclawConn === 'installed'
+                ultronConn === 'live'
+                  ? 'bg-purple-400 animate-pulse'
+                  : ultronConn === 'installed'
                   ? 'bg-amber-400'
-                  : openclawConn === 'offline'
+                  : ultronConn === 'offline'
                   ? 'bg-rose-400'
                   : 'bg-slate-500 animate-pulse'
               }`}

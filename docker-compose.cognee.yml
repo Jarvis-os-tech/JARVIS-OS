@@ -1,0 +1,60 @@
+services:
+  cognee:
+    image: cognee/cognee:main
+    container_name: jarvis-cognee
+    restart: unless-stopped
+    ports:
+      - "${COGNEE_PORT:-8020}:8000"
+    environment:
+      - ENABLE_BACKEND_ACCESS_CONTROL=false
+      - CORS_ALLOWED_ORIGINS=http://localhost:8025,http://127.0.0.1:8025,http://localhost:3000,http://127.0.0.1:3000,http://localhost:8020,http://127.0.0.1:8020
+      - LLM_API_KEY=${GEMINI_API_KEY:-}
+      - LLM_PROVIDER=gemini
+      - LLM_MODEL=${ACTIVE_LLM_MODEL:-gemini-2.5-flash}
+      - EMBEDDING_PROVIDER=gemini
+      - EMBEDDING_MODEL=models/text-embedding-004
+      - VECTOR_DB_PROVIDER=lancedb
+      - GRAPH_DATABASE_PROVIDER=kuzu
+    volumes:
+      - cognee_system:/cognee-storage/system
+      - cognee_data:/cognee-storage/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  cognee-mcp:
+    image: cognee/cognee-mcp:main
+    container_name: jarvis-cognee-mcp
+    restart: unless-stopped
+    ports:
+      - "${COGNEE_MCP_PORT:-8021}:8000"
+    environment:
+      - TRANSPORT_MODE=http
+      - API_URL=http://cognee:8000
+    depends_on:
+      cognee:
+        condition: service_healthy
+    volumes:
+      - cognee_system:/cognee-storage/system
+      - cognee_data:/cognee-storage/data
+
+  cognee-ui:
+    image: cognee/cognee-ui:main
+    container_name: jarvis-cognee-ui
+    restart: unless-stopped
+    ports:
+      - "${COGNEE_UI_PORT:-8025}:3000"
+    environment:
+      - COGNEE_BACKEND_URL=http://localhost:8020
+    depends_on:
+      cognee:
+        condition: service_healthy
+
+volumes:
+  cognee_system:
+    name: jarvis_cognee_system
+  cognee_data:
+    name: jarvis_cognee_data

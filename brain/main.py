@@ -24,6 +24,11 @@ from brain.audio_bridge import audio_bridge, DEFAULT_SOCKET_PATH
 from brain.gemini_live import gemini_session
 from brain.server import app
 from brain.hud import launch_native_hud
+from brain.logger import (
+    setup_global_logger, print_banner, log_info, log_success,
+    log_warn, log_error, log_reminder
+)
+from brain.reminders import run_reminder_scheduler, reminder_manager
 
 
 def load_environment():
@@ -32,37 +37,47 @@ def load_environment():
 
 
 async def run_orchestrator(args):
-    print("==========================================================")
-    print("  🚀 J.A.R.V.I.S. PYTHON CORE ENGINE ONLINE")
-    print("==========================================================")
-    print(f"• Audio Gateway Socket: {args.socket_path}")
-    print(f"• REST & WebSocket API: http://127.0.0.1:{args.port}")
-    print(f"• Active Persona: {args.persona.upper()}")
-    print(f"• Tools Registered: {len(actuator_dispatcher.get_tool_declarations())} tools")
-    print("==========================================================")
+    setup_global_logger()
+    tools_count = len(actuator_dispatcher.get_tool_declarations())
+    print_banner(persona=args.persona, port=args.port, socket_path=args.socket_path, tools_count=tools_count)
 
     # 1. Initialize Memory Vault & Fresh Daily Session
     v_status = memory_engine.get_vault_status()
     snapshot = memory_engine.get_frozen_snapshot()
-    print(f"[Core] 🧠 Memory Vault Connected: {v_status['vault_root']}")
-    print(f"[Core] 📅 Active Daily Conversation: {v_status['today_conversation_file']}")
-    print(f"[Core] 📚 Vault Index: {v_status['total_facts_indexed']} facts, {v_status['total_skills_indexed']} skills, {v_status['total_conversations_logged']} conversation logs")
+    log_info(f"🧠 Memory Vault Connected: {v_status['vault_root']}", source="Vault")
+    log_info(f"📅 Active Daily Conversation: {v_status['today_conversation_file']}", source="Vault")
+    log_info(f"📚 Vault Index: {v_status['total_facts_indexed']} facts, {v_status['total_skills_indexed']} skills, {v_status['total_conversations_logged']} conversation logs", source="Vault")
 
     # 2. Render initial system prompt
     initial_prompt = prompt_engine.render_system_prompt(persona_id=args.persona)
-    print(f"[Core] 📜 Initial prompt rendered ({len(initial_prompt)} chars).")
+    log_info(f"📜 Initial prompt rendered ({len(initial_prompt)} chars).", source="Prompt")
+
+    # 3. Active Reminders Summary
+    active_rems = reminder_manager.list_reminders(include_completed=False)
+    if active_rems:
+        log_reminder(f"Loaded {len(active_rems)} active scheduled reminder(s).", action="INFO")
+    else:
+        log_info("⏰ Reminders vault loaded (0 pending).", source="Reminders")
 
     if args.dry_run:
-        print("[Core] ✅ Dry run successful. All subsystems initialized without errors.")
+        log_success("✅ Dry run successful. All subsystems initialized without errors.", source="Core")
         return
 
-    # 3. Start Audio Bridge (Unix Domain Socket server)
+    # 4. Start Audio Bridge (Unix Domain Socket server)
     audio_bridge.socket_path = args.socket_path
     await audio_bridge.start()
 
-    print("[Core] 🟢 J.A.R.V.I.S. Core Engine ready. Waiting for UI connection...")
+    # 5. Start Background Reminder Scheduler
+    scheduler_task = asyncio.create_task(
+        run_reminder_scheduler(
+            broadcast_fn=actuator_dispatcher._broadcast_to_ui,
+            voice_notify_fn=gemini_session.send_text_message
+        )
+    )
 
-    # 5. Start FastAPI server
+    log_success("🟢 J.A.R.V.I.S. Core Engine ready. Waiting for UI connection...", source="Core")
+
+    # 6. Start FastAPI server
     config = uvicorn.Config(
         app,
         host="127.0.0.1",
@@ -79,11 +94,11 @@ async def run_orchestrator(args):
             import webbrowser
             time.sleep(1.0)
             ui_url = f"http://localhost:{args.port}"
-            print(f"[Core] 🌐 Launching J.A.R.V.I.S. React UI: {ui_url}")
+            log_info(f"🌐 Launching J.A.R.V.I.S. React UI: {ui_url}", source="Browser")
             try:
                 webbrowser.open(ui_url)
-            except Exception:
-                pass
+            except Exception as b_ex:
+                log_warn(f"Could not auto-launch browser: {b_ex}", source="Browser")
 
         import threading
         threading.Thread(target=open_browser, daemon=True).start()
@@ -91,9 +106,10 @@ async def run_orchestrator(args):
     try:
         await server.serve()
     finally:
+        scheduler_task.cancel()
         await gemini_session.close()
         await audio_bridge.stop()
-        print("[Core] 🏁 J.A.R.V.I.S. Python Core Engine shutdown complete.")
+        log_success("🏁 J.A.R.V.I.S. Python Core Engine shutdown complete.", source="Core")
 
 
 def main():
@@ -114,7 +130,8 @@ def main():
     try:
         asyncio.run(run_orchestrator(args))
     except KeyboardInterrupt:
-        print("\n[Core] Process interrupted by user.")
+        print("")
+        log_warn("Process interrupted by user.", source="Core")
 
 
 if __name__ == "__main__":

@@ -42,31 +42,30 @@
       "role": "Autonomous Research & Personal Knowledge Sub-Agent",
       "description": "Delegated sub-agent for autonomous web research, Obsidian vault queries, file operations, and general problem solving via Hermes CLI.",
       "platform": "hermes",
-      "bridge": "server/hermesBridge.ts",
+      "bridge": "brain/hermes_bridge.py",
       "vaultDirectory": "jarvis-memory/",
       "status": "ready",
       "capabilities": ["web-research", "vault-queries", "source-grounding", "autonomous-cli"]
     },
-    "openclaw": {
-      "id": "openclaw",
-      "name": "OpenClaw Autonomous Gateway",
-      "role": "Autonomous Gateway & Multimodal Specialist",
-      "description": "Autonomous multi-agent gateway (nvidia/nemotron, claude, minimax) on port 18789 with sandboxed workspace and tools.",
-      "platform": "openclaw",
-      "bridge": "server/openclawBridge.ts",
-      "gatewayUrl": "http://127.0.0.1:18789",
-      "status": "ready",
-      "capabilities": ["multimodal-agent", "workspace-tools", "gateway-delegation", "subagent-sessions"]
-    },
     "ultron": {
       "id": "ultron",
-      "name": "Ultron OS Diagnostics & Boost Engine",
-      "role": "Linux Kernel Health & Hardware Optimizer",
-      "description": "Diagnostic daemon for Linux OS health audits, CPU thermal monitoring, memory optimization, and sound server auto-healing.",
+      "name": "Ultron Autonomous Sentinel & Gateway",
+      "role": "Chief Security Sentinel, OS Diagnostics & Autonomous Gateway",
+      "description": "Zero-trust security referee, Linux OS diagnostics, hardware optimizer, and autonomous agent gateway (port 18789) for multimodal workspace actions.",
       "platform": "ultron",
-      "bridge": "server/ultronBridge.ts",
+      "bridge": "brain/ultron_bridge.py",
+      "gatewayUrl": "http://127.0.0.1:18789",
       "status": "ready",
-      "capabilities": ["system-diagnostics", "thermal-monitoring", "process-cleanup", "hardware-telemetry"]
+      "capabilities": [
+        "security-sentinel",
+        "os-diagnostics",
+        "hardware-optimizer",
+        "system-boost",
+        "subsystem-healing",
+        "multimodal-agent",
+        "workspace-tools",
+        "gateway-delegation"
+      ]
     }
   },
 
@@ -180,29 +179,30 @@
         "max_turns": { "type": "number", "description": "Max execution turns (default 12)" }
       },
       "executionMode": "async-parallel",
-      "source": "server/skills.ts"
-    },
-    "delegate_to_openclaw": {
-      "name": "delegate_to_openclaw",
-      "displayName": "OpenClaw Gateway Delegation",
-      "category": "Productivity",
-      "description": "Delegates multimodal tasks, agent workspace commands, or specialized models to OpenClaw gateway on port 18789.",
-      "parameters": {
-        "prompt": { "type": "string", "description": "The complete prompt for OpenClaw" }
-      },
-      "executionMode": "async-parallel",
-      "source": "server/skills.ts"
+      "source": "brain/actuator_dispatcher.py"
     },
     "delegate_to_ultron": {
       "name": "delegate_to_ultron",
-      "displayName": "Ultron System Diagnostic & Boost",
+      "displayName": "Ultron Autonomous Gateway & Sentinel",
       "category": "System",
-      "description": "Engages Ultron for deep Linux OS health audits, performance tuning, and hardware diagnostic analysis.",
+      "description": "Engages Ultron for autonomous agent gateway tasks (port 18789), deep Linux OS health audits, performance tuning, subsystem healing, and security audits.",
       "parameters": {
-        "action": { "type": "string", "enum": ["deep_audit", "boost_performance", "check_thermals", "clean_memory"], "description": "Ultron action" }
+        "action": { "type": "string", "enum": ["deep_audit", "boost_system", "heal_subsystem", "security_audit", "ultron_status", "ultron_delegate"], "description": "Ultron system or diagnostic action" },
+        "prompt": { "type": "string", "description": "The complete prompt or task for Ultron autonomous gateway" }
       },
       "executionMode": "async-parallel",
-      "source": "server/skills.ts"
+      "source": "brain/actuator_dispatcher.py"
+    },
+    "delegate_to_openclaw": {
+      "name": "delegate_to_openclaw",
+      "displayName": "Ultron Gateway Delegation (Legacy Alias)",
+      "category": "System",
+      "description": "Legacy alias for delegate_to_ultron. Delegates multimodal tasks, agent workspace commands, or specialized models to Ultron gateway on port 18789.",
+      "parameters": {
+        "prompt": { "type": "string", "description": "The complete prompt for Ultron" }
+      },
+      "executionMode": "async-parallel",
+      "source": "brain/actuator_dispatcher.py"
     },
     "get_system_info": {
       "name": "get_system_info",
@@ -375,6 +375,15 @@
       "category": "Dynamic Tool Synthesis Sandbox",
       "source": "core_engine/forge_sandbox.py",
       "description": "Bubblewrap (bwrap) sandboxed virtual environment for dynamically creating, compiling, and testing custom Python tools on the fly.",
+      "status": "active"
+    },
+    "cognee_universal_memory": {
+      "category": "Universal Shared Graph & Vector Memory",
+      "source": "memory/python/cognee_bridge.py",
+      "composeFile": "docker-compose.cognee.yml",
+      "apiUrl": "http://127.0.0.1:8020",
+      "mcpUrl": "http://127.0.0.1:8021/mcp",
+      "description": "Primary universal shared memory fabric across JARVIS-OS, Hermes, Ultron, Prime Agent, and browser extensions powered by Cognee.",
       "status": "active"
     }
   }

@@ -61,20 +61,20 @@ def ensure_gateway_service():
         res = subprocess.run(["systemctl", "--user", "is-active", service_name],
                              capture_output=True, text=True)
         if res.returncode == 0 and res.stdout.strip() == "active":
-            print("[Launcher] 🟢 24/7 JARVIS-OS Gateway service active & running.")
+            print("\033[2m[Launcher]\033[0m \033[1;32m[OK]\033[0m 24/7 JARVIS-OS Gateway service active & running.")
             return
 
         # Check legacy fallback
         res_legacy = subprocess.run(["systemctl", "--user", "is-active", "friday-gateway.service"],
                                     capture_output=True, text=True)
         if res_legacy.returncode == 0 and res_legacy.stdout.strip() == "active":
-            print("[Launcher] 🟢 24/7 JARVIS-OS Gateway service active & running (via friday-gateway.service).")
+            print("\033[2m[Launcher]\033[0m \033[1;32m[OK]\033[0m 24/7 JARVIS-OS Gateway service active & running (legacy).")
             return
 
-        print("[Launcher] 🔄 Starting 24/7 JARVIS-OS Gateway service...")
+        print("\033[2m[Launcher]\033[0m \033[1;36m[INFO]\033[0m 🔄 Starting 24/7 JARVIS-OS Gateway service...")
         subprocess.run(["systemctl", "--user", "start", service_name], capture_output=True)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"\033[2m[Launcher]\033[0m \033[1;31m[ERROR] Gateway service check failed: {e}\033[0m")
 
 
 def spawn_rust_audio_gateway():
@@ -90,12 +90,26 @@ def spawn_rust_audio_gateway():
             )
             return proc
         except Exception as e:
-            print(f"[Launcher] Note: Could not auto-start Rust audio gateway: {e}")
+            print(f"\033[2m[Launcher]\033[0m \033[1;31m[ERROR] Rust audio gateway failed: {e}\033[0m")
     return None
+
+
+def ensure_ui_built():
+    """Ensure the React 19 UI is compiled in dist/ for seamless presentation."""
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    dist_index = os.path.join(root_dir, "dist", "index.html")
+    if not os.path.exists(dist_index):
+        print("\033[2m[Launcher]\033[0m \033[1;36m[INFO]\033[0m 📦 UI dist bundle missing. Compiling React 19 frontend UI...")
+        try:
+            subprocess.run(["npm", "run", "build"], check=True, cwd=root_dir)
+            print("\033[2m[Launcher]\033[0m \033[1;32m[OK]\033[0m UI build complete.")
+        except Exception as e:
+            print(f"\033[2m[Launcher]\033[0m \033[1;31m[ERROR] UI build failed: {e}\033[0m")
 
 
 if __name__ == "__main__":
     ensure_gateway_service()
+    ensure_ui_built()
     rust_proc = None
     if "--standalone-audio" in sys.argv:
         sys.argv.remove("--standalone-audio")

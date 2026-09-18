@@ -1,0 +1,270 @@
+"""
+Cognee Universal Memory Bridge for JARVIS-OS.
+
+Provides an asynchronous and synchronous client to connect JARVIS-OS agents
+to the centralized Cognee knowledge graph, vector store, and MCP server.
+
+Guarantees:
+- Non-blocking execution (graceful fallback if Cognee container is offline).
+- Multi-agent dataset scoping (jarvis_knowledge, session_dialogue, agent_memories).
+- Full support for remember (Add->Cognify), recall (Graph & Vector Search), and cognify.
+"""
+
+import os
+import time
+import json
+import logging
+import threading
+from typing import Dict, Any, List, Optional
+
+logger = logging.getLogger("jarvis.cognee_bridge")
+
+DEFAULT_API_URL = os.environ.get("COGNEE_API_URL", "http://127.0.0.1:8020")
+DEFAULT_MCP_URL = os.environ.get("COGNEE_MCP_URL", "http://127.0.0.1:8021/mcp")
+DEFAULT_DATASET = os.environ.get("COGNEE_DATASET", "jarvis_knowledge")
+COGNEE_ENABLED = os.environ.get("COGNEE_ENABLED", "true").lower() in ("1", "true", "yes", "on")
+
+
+class CogneeBridge:
+    """
+    Client bridge for Cognee Knowledge Graph & Semantic Memory.
+    Delegates to Cognee REST API when online, safely fails over to no-op if offline.
+    """
+
+    _instance = None
+    _lock = threading.Lock()
+
+    @classmethod
+    def get_instance(cls) -> "CogneeBridge":
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = cls()
+            return cls._instance
+
+    def __init__(
+        self,
+        api_url: str = DEFAULT_API_URL,
+        mcp_url: str = DEFAULT_MCP_URL,
+        default_dataset: str = DEFAULT_DATASET,
+        enabled: bool = COGNEE_ENABLED,
+    ):
+        self.api_url = api_url.rstrip("/")
+        self.mcp_url = mcp_url
+        self.default_dataset = default_dataset
+        self.enabled = enabled
+
+        # Cached availability to prevent blocking on repeated calls when offline
+        self._is_available: Optional[bool] = None
+        self._last_health_check: float = 0.0
+        self._health_check_ttl: float = 15.0  # re-check every 15s
+
+    def is_available(self, force: bool = False) -> bool:
+        """Checks if Cognee REST API is reachable with a rapid timeout."""
+        if not self.enabled:
+            return False
+
+        now = time.time()
+        if not force and self._is_available is not None and (now - self._last_health_check) < self._health_check_ttl:
+            return self._is_available
+
+        try:
+            import urllib.request
+            req = urllib.request.Request(f"{self.api_url}/health", headers={"User-Agent": "JARVIS-OS/1.0"})
+            with urllib.request.urlopen(req, timeout=0.8) as resp:
+                self._is_available = (resp.status == 200)
+        except Exception:
+            self._is_available = False
+
+        self._last_health_check = now
+        return self._is_available
+
+    # ─── High-Level Memory Operations ────────────────────────────────────
+
+    def remember(
+        self,
+        text: str,
+        dataset_name: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        run_cognify: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Synchronously store information in Cognee.
+        Fires in background worker or fast HTTP POST to avoid blocking the voice loop.
+        """
+        if not self.is_available():
+            return {"success": False, "reason": "cognee_offline", "detail": "Cognee service is not reachable"}
+
+        dataset = dataset_name or self.default_dataset
+
+        def _do_post():
+            try:
+                import urllib.request
+                payload = json.dumps({
+                    "data": text,
+                    "dataset_name": dataset,
+                    "metadata": metadata or {},
+                }).encode("utf-8")
+
+                # Try high-level remember endpoint first
+                url = f"{self.api_url}/api/v1/remember"
+                req = urllib.request.Request(
+                    url,
+                    data=payload,
+                    headers={"Content-Type": "application/json", "User-Agent": "JARVIS-OS/1.0"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=3.0) as resp:
+                    res_body = resp.read().decode("utf-8")
+                    return {"success": True, "data": res_body}
+            except Exception as e:
+                # Fallback to add endpoint
+                try:
+                    import urllib.request
+                    url = f"{self.api_url}/api/v1/add"
+                    payload = json.dumps({
+                        "data": text,
+                        "dataset_name": dataset,
+                    }).encode("utf-8")
+                    req = urllib.request.Request(
+                        url,
+                        data=payload,
+                        headers={"Content-Type": "application/json", "User-Agent": "JARVIS-OS/1.0"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req, timeout=3.0) as resp:
+                        res_body = resp.read().decode("utf-8")
+                        if run_cognify:
+                            self.trigger_cognify_async(dataset)
+                        return {"success": True, "data": res_body}
+                except Exception as inner_e:
+                    logger.debug(f"Cognee remember error: {inner_e}")
+                    return {"success": False, "error": str(inner_e)}
+
+        # Run in thread so callers (like voice turns) never stall
+        t = threading.Thread(target=_do_post, daemon=True)
+        t.start()
+        return {"success": True, "status": "queued"}
+
+    def recall(
+        self,
+        query: str,
+        search_type: str = "SEARCH",
+        dataset_name: Optional[str] = None,
+        limit: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve structured entities, relationships, or semantic chunks from Cognee.
+        """
+        if not self.is_available():
+            return []
+
+        dataset = dataset_name or self.default_dataset
+        try:
+            import urllib.request
+            payload = json.dumps({
+                "query": query,
+                "search_type": search_type,
+                "dataset_name": dataset,
+                "limit": limit,
+            }).encode("utf-8")
+
+            url = f"{self.api_url}/api/v1/search"
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={"Content-Type": "application/json", "User-Agent": "JARVIS-OS/1.0"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=2.5) as resp:
+                raw = resp.read().decode("utf-8")
+                data = json.loads(raw) if raw else []
+                if isinstance(data, list):
+                    return data
+                elif isinstance(data, dict):
+                    return data.get("results", [data])
+                return []
+        except Exception as e:
+            logger.debug(f"Cognee recall error: {e}")
+            return []
+
+    def trigger_cognify_async(self, dataset_name: Optional[str] = None) -> None:
+        """Asynchronously triggers graph generation and entity extraction."""
+        dataset = dataset_name or self.default_dataset
+
+        def _do_cognify():
+            try:
+                import urllib.request
+                payload = json.dumps({"dataset_name": dataset}).encode("utf-8")
+                url = f"{self.api_url}/api/v1/cognify"
+                req = urllib.request.Request(
+                    url,
+                    data=payload,
+                    headers={"Content-Type": "application/json", "User-Agent": "JARVIS-OS/1.0"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=10.0) as resp:
+                    pass
+            except Exception as e:
+                logger.debug(f"Cognee cognify error: {e}")
+
+        t = threading.Thread(target=_do_cognify, daemon=True)
+        t.start()
+
+    def sync_vault(self, vault_path: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Scans Obsidian vault markdown files (MEMORY.md, USER.md, facts, knowledge)
+        and synchronizes them into the Cognee Knowledge Graph.
+        """
+        if not self.is_available():
+            return {"success": False, "reason": "cognee_offline"}
+
+        from .config import VAULT_ROOT, FACTS_DIR, MEMORY_MD, USER_MD
+        target_vault = vault_path or VAULT_ROOT
+
+        files_to_sync = []
+        if os.path.exists(MEMORY_MD):
+            files_to_sync.append(("MEMORY.md", MEMORY_MD, "system_memory"))
+        if os.path.exists(USER_MD):
+            files_to_sync.append(("USER.md", USER_MD, "user_profile"))
+
+        if os.path.exists(FACTS_DIR):
+            for f in os.listdir(FACTS_DIR):
+                if f.endswith(".md"):
+                    files_to_sync.append((f, os.path.join(FACTS_DIR, f), "fact"))
+
+        synced_count = 0
+        for name, path, kind in files_to_sync:
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    content = fh.read().strip()
+                if content:
+                    self.remember(
+                        content,
+                        dataset_name="jarvis_vault",
+                        metadata={"filename": name, "kind": kind, "source": "obsidian_vault"},
+                        run_cognify=False
+                    )
+                    synced_count += 1
+            except Exception as e:
+                logger.debug(f"Failed to sync {name}: {e}")
+
+        # Trigger cognify on the dataset once batch ingestion is queued
+        self.trigger_cognify_async("jarvis_vault")
+        return {"success": True, "files_synced": synced_count, "dataset": "jarvis_vault"}
+
+    def status(self) -> Dict[str, Any]:
+        """Provides health and configuration diagnostics for Cognee."""
+        is_up = self.is_available(force=True)
+        return {
+            "enabled": self.enabled,
+            "connected": is_up,
+            "api_url": self.api_url,
+            "mcp_url": self.mcp_url,
+            "default_dataset": self.default_dataset,
+            "last_check": self._last_health_check,
+            "service_type": "Docker Container (cognee/cognee + cognee/cognee-mcp)",
+        }
+
+
+# Global singleton instance
+cognee_bridge = CogneeBridge.get_instance()

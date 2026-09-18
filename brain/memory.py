@@ -47,7 +47,8 @@ _jm_spec = importlib.util.spec_from_file_location(
 _jm_module = importlib.util.module_from_spec(_jm_spec)
 sys.modules["jarvis_memory"] = _jm_module
 
-for submod in ["config", "types", "engine", "vault", "hermes_bridge", "agent_memory", "miner"]:
+MEMORY_SUBMODULES = ("config", "types", "engine", "vault", "hermes_bridge", "agent_memory", "miner", "cognee_bridge")
+for submod in MEMORY_SUBMODULES:
     sub_spec = importlib.util.spec_from_file_location(
         f"jarvis_memory.{submod}",
         os.path.join(_jarvis_memory_path, f"{submod}.py"),
@@ -62,7 +63,7 @@ _jm_spec.loader.exec_module(_jm_module)
 
 # 2. Register friday_memory as backward-compatibility alias
 sys.modules["friday_memory"] = _jm_module
-for submod in ["config", "types", "engine", "vault", "hermes_bridge", "agent_memory", "miner"]:
+for submod in MEMORY_SUBMODULES:
     sys.modules[f"friday_memory.{submod}"] = sys.modules[f"jarvis_memory.{submod}"]
 
 from jarvis_memory import JarvisMemory, FridayMemory
@@ -108,6 +109,10 @@ class DualStoreMemory:
     @property
     def miner(self):
         return self._fm.miner
+
+    @property
+    def cognee(self):
+        return getattr(self._fm, "cognee", None)
 
     # ─── Backward-Compatible API ─────────────────────────────────────────
 
@@ -192,11 +197,14 @@ class DualStoreMemory:
         self._fm.engine.store_node(node)
         # Also write vault fact
         self._fm.vault.save_fact(key, value, category=category, source=source)
+        # Also store in Cognee Knowledge Graph
+        if hasattr(self._fm, "cognee") and self._fm.cognee and self._fm.cognee.is_available():
+            self._fm.cognee.remember(f"{key}: {value}", metadata={"category": category, "source": source})
         self._cached_snapshot = None
 
     def search(self, query: str, limit: int = 8) -> List[Dict[str, Any]]:
         result = self._fm.search(query, limit=limit)
-        return result.get("db", []) + result.get("vault", [])
+        return result.get("db", []) + result.get("vault", []) + result.get("cognee", [])
 
     def get_frozen_snapshot(self, force_refresh: bool = False) -> Dict[str, Any]:
         if self._cached_snapshot is not None and not force_refresh:
@@ -217,6 +225,7 @@ class DualStoreMemory:
     def get_vault_status(self) -> Dict[str, Any]:
         vault_st = self._fm.vault.get_status()
         today = vault_st.get("today", "")
+        cognee_st = self._fm.cognee.status() if hasattr(self._fm, "cognee") and self._fm.cognee else {}
         return {
             "vault_root": vault_st.get("vault_root", ""),
             "status": "connected",
@@ -224,6 +233,7 @@ class DualStoreMemory:
             "total_facts_indexed": vault_st.get("total_facts", 0),
             "total_skills_indexed": len(self.get_vault_skills_summary().splitlines()) if self.get_vault_skills_summary() else 0,
             "total_conversations_logged": vault_st.get("total_conversations", 0),
+            "cognee": cognee_st,
             **vault_st,
             "full_status": self._fm.status(),
         }

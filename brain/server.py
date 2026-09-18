@@ -23,6 +23,8 @@ from .prompt_engine import prompt_engine
 from .audio_bridge import audio_bridge
 from .gemini_live import gemini_session
 from .telemetry_service import telemetry_service
+from .logger import log_error, log_info, log_warn
+from .reminders import reminder_manager
 
 app = FastAPI(title="J.A.R.V.I.S. Python Core Engine", version="1.0.0")
 
@@ -488,75 +490,138 @@ async def save_memory(req: MemoryFactRequest):
     return {"success": True, "message": f"Memory '{req.key}' saved successfully."}
 
 
+class CogneeRememberRequest(BaseModel):
+    text: str
+    dataset: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class CogneeRecallRequest(BaseModel):
+    query: str
+    dataset: Optional[str] = None
+    limit: int = 5
+
+
+@app.get("/api/memory/cognee/status")
+async def get_cognee_status():
+    if hasattr(memory_engine, "cognee") and memory_engine.cognee:
+        return {"success": True, "status": memory_engine.cognee.status()}
+    return {"success": False, "status": {"enabled": False, "connected": False}}
+
+
+@app.post("/api/memory/cognee/remember")
+async def cognee_remember_endpoint(req: CogneeRememberRequest):
+    if hasattr(memory_engine, "cognee") and memory_engine.cognee:
+        res = memory_engine.cognee.remember(req.text, dataset_name=req.dataset, metadata=req.metadata)
+        return {"success": True, "result": res}
+    return {"success": False, "error": "cognee_not_available"}
+
+
+@app.post("/api/memory/cognee/recall")
+async def cognee_recall_endpoint(req: CogneeRecallRequest):
+    if hasattr(memory_engine, "cognee") and memory_engine.cognee:
+        res = memory_engine.cognee.recall(req.query, dataset_name=req.dataset, limit=req.limit)
+        return {"success": True, "results": res}
+    return {"success": False, "results": []}
+
+
 @app.post("/api/tools/execute")
 async def execute_tool(req: ToolExecuteRequest):
     result = await actuator_dispatcher.dispatch_tool(req.tool_name, req.args)
     return result
 
 
+# ─── Hermes Sub-Agent REST Endpoints ──────────────────────────────────────────
+
 @app.get("/api/hermes/health")
-async def hermes_health():
-    import socket, shutil
-    hermes_bin = shutil.which("hermes") or os.path.exists(os.path.expanduser("~/.local/bin/hermes"))
-    reachable = False
-    try:
-        with socket.create_connection(("127.0.0.1", 9119), timeout=0.5):
-            reachable = True
-    except Exception:
-        pass
+async def hermes_health_endpoint():
+    from .hermes_bridge import check_hermes_health
+    return await check_hermes_health()
 
-    vault_candidates = [
-        os.path.join(os.getcwd(), "memory", "vault"),
-        os.path.join(os.getcwd(), "jarvis-memory"),
-        os.path.join(os.getcwd(), "friday-memory"),
-    ]
-    vault_path = next((p for p in vault_candidates if os.path.exists(p)), vault_candidates[0])
+
+@app.post("/api/hermes/chat")
+@app.post("/api/hermes/delegate")
+@app.post("/api/prime/chat")
+@app.post("/api/prime/delegate")
+async def hermes_chat_endpoint(req: Dict[str, Any] = Body(default={})):
+    from .hermes_bridge import exec_hermes
+    prompt = req.get("prompt") or req.get("message") or ""
+    if not prompt:
+        return {"success": False, "error": "prompt is required"}
+    max_turns = req.get("maxTurns", 12)
+    yolo = req.get("yolo", True)
+    timeout = req.get("timeout")
+    return await exec_hermes(prompt, timeout=timeout, max_turns=max_turns, yolo=yolo)
+
+
+# ─── Prime Agent Bridge REST Endpoints ────────────────────────────────────────
+
+@app.get("/api/prime/health")
+async def prime_health_endpoint():
     return {
-        "hermes": {
-            "ok": bool(hermes_bin),
-            "version": "Hermes Agent v0.21.0",
-            "gateway": {"url": "127.0.0.1:9119", "reachable": reachable}
-        },
-        "connected": reachable,
-        "delegation": "ready" if hermes_bin else "unavailable",
-        "vault": vault_path,
-        "vaultExists": os.path.exists(vault_path)
+        "ok": True,
+        "installed": True,
+        "name": "Prime Agent (Sovereign Generalist)",
+        "status": "ready"
     }
 
 
+# ─── Ultron & OpenClaw REST Endpoints ─────────────────────────────────────────
+
+@app.get("/api/ultron/health")
 @app.get("/api/openclaw/health")
-async def openclaw_health():
-    import socket
-    openclaw_dir = os.path.expanduser("~/.openclaw")
-    installed = os.path.exists(openclaw_dir)
-    reachable = False
-    try:
-        with socket.create_connection(("127.0.0.1", 18789), timeout=0.5):
-            reachable = True
-    except Exception:
-        pass
-
+async def ultron_health_endpoint():
+    from .ultron_bridge import check_ultron_health
+    h = await check_ultron_health()
+    connected = bool(h.get("ok")) and bool(h.get("gatewayRunning"))
     return {
-        "openclaw": {
-            "ok": installed,
-            "installed": installed,
-            "configPresent": os.path.exists(os.path.join(openclaw_dir, "openclaw.json")),
-            "workspace": os.path.join(openclaw_dir, "workspace"),
-            "gatewayRunning": reachable,
-            "gatewayUrl": "http://127.0.0.1:18789",
-            "primaryModel": "omniroute/auto/coding",
-            "agentsDir": os.path.join(openclaw_dir, "agents")
-        },
-        "connected": reachable,
-        "delegation": "ready" if installed else "unavailable",
-        "workspace": os.path.join(openclaw_dir, "workspace"),
-        "model": "omniroute/auto/coding"
+        "ultron": h,
+        "openclaw": h,
+        "connected": connected,
+        "delegation": "ready" if h.get("installed") else "unavailable",
+        "workspace": h.get("workspace"),
+        "model": h.get("primaryModel"),
     }
 
 
+@app.get("/api/ultron/status")
 @app.get("/api/openclaw/status")
-async def openclaw_status():
-    return await openclaw_health()
+async def ultron_status_endpoint():
+    from .ultron_bridge import get_ultron_status, run_ultron_deep_audit
+    status, audit = await asyncio.gather(get_ultron_status(), run_ultron_deep_audit())
+    return {
+        "ultron": status,
+        "openclaw": status,
+        "healthScore": audit.get("healthScore", 100),
+        "overallStatus": audit.get("overallStatus", "optimal"),
+        "telemetry": audit.get("telemetry", {}),
+        "bottlenecks": audit.get("bottlenecks", []),
+        "gatewayRunning": status.get("gatewayRunning", False),
+        "openClawGatewayRunning": status.get("gatewayRunning", False),
+        "primaryModel": status.get("primaryModel"),
+        "openClawModel": status.get("primaryModel"),
+    }
+
+
+@app.post("/api/ultron/chat")
+@app.post("/api/ultron/delegate")
+@app.post("/api/openclaw/chat")
+@app.post("/api/openclaw/delegate")
+async def ultron_chat_endpoint(req: Dict[str, Any] = Body(default={})):
+    from .ultron_bridge import exec_ultron
+    prompt = req.get("prompt") or req.get("message") or ""
+    if not prompt:
+        return {"success": False, "error": "prompt is required"}
+    return await exec_ultron(prompt, timeout=req.get("timeout"), model=req.get("model"))
+
+
+@app.post("/api/ultron/execute")
+@app.post("/api/openclaw/execute")
+async def ultron_execute_endpoint(req: Dict[str, Any] = Body(default={})):
+    from .ultron_bridge import run_ultron_system_action
+    action = req.get("action", "deep_audit")
+    params = req.get("params") or {}
+    return await run_ultron_system_action(action, params)
 
 
 @app.get("/api/llm/status")
@@ -596,12 +661,119 @@ async def set_llm_config(data: Dict[str, Any]):
 
 @app.get("/api/tasks")
 async def get_tasks():
-    return {"activeTasks": [], "completedTasks": []}
+    def _format(t: Dict[str, Any]) -> Dict[str, Any]:
+        task_id = str(t.get("id"))
+        task_type = t.get("type") or (
+            "ultron" if "ultron" in str(t.get("title", "")).lower() or "openclaw" in str(t.get("title", "")).lower()
+            else "hermes" if "hermes" in str(t.get("title", "")).lower()
+            else "system"
+        )
+        status = t.get("status", "running")
+        raw_start = t.get("startTime") or t.get("started_at") or time.time()
+        start_ms = int(raw_start * 1000) if raw_start < 10000000000 else int(raw_start)
+
+        raw_completed = t.get("completedTime") or t.get("completed_at")
+        completed_ms = None
+        if raw_completed:
+            completed_ms = int(raw_completed * 1000) if raw_completed < 10000000000 else int(raw_completed)
+
+        progress_pct = t.get("progressPercent", 100 if status in ["completed", "failed"] else 40)
+        progress_msg = t.get("progressMessage", "Task completed" if status == "completed" else "Executing in background...")
+
+        return {
+            "id": task_id,
+            "type": task_type,
+            "title": t.get("title") or t.get("name") or "Background Task",
+            "prompt": t.get("prompt") or t.get("command") or "",
+            "status": "completed" if status == "completed" else "failed" if status in ["failed", "error"] else "running",
+            "startTime": start_ms,
+            "completedTime": completed_ms,
+            "durationMs": t.get("durationMs"),
+            "progressPercent": progress_pct,
+            "progressMessage": progress_msg,
+            "result": t.get("result") or t.get("output"),
+            "displayCard": t.get("displayCard"),
+            "error": t.get("error") if status in ["failed", "error"] else None,
+        }
+    tasks = [_format(t) for t in actuator_dispatcher.background_tasks.values()]
+    return {
+        "activeTasks": [t for t in tasks if t["status"] == "running"],
+        "completedTasks": [t for t in tasks if t["status"] != "running"],
+    }
+
+
+@app.post("/api/tasks/{task_id}/cancel")
+async def cancel_task_endpoint(task_id: str):
+    if task_id in actuator_dispatcher.background_tasks:
+        task = actuator_dispatcher.background_tasks[task_id]
+        task["status"] = "failed"
+        task["output"] = "Task cancelled by operator"
+        task["completed_at"] = time.time()
+        pid = task.get("pid")
+        if pid:
+            try:
+                import signal
+                os.kill(pid, signal.SIGTERM)
+            except Exception:
+                pass
+        return {"success": True, "message": f"Task {task_id} cancelled"}
+    return {"success": False, "error": f"Task {task_id} not found"}
 
 
 @app.get("/api/reminders")
 async def get_reminders():
-    return {"reminders": []}
+    return {"reminders": reminder_manager.list_reminders(include_completed=True)}
+
+
+@app.post("/api/reminders")
+async def manage_reminders_endpoint(req: Dict[str, Any] = Body(default={})):
+    action = req.get("action", "list")
+    if action == "create":
+        text = req.get("text") or req.get("title") or "Reminder"
+        due_mins = req.get("due_in_minutes")
+        due_str = req.get("due_time_string")
+        category = req.get("category", "general")
+        rem = reminder_manager.create_reminder(
+            text=text,
+            due_in_minutes=due_mins,
+            due_time_string=due_str,
+            category=category
+        )
+        display_card = reminder_manager.get_display_card("reminder_created", rem)
+        # Broadcast to UI so drawer and active skill cards update instantly
+        await actuator_dispatcher._broadcast_to_ui({
+            "type": "reminder_created",
+            "reminder": rem,
+            "displayCard": display_card
+        })
+        return {"success": True, "data": rem, "displayCard": display_card}
+
+    elif action == "complete":
+        rem_id = req.get("reminder_id") or req.get("id") or ""
+        ok = reminder_manager.complete_reminder(rem_id)
+        if ok:
+            await actuator_dispatcher._broadcast_to_ui({"type": "reminder_completed", "id": rem_id})
+        return {"success": ok, "id": rem_id}
+
+    elif action == "delete":
+        rem_id = req.get("reminder_id") or req.get("id") or ""
+        ok = reminder_manager.delete_reminder(rem_id)
+        if ok:
+            await actuator_dispatcher._broadcast_to_ui({"type": "reminder_deleted", "id": rem_id})
+        return {"success": ok, "id": rem_id}
+
+    elif action == "clear_completed":
+        count = reminder_manager.clear_completed()
+        return {"success": True, "cleared": count}
+
+    else:
+        # action == "list"
+        rems = reminder_manager.list_reminders(include_completed=True)
+        return {
+            "success": True,
+            "reminders": rems,
+            "displayCard": reminder_manager.get_display_card("reminders_list", rems)
+        }
 
 
 @app.get("/api/voices")
@@ -903,12 +1075,13 @@ async def websocket_live_bridge(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        print(f"[WebSocket] Error: {e}")
+        log_error(f"WebSocket client error: {e}", source="WebSocket")
     finally:
         if ws in _connected_ws_clients:
             _connected_ws_clients.remove(ws)
         gemini_session.remove_listener(on_gemini_event)
-        await gemini_session.close()
+        if len(_connected_ws_clients) == 0:
+            await gemini_session.close()
 
 
 # ─── Serve Spatial Stage & AI-Visualizer Suite ───────────────────────────────
@@ -964,10 +1137,16 @@ assets_dir = os.path.join(dist_dir, "assets")
 if os.path.exists(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-    @app.get("/{full_path:path}")
-    async def serve_react_app(full_path: str):
+
+@app.get("/")
+@app.get("/{full_path:path}")
+async def serve_react_app(full_path: str = ""):
+    if full_path:
         file_path = os.path.join(dist_dir, full_path)
         if os.path.exists(file_path) and not os.path.isdir(file_path):
             return FileResponse(file_path)
-        return FileResponse(os.path.join(dist_dir, "index.html"))
+    index_file = os.path.join(dist_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return HTMLResponse("<h1>J.A.R.V.I.S. OS Core Online</h1><p>UI dist bundle is compiling. Run <code>npm run build</code> or refresh in a moment.</p>")
 

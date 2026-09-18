@@ -89,6 +89,8 @@ export interface SkillDisplayCard {
     | 'calculation'
     | 'hermes_response'
     | 'prime_response'
+    | 'ultron_response'
+    | 'ultron_status'
     | 'openclaw_response'
     | 'openclaw_status'
     | 'ultron_audit'

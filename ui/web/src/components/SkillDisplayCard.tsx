@@ -356,19 +356,19 @@ export const SkillDisplayCard: React.FC<SkillDisplayCardProps> = ({
     );
   }
 
-  // OpenClaw Autonomous Response Card
-  if (type === 'openclaw_response') {
+  // Ultron / Gateway Autonomous Response Card
+  if (type === 'ultron_response' || type === 'openclaw_response') {
     const { text, prompt, sessionId, model } = data || {};
     return (
-      <div className="w-full max-w-xl mx-auto my-3 rounded-2xl bg-gradient-to-br from-slate-900/95 via-emerald-950/40 to-slate-900/95 border border-emerald-500/30 p-4 text-slate-100 shadow-xl backdrop-blur-md animate-fadeIn">
-        <div className="flex items-center justify-between pb-2.5 border-b border-emerald-500/20">
+      <div className="w-full max-w-xl mx-auto my-3 rounded-2xl bg-gradient-to-br from-slate-900/95 via-purple-950/40 to-slate-900/95 border border-purple-500/30 p-4 text-slate-100 shadow-xl backdrop-blur-md animate-fadeIn">
+        <div className="flex items-center justify-between pb-2.5 border-b border-purple-500/20">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
+            <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-400">
               <Cpu className="w-4 h-4" />
             </div>
             <div>
-              <span className="text-xs font-mono font-semibold uppercase tracking-wider text-emerald-300">
-                OpenClaw • Autonomous Gateway
+              <span className="text-xs font-mono font-semibold uppercase tracking-wider text-purple-300">
+                Ultron • Autonomous Gateway & Sentinel
               </span>
               <h3 className="text-xs text-slate-300 truncate max-w-xs" title={title}>
                 {title}
@@ -382,31 +382,31 @@ export const SkillDisplayCard: React.FC<SkillDisplayCardProps> = ({
           )}
         </div>
 
-        {/* The prompt dispatched to OpenClaw */}
+        {/* The prompt dispatched to Ultron */}
         {prompt && (
-          <div className="my-2.5 rounded-xl bg-slate-950/70 border border-emerald-500/15 p-2.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-emerald-300/80 mb-1">
+          <div className="my-2.5 rounded-xl bg-slate-950/70 border border-purple-500/15 p-2.5">
+            <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-purple-300/80 mb-1">
               <Terminal className="w-3 h-3" />
-              <span>JARVIS sent to OpenClaw</span>
+              <span>JARVIS sent to Ultron</span>
             </div>
             <div className="text-xs leading-relaxed whitespace-pre-wrap text-slate-200">{prompt}</div>
           </div>
         )}
 
-        {/* OpenClaw answer */}
+        {/* Ultron answer */}
         <div className="my-2.5 text-xs leading-relaxed whitespace-pre-wrap text-slate-200 max-h-72 overflow-y-auto pr-1">
           {text || 'No response'}
         </div>
 
-        <div className="flex items-center justify-between gap-2 mt-2 text-[10px] font-mono text-emerald-300/70">
+        <div className="flex items-center justify-between gap-2 mt-2 text-[10px] font-mono text-purple-300/70">
           <div className="flex items-center gap-1.5">
             <Sparkles className="w-3 h-3" />
             <span>Port 18789 • {model || 'nemotron-3-ultra-550b'}</span>
           </div>
           {sessionId && (
             <span
-              className="px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300/80"
-              title="OpenClaw session id"
+              className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-300/80"
+              title="Ultron session id"
             >
               {sessionId.slice(0, 14)}
             </span>

@@ -40,8 +40,7 @@
 - 🤖 **Multi-Agent Specialist Delegation**: Asynchronously offload tasks to specialized autonomous agents:
   - **Prime Agent** (`prime-agent`): Software engineering, full-stack coding, refactoring, and AST analysis.
   - **Hermes Agent** (`hermes`): Deep web research, note synthesis, source grounding, and Obsidian vault indexing.
-  - **OpenClaw Gateway** (`openclaw`): Multimodal gateway and sandboxed workspace tooling on port 18789.
-  - **Ultron Engine** (`ultron`): Deep Linux kernel diagnostics, performance tuning, and sound server auto-healing.
+  - **Ultron Sentinel & Gateway** (`ultron`): Chief zero-trust security sentinel, Linux kernel diagnostics/boost, and autonomous agent gateway (port 18789, formerly OpenClaw) for multimodal workspace tooling.
 - 🧠 **Sovereign Multi-Tier Memory Vault**: Local Markdown vault (`jarvis-memory/` (with `friday-memory/` compatibility alias)), timestamped conversation logs, daily agendas, and scoped department memory with anti-poisoning guards.
 - 💓 **24/7 Autonomous Heartbeat**: Proactive background monitoring for battery drops, thermal spikes, overdue reminders, and task completions.
 - 📱 **Mobile Telegram Control**: Full remote two-way assistant chat and command execution (`/status`, `/task`, `/remind`) directly from your phone.
@@ -90,8 +89,7 @@ flowchart TB
     subgraph AgentSwarm ["🤖 Specialist Agent Swarm"]
         U["Prime Agent (Coding & Refactoring)"]
         V["Hermes Agent (Deep Web Research & Obsidian)"]
-        W["OpenClaw Gateway (Multimodal & Workspace)"]
-        X["Ultron Engine (Linux Health & Tuning)"]
+        W["Ultron (Security Sentinel & Autonomous Gateway)"]
     end
 
     UI <-->|WebSocket / REST| Server
@@ -109,11 +107,10 @@ flowchart TB
 
 | Agent | Platform / Engine | Role & Capabilities | Bridge File |
 |---|---|---|---|
-| **J.A.R.V.I.S. Prime** | Gemini 3.1 Live / 3.7 Flash | Master conversational voice orchestrator, real-time audio/vision comprehension, intent classifier, and task dispatcher. | `server.ts` / `core_engine/gemini_live.py` |
+| **Jarvis Core** | Gemini 3.1 Live / 3.7 Flash | Master conversational voice orchestrator, real-time audio/vision comprehension, intent classifier, and task dispatcher. | `server.ts` / `brain/gemini_live.py` |
 | **Prime Agent** | `prime-agent` CLI | Primary autonomous software engineer. Specializes in building applications, large refactors, code generation, and test-driven debugging. | `server/primeBridge.ts` |
 | **Hermes Agent** | `hermes` CLI (v0.20+) | Deep autonomous web research, fact extraction, source grounding, and multi-turn Obsidian knowledge navigation. | `server/hermesBridge.ts` |
-| **OpenClaw Gateway** | OpenClaw Gateway (:18789) | Multi-model agent gateway (Nemotron, Claude, MiniMax) with sandboxed workspace tooling and subagent sessions. | `server/openclawBridge.ts` |
-| **Ultron Engine** | Native Ultron Daemon | Linux OS diagnostic audits, sound server auto-healing (PulseAudio/PipeWire), thermal monitoring, and memory cache pruning. | `server/ultronBridge.ts` |
+| **Ultron** | Ultron Gateway & Sentinel (:18789) | Chief zero-trust security sentinel, Linux OS diagnostic audits, sound auto-healing, and autonomous multi-model gateway (formerly OpenClaw). | `server/ultronBridge.ts` |
 
 ---
 
@@ -323,8 +320,8 @@ All skills are registered in `agents.registry.json` and automatically declared t
 | `delegate_task` | Productivity | Universal smart delegation to the best suited agent (`prime-agent`, `hermes`, `ultron`). | Async |
 | `delegate_to_prime_agent` | Productivity | Dispatches heavy coding, refactoring, and debugging tasks to Prime Agent. | Async |
 | `delegate_to_hermes` | Productivity | Multi-turn autonomous web research, note taking, and source-grounded exploration. | Async |
-| `delegate_to_openclaw` | Productivity | Dispatches multimodal workspace commands to the OpenClaw gateway (:18789). | Async |
-| `delegate_to_ultron` | System | Triggers Linux OS health audits, performance tuning, and sound server healing. | Async |
+| `delegate_to_ultron` | System | Dispatches autonomous gateway commands (:18789), Linux OS health audits, performance boost, and sound server healing. | Async |
+| `delegate_to_openclaw` | System | Legacy alias for `delegate_to_ultron`. | Async |
 | `get_system_info` | System | Ground-truth hardware metrics (CPU load %, RAM, disk space, battery, thermals). | Sync |
 | `control_system` | System | Controls master volume, brightness, power management profiles, and screen locking. | Sync |
 | `launch_application` | System | Launches desktop applications, terminals, IDEs, or media tools via XDG entries. | Sync |

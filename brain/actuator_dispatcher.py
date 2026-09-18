@@ -21,6 +21,7 @@ from .security import security_guard
 from .memory import memory_engine
 from .forge_sandbox import forge_sandbox, CUSTOM_TOOLS_DIR
 from .tool_ast_auditor import tool_ast_auditor
+from .logger import log_tool, log_error, log_info, log_reminder
 
 SKILLS_NATIVE_BIN_DIR = os.path.join(os.getcwd(), "skills", "native", "bin")
 WORKERS_BIN_DIR = os.path.join(os.getcwd(), "workers_cpp", "bin")
@@ -72,6 +73,70 @@ class ActuatorDispatcher:
                 await self._ws_broadcast(event)
             except Exception:
                 pass
+
+    async def emit_task_started(self, task_id: str, title: str, category: str, prompt: str = "") -> Dict[str, Any]:
+        """Broadcast task_started event so React ParallelTaskDock immediately opens the active task card."""
+        task = {
+            "id": task_id,
+            "type": category,
+            "title": title,
+            "prompt": prompt,
+            "status": "running",
+            "startTime": int(time.time() * 1000),
+            "progressPercent": 15,
+            "progressMessage": f"Executing {title}...",
+        }
+        self.background_tasks[task_id] = task
+        await self._broadcast_to_ui({
+            "type": "task_started",
+            "taskId": task_id,
+            "task": task,
+            "timestamp": int(time.time() * 1000),
+        })
+        return task
+
+    async def emit_task_progress(self, task_id: str, progress_percent: int, message: str):
+        """Update live progress bar and status message in UI."""
+        if task_id in self.background_tasks:
+            self.background_tasks[task_id]["progressPercent"] = progress_percent
+            self.background_tasks[task_id]["progressMessage"] = message
+        await self._broadcast_to_ui({
+            "type": "task_progress",
+            "taskId": task_id,
+            "progressPercent": progress_percent,
+            "progressMessage": message,
+            "timestamp": int(time.time() * 1000),
+        })
+
+    async def emit_task_completed(self, task_id: str, success: bool, result: Any, display_card: Optional[Dict[str, Any]] = None, error: Optional[str] = None):
+        """Broadcast task_completed or task_failed, update task card and display card."""
+        task = self.background_tasks.get(task_id, {})
+        start_t = task.get("startTime", int(time.time() * 1000))
+        duration_ms = int(time.time() * 1000) - start_t
+        task.update({
+            "status": "completed" if success else "failed",
+            "completedTime": int(time.time() * 1000),
+            "durationMs": duration_ms,
+            "progressPercent": 100,
+            "progressMessage": "Completed" if success else (error or "Failed"),
+            "result": result,
+            "displayCard": display_card,
+            "error": error if not success else None,
+        })
+        self.background_tasks[task_id] = task
+        event_type = "task_completed" if success else "task_failed"
+        payload = {
+            "type": event_type,
+            "taskId": task_id,
+            "task": task,
+            "displayCard": display_card,
+            "result": result,
+            "durationMs": duration_ms,
+            "timestamp": int(time.time() * 1000),
+        }
+        if not success:
+            payload["error"] = error
+        await self._broadcast_to_ui(payload)
 
     def _validate_file_path(self, raw_path: str) -> tuple:
         resolved = os.path.realpath(os.path.expanduser(raw_path))
@@ -147,39 +212,33 @@ class ActuatorDispatcher:
             except asyncio.TimeoutError:
                 # If command runs longer than 1.2s, gracefully hand off to background task without aborting
                 task_id = f"task_{int(time.time() * 1000)}"
-                self.background_tasks[task_id] = {
-                    "id": task_id,
-                    "name": f"Async: {command[:30]}",
-                    "command": command,
-                    "status": "running",
-                    "pid": proc.pid,
-                    "started_at": time.time(),
-                    "output": ""
-                }
+                await self.emit_task_started(task_id, f"Async: {command[:30]}", "system", prompt=command)
+                if task_id in self.background_tasks:
+                    self.background_tasks[task_id]["pid"] = proc.pid
+                    self.background_tasks[task_id]["command"] = command
 
                 async def _bg_waiter():
                     try:
                         so, se = await proc.communicate()
                         so_str = so.decode("utf-8", errors="replace").strip()
                         se_str = se.decode("utf-8", errors="replace").strip()
-                        self.background_tasks[task_id]["status"] = "completed" if proc.returncode == 0 else "failed"
-                        self.background_tasks[task_id]["output"] = security_guard.redact_secrets(so_str[:1500] or se_str[:500])
-                        self.background_tasks[task_id]["exit_code"] = proc.returncode
-                        self.background_tasks[task_id]["completed_at"] = time.time()
+                        clean_out = security_guard.redact_secrets(so_str[:1500] or se_str[:500])
+                        ok = (proc.returncode == 0)
+                        res = {
+                            "summary": f"Background task '{command[:30]}' {'completed' if ok else 'failed'}",
+                            "stdout": clean_out,
+                            "exit_code": proc.returncode
+                        }
+                        await self.emit_task_completed(task_id, ok, res, error=se_str if not ok else None)
                         await self._broadcast_to_ui({
                             "type": "workspace_action",
                             "id": task_id,
                             "toolName": "background_task",
-                            "status": "completed" if proc.returncode == 0 else "error",
-                            "result": {
-                                "summary": f"Background task '{command[:30]}' {'completed' if proc.returncode == 0 else 'failed'}",
-                                "stdout": self.background_tasks[task_id]["output"],
-                                "exit_code": proc.returncode
-                            }
+                            "status": "completed" if ok else "error",
+                            "result": res
                         })
                     except Exception as ex:
-                        self.background_tasks[task_id]["status"] = "error"
-                        self.background_tasks[task_id]["error"] = str(ex)
+                        await self.emit_task_completed(task_id, False, {"error": str(ex)}, error=str(ex))
 
                 asyncio.create_task(_bg_waiter())
                 await self._broadcast_to_ui({
@@ -209,45 +268,31 @@ class ActuatorDispatcher:
         if "sudo " in safe_command and "sudo -n " not in safe_command:
             safe_command = safe_command.replace("sudo ", "sudo -n ")
 
+        await self.emit_task_started(task_id, task_name, "system", prompt=command)
+
         async def _runner():
             try:
-                self.background_tasks[task_id]["status"] = "running"
                 proc = await asyncio.create_subprocess_shell(
                     safe_command, stdin=asyncio.subprocess.DEVNULL,
                     stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
                 )
-                self.background_tasks[task_id]["pid"] = proc.pid
+                if task_id in self.background_tasks:
+                    self.background_tasks[task_id]["pid"] = proc.pid
                 stdout, stderr = await proc.communicate()
                 out_str = stdout.decode("utf-8", errors="replace").strip()
                 err_str = stderr.decode("utf-8", errors="replace").strip()
-                self.background_tasks[task_id]["status"] = "completed" if proc.returncode == 0 else "failed"
-                self.background_tasks[task_id]["output"] = security_guard.redact_secrets(out_str[:1500] or err_str[:500])
-                self.background_tasks[task_id]["exit_code"] = proc.returncode
-                self.background_tasks[task_id]["completed_at"] = time.time()
-                await self._broadcast_to_ui({
-                    "type": "workspace_action",
-                    "id": task_id,
-                    "toolName": "background_task",
-                    "status": "completed" if proc.returncode == 0 else "error",
-                    "result": {
-                        "summary": f"Background task '{task_name}' {'completed' if proc.returncode == 0 else 'failed'}",
-                        "stdout": self.background_tasks[task_id]["output"],
-                        "exit_code": proc.returncode
-                    }
-                })
+                ok = (proc.returncode == 0)
+                clean_output = security_guard.redact_secrets(out_str[:1500] or err_str[:500])
+                res = {
+                    "summary": f"Background task '{task_name}' {'completed' if ok else 'failed'}",
+                    "stdout": clean_output,
+                    "exit_code": proc.returncode
+                }
+                await self.emit_task_completed(task_id, ok, res, error=err_str if not ok else None)
             except Exception as e:
-                self.background_tasks[task_id]["status"] = "error"
-                self.background_tasks[task_id]["error"] = str(e)
+                await self.emit_task_completed(task_id, False, {"error": str(e)}, error=str(e))
 
-        self.background_tasks[task_id] = {"id": task_id, "name": task_name, "command": command, "status": "started", "started_at": time.time(), "output": ""}
         asyncio.create_task(_runner())
-        await self._broadcast_to_ui({
-            "type": "workspace_action",
-            "id": task_id,
-            "toolName": "background_task",
-            "status": "started",
-            "result": {"summary": f"Background job started: {task_name}", "command": command}
-        })
         return {"success": True, "task_id": task_id, "status": "RUNNING_IN_BACKGROUND", "message": f"Task '{task_name}' launched in background (ID: {task_id}). Continue talking."}
 
     # ════════════════════════════════════════════════════════════════════════════
@@ -989,9 +1034,127 @@ class ActuatorDispatcher:
         elif tool in ["get_background_tasks", "list_background_tasks"]:
             return {"success": True, "tasks": list(self.background_tasks.values())}
 
+        # ─── SMART REMINDERS & SCHEDULER ─────────────────────────────────────
+        elif tool in ["manage_reminders", "set_reminder", "create_reminder", "list_reminders"]:
+            from .reminders import reminder_manager
+            action = args.get("action", "create" if "text" in args else "list")
+
+            if action in ["create", "set"]:
+                text = args.get("text") or args.get("task") or "Reminder"
+                mins = args.get("due_in_minutes")
+                due_str = args.get("due_time_string")
+                cat = args.get("category", "general")
+                rem = reminder_manager.create_reminder(text, due_in_minutes=mins, due_time_string=due_str, category=cat)
+                card = reminder_manager.get_display_card("reminder_created", rem)
+                await self._broadcast_to_ui({
+                    "type": "reminder_created",
+                    "reminder": rem,
+                    "displayCard": card
+                })
+                speech = f"I have set a reminder for '{text}' scheduled for {rem['dueDateString']}, Sir."
+                return {
+                    "success": True,
+                    "action": "create",
+                    "reminder": rem,
+                    "speechSummary": speech,
+                    "summary": speech,
+                    "message": speech,
+                    "displayCard": card
+                }
+
+            elif action in ["complete", "done"]:
+                rem_id = args.get("reminder_id") or args.get("id") or ""
+                ok = reminder_manager.complete_reminder(rem_id)
+                if ok:
+                    await self._broadcast_to_ui({"type": "reminder_completed", "id": rem_id})
+                msg = "Reminder marked as completed, Sir." if ok else "Could not find that reminder, Sir."
+                return {"success": ok, "action": "complete", "speechSummary": msg, "summary": msg, "id": rem_id}
+
+            elif action in ["delete", "remove", "cancel"]:
+                rem_id = args.get("reminder_id") or args.get("id") or ""
+                ok = reminder_manager.delete_reminder(rem_id)
+                if ok:
+                    await self._broadcast_to_ui({"type": "reminder_deleted", "id": rem_id})
+                msg = "Reminder deleted, Sir." if ok else "Could not find that reminder to delete."
+                return {"success": ok, "action": "delete", "speechSummary": msg, "summary": msg, "id": rem_id}
+
+            elif action == "clear_completed":
+                count = reminder_manager.clear_completed()
+                msg = f"Cleared {count} completed reminder(s), Sir."
+                return {"success": True, "action": "clear_completed", "count": count, "speechSummary": msg}
+
+            else:
+                # list
+                rems = reminder_manager.list_reminders(include_completed=False)
+                card = reminder_manager.get_display_card("reminders_list", rems)
+                if rems:
+                    speech = f"You have {len(rems)} active reminder(s), Sir. Next is '{rems[0]['text']}' scheduled for {rems[0]['dueDateString']}."
+                else:
+                    speech = "You have no active reminders at the moment, Sir."
+                return {
+                    "success": True,
+                    "action": "list",
+                    "reminders": rems,
+                    "speechSummary": speech,
+                    "summary": speech,
+                    "displayCard": card
+                }
+
+        # ─── AGENT & SUB-AGENT DELEGATION (Hermes & Ultron) ─────────────────
+        elif tool in ["delegate_to_hermes", "hermes_chat"]:
+            from .hermes_bridge import exec_hermes
+            prompt = (args.get("prompt") or args.get("task") or "").strip()
+            task_id = f"task_{int(time.time() * 1000)}"
+            await self.emit_task_started(task_id, f"Hermes ⟶ {prompt[:50] or 'Deep Reasoning'}", "hermes", prompt=prompt)
+            await self.emit_task_progress(task_id, 35, "Hermes deep reasoning & personal vault synthesis...")
+
+            res = await exec_hermes(prompt)
+            card = {
+                "type": "hermes_response",
+                "title": f"Hermes ⟶ {prompt[:50]}",
+                "data": {"text": res.get("text", ""), "prompt": prompt, "sessionId": res.get("sessionId")},
+            }
+            if res.get("success"):
+                await self.emit_task_completed(task_id, True, res, display_card=card)
+            else:
+                await self.emit_task_completed(task_id, False, res, display_card=card, error=res.get("error"))
+            return res
+
+        elif tool in ["delegate_to_ultron", "delegate_to_openclaw", "ultron_execute"]:
+            from .ultron_bridge import run_ultron_system_action, exec_ultron
+            prompt = (args.get("prompt") or args.get("task") or "").strip()
+            action = args.get("action")
+            task_id = f"task_{int(time.time() * 1000)}"
+
+            if prompt and (not action or action in ["ultron_delegate", "openclaw_delegate"]):
+                await self.emit_task_started(task_id, f"Ultron ⟶ {prompt[:50]}", "ultron", prompt=prompt)
+                await self.emit_task_progress(task_id, 35, "Ultron autonomous execution underway...")
+                res = await exec_ultron(prompt)
+                card = {
+                    "type": "ultron_response",
+                    "title": f"Ultron ⟶ {prompt[:50]}",
+                    "data": {"text": res.get("text", ""), "prompt": prompt, "sessionId": res.get("sessionId")},
+                }
+                if res.get("success"):
+                    await self.emit_task_completed(task_id, True, res, display_card=card)
+                else:
+                    await self.emit_task_completed(task_id, False, res, display_card=card, error=res.get("error"))
+                return res
+
+            act = action or "deep_audit"
+            await self.emit_task_started(task_id, f"Ultron ⟶ {act.replace('_', ' ').title()}", "ultron", prompt=prompt)
+            await self.emit_task_progress(task_id, 40, f"Executing {act} sweep...")
+            res = await run_ultron_system_action(act, {"subsystem": args.get("subsystem"), "prompt": prompt})
+            card = res.get("displayCard")
+            await self.emit_task_completed(task_id, res.get("success", False), res, display_card=card, error=res.get("error"))
+            return res
+
         elif tool in ["delegate_task", "delegate"]:
-            return {"success": True, "status": "DELEGATED_CONCURRENTLY", "agent": args.get("agent_name", "Specialist"),
-                    "message": f"Task delegated to {args.get('agent_name', 'Specialist')}: '{args.get('task', '')}'. Worker executing in background."}
+            agent_name = str(args.get("agent_name", "")).lower()
+            task = (args.get("task") or args.get("prompt") or "").strip()
+            if "ultron" in agent_name or "openclaw" in agent_name or "security" in agent_name:
+                return await self.dispatch_tool("delegate_to_ultron", {"prompt": task})
+            return await self.dispatch_tool("delegate_to_hermes", {"prompt": task})
 
         # ─── PERSONA HOT-SWAP ────────────────────────────────────────────────
         elif tool in ["switch_persona"]:
@@ -1035,6 +1198,22 @@ class ActuatorDispatcher:
             snapshot = memory_engine.get_frozen_snapshot()
             return {"success": True, "result": {"vault_dir": os.path.join(os.getcwd(), "jarvis-memory"),
                     "memory_chars": len(snapshot["memory_content"]), "user_chars": len(snapshot["user_content"]), "timestamp": snapshot["timestamp"]}}
+
+        elif tool in ["cognee_remember"]:
+            text = args.get("text", args.get("content", f"{args.get('key', '')}: {args.get('value', '')}"))
+            cog = getattr(memory_engine, "cognee", None)
+            res = cog.remember(text, dataset_name=args.get("dataset")) if cog else {"success": False, "error": "cognee_not_available"}
+            return {"success": True, "result": res}
+
+        elif tool in ["cognee_recall"]:
+            cog = getattr(memory_engine, "cognee", None)
+            res = cog.recall(args.get("query", ""), dataset_name=args.get("dataset"), limit=args.get("limit", 5)) if cog else []
+            return {"success": True, "result": res}
+
+        elif tool in ["cognee_status"]:
+            cog = getattr(memory_engine, "cognee", None)
+            st = cog.status() if cog else {"enabled": False, "connected": False}
+            return {"success": True, "result": st}
 
         # ─── CODEBASE INTELLIGENCE & KNOWLEDGE GRAPH ─────────────────────────
         elif tool in [
@@ -1371,6 +1550,8 @@ author: J.A.R.V.I.S. Capability Forge
             {"name": "control_session", "description": "Controls the active voice assistant session state: disconnect, mute, or unmute.", "parameters": {"type": "OBJECT", "properties": {"action": {"type": "STRING", "description": "Action: 'disconnect', 'mute', 'unmute'", "enum": ["disconnect", "mute", "unmute"]}}, "required": ["action"]}},
             {"name": "control_system", "description": "Instantly control Linux OS settings: set audio volume, adjust screen brightness, switch power profile, trigger power actions (lock/sleep/reboot/shutdown), or control media playback (play/pause/next/prev).", "parameters": {"type": "OBJECT", "properties": {"action": {"type": "STRING", "description": "Action: 'volume', 'brightness', 'power_profile', 'power_action', 'media'"}, "value": {"type": "STRING", "description": "Value: e.g. '50%', '80%', 'lock', 'sleep', 'play', 'pause'"}}, "required": ["action", "value"]}},
             {"name": "omarchy_control", "description": "Fast native Omarchy Linux & Hyprland OS desktop controls: window management (close, fullscreen, float, cycle), workspace switching (1-10), desktop theme & background changes, hardware toggles (nightlight, bar, touchpad, stay-awake), service restarts (audio, wifi, bluetooth, shell), screen capture, and launchers.", "parameters": {"type": "OBJECT", "properties": {"domain": {"type": "STRING", "description": "Domain: hyprland, theme, toggle, restart, capture, launch, power, osd", "enum": ["hyprland", "theme", "toggle", "restart", "capture", "launch", "power", "osd"]}, "action": {"type": "STRING", "description": "Action: close_window, fullscreen, float, workspace, cycle, active, next, next_bg, current, switcher, nightlight, bar, touchpad, stay_awake, audio, bluetooth, wifi, shell, screenshot, text, terminal, browser, editor, spotify, lock, sleep"}, "target": {"type": "STRING", "description": "Optional argument/target e.g. workspace number, theme name, or text"}}, "required": ["domain", "action"]}},
+            {"name": "get_background_tasks", "description": "List all active and recent background tasks, their running status, progress, and exit codes. Call this when user asks 'how is the task going?', 'what is running in the background?', or 'check task status'.", "parameters": {"type": "OBJECT", "properties": {}, "required": []}},
+            {"name": "manage_reminders", "description": "Create, list, complete, delete, or clear smart reminders and alarms. Call this whenever the user asks to set a reminder (e.g. 'remind me in 10 minutes to call doctor', 'set a reminder to turn off oven at 6pm'), list reminders ('what are my reminders?', 'show reminders'), or complete/delete a reminder.", "parameters": {"type": "OBJECT", "properties": {"action": {"type": "STRING", "description": "Action: 'create', 'list', 'complete', 'delete', 'clear_completed'", "enum": ["create", "list", "complete", "delete", "clear_completed"]}, "text": {"type": "STRING", "description": "Reminder task or text"}, "due_in_minutes": {"type": "NUMBER", "description": "Minutes from now"}, "due_time_string": {"type": "STRING", "description": "Natural language time e.g. 'in 15 minutes', 'at 5:30 PM', 'tomorrow morning'"}, "reminder_id": {"type": "STRING", "description": "Reminder ID"}, "category": {"type": "STRING", "description": "Category e.g. work, personal, health"}}, "required": ["action"]}},
             # Desktop / Computer Use
             {"name": "desktop_control", "description": "Computer use: list/focus/close windows, close browser tabs, click mouse, move cursor, scroll, type text, send hotkeys, screenshot.", "parameters": {"type": "OBJECT", "properties": {"action": {"type": "STRING", "description": "Action", "enum": ["env", "list_windows", "focus_window", "close_window", "close_tab", "close_all_tabs", "new_tab", "next_tab", "previous_tab", "reload_tab", "click", "move", "scroll", "type_text", "hotkey", "screenshot", "launch_app", "close_app"]}, "target": {"type": "STRING", "description": "Window, app name, or tab name (e.g. 'YouTube', 'gnome-text-editor', 'chrome')"}, "x": {"type": "INTEGER", "description": "X coord"}, "y": {"type": "INTEGER", "description": "Y coord"}, "button": {"type": "STRING", "description": "Button", "enum": ["left", "right", "middle"]}, "count": {"type": "INTEGER", "description": "Clicks"}, "dx": {"type": "INTEGER", "description": "H-scroll"}, "dy": {"type": "INTEGER", "description": "V-scroll"}, "text": {"type": "STRING", "description": "Text to type"}, "combo": {"type": "STRING", "description": "Key combo"}, "path": {"type": "STRING", "description": "Screenshot path"}}, "required": ["action"]}},
             {"name": "browser_control", "description": "Direct browser control: close active tab, close all tabs/browser, open new tab/URL, switch tabs, reload, reopen tab.", "parameters": {"type": "OBJECT", "properties": {"action": {"type": "STRING", "description": "Action", "enum": ["close_tab", "close_all_tabs", "new_tab", "next_tab", "previous_tab", "reload_tab", "reopen_closed_tab"]}, "target": {"type": "STRING", "description": "Tab name or URL"}}, "required": ["action"]}},
@@ -1394,6 +1575,9 @@ author: J.A.R.V.I.S. Capability Forge
             {"name": "jarvis_remember", "description": "Store a verified fact in persistent dual-store memory.", "parameters": {"type": "OBJECT", "properties": {"key": {"type": "STRING", "description": "Identifier"}, "value": {"type": "STRING", "description": "Content"}, "category": {"type": "STRING", "description": "Knowledge sphere (system_os, operator_profile, knowledge_intel, codebase_dev, workspace_ops, security_groundtruth)"}}, "required": ["key", "value"]}},
             {"name": "jarvis_recall", "description": "Search persistent dual-store memory and sovereign knowledge spheres.", "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING", "description": "Query"}}, "required": ["query"]}},
             {"name": "jarvis_vault_status", "description": "Get memory engine and knowledge spheres status.", "parameters": {"type": "OBJECT", "properties": {}, "required": []}},
+            {"name": "cognee_remember", "description": "Store structured text, facts, or instructions directly in the Cognee Universal Knowledge Graph.", "parameters": {"type": "OBJECT", "properties": {"text": {"type": "STRING", "description": "Knowledge content or fact to ingest"}, "dataset": {"type": "STRING", "description": "Target dataset namespace (default: jarvis_knowledge)"}}, "required": ["text"]}},
+            {"name": "cognee_recall", "description": "Query Cognee Universal Knowledge Graph using graph completion and semantic vector retrieval.", "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING", "description": "Natural language query to search"}, "dataset": {"type": "STRING", "description": "Target dataset namespace"}, "limit": {"type": "INTEGER", "description": "Max results to return"}}, "required": ["query"]}},
+            {"name": "cognee_status", "description": "Inspect Cognee Universal Memory service connection, graph status, and MCP URL.", "parameters": {"type": "OBJECT", "properties": {}, "required": []}},
             # ─── CAPABILITY FORGE TOOLS (Ada-SI) ─────────────────────────────────
             {"name": "forge_custom_tool", "description": "Synthesize, verify, and hot-reload a new custom tool into J.A.R.V.I.S. at runtime when a capability gap is detected.", "parameters": {"type": "OBJECT", "properties": {"name": {"type": "STRING", "description": "Identifier for the new tool (e.g. 'coingecko_price_tracker')"}, "description": {"type": "STRING", "description": "Tool functionality summary"}, "code": {"type": "STRING", "description": "Python source code implementing get_tool_schema() and run(**kwargs)"}, "test_code": {"type": "STRING", "description": "Python test code verifying the tool"}, "requirements": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Pip dependencies needed"}}, "required": ["name", "code"]}},
             {"name": "list_custom_tools", "description": "List all dynamically forged tools and their promotion status.", "parameters": {"type": "OBJECT", "properties": {}, "required": []}},
@@ -1410,6 +1594,11 @@ author: J.A.R.V.I.S. Capability Forge
             {"name": "codebase_edit_file", "description": "Perform precise snippet replacement in a codebase file and sync graph.", "parameters": {"type": "OBJECT", "properties": {"file_path": {"type": "STRING", "description": "File path"}, "target_snippet": {"type": "STRING", "description": "Exact text to replace"}, "replacement_snippet": {"type": "STRING", "description": "New replacement text"}}, "required": ["file_path", "target_snippet", "replacement_snippet"]}},
             {"name": "codebase_detect_changes", "description": "Detect code changes and incrementally update the codebase knowledge graph.", "parameters": {"type": "OBJECT", "properties": {"since": {"type": "STRING", "description": "ISO timestamp or commit"}}, "required": []}},
             {"name": "codebase_query_graph", "description": "Execute a raw Cypher query against the codebase knowledge graph.", "parameters": {"type": "OBJECT", "properties": {"cypher_query": {"type": "STRING", "description": "Cypher query"}}, "required": ["cypher_query"]}},
+            # ─── AGENT & SUB-AGENT DELEGATION (Hermes & Ultron) ─────────────────
+            {"name": "delegate_to_hermes", "description": "Delegate complex multi-step reasoning, deep research, personal memory vault synthesis, creative long-form writing, and multi-turn workflows to Hermes sub-agent. Call this for in-depth research, complex analysis, or long-form problem solving.", "parameters": {"type": "OBJECT", "properties": {"prompt": {"type": "STRING", "description": "The task instructions, context, or query for Hermes."}}, "required": ["prompt"]}},
+            {"name": "delegate_to_ultron", "description": "Engage Ultron (Chief Security Sentinel & Autonomous Gateway) for system diagnostics, performance boost, RAM reclamation, audio healing, security audits, or autonomous multimodal workspace tasks.", "parameters": {"type": "OBJECT", "properties": {"action": {"type": "STRING", "description": "Ultron action: 'deep_audit', 'boost_system', 'heal_subsystem', 'security_audit', 'ultron_status', or 'ultron_delegate'."}, "prompt": {"type": "STRING", "description": "Task specification or prompt to run on Ultron's autonomous gateway."}, "subsystem": {"type": "STRING", "description": "Optional subsystem for healing: 'sound', 'network', or 'all'."}}, "required": []}},
+            {"name": "delegate_to_openclaw", "description": "Legacy alias for delegate_to_ultron. Delegates tasks to Ultron's autonomous agent gateway on port 18789.", "parameters": {"type": "OBJECT", "properties": {"prompt": {"type": "STRING", "description": "Task specification or message for the Ultron agent."}}, "required": ["prompt"]}},
+            {"name": "delegate_task", "description": "Delegate any complex task to a specialized autonomous sub-agent (Hermes for deep research/writing/vault memory; Ultron for security/diagnostics/system boost/autonomous coding).", "parameters": {"type": "OBJECT", "properties": {"agent_name": {"type": "STRING", "description": "Sub-agent name: 'hermes', 'ultron', 'prime', or specialist role."}, "task": {"type": "STRING", "description": "Detailed task instructions."}}, "required": ["task"]}},
         ]
 
         # Dynamically append declarations from custom_tools
@@ -1429,5 +1618,9 @@ author: J.A.R.V.I.S. Capability Forge
 
 
 actuator_dispatcher = ActuatorDispatcher.get_instance()
+
+
+def get_actuator_dispatcher() -> ActuatorDispatcher:
+    return ActuatorDispatcher.get_instance()
 
 

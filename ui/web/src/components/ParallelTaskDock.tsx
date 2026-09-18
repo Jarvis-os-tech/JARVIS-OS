@@ -133,13 +133,9 @@ export const ParallelTaskDock: React.FC<ParallelTaskDockProps> = ({
             <Bot className="w-2.5 h-2.5" />
             Hermes
           </span>
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 shrink-0">
-            <Cpu className="w-2.5 h-2.5" />
-            OpenClaw
-          </span>
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-950/60 border border-red-500/40 text-red-300 shrink-0">
             <ShieldAlert className="w-2.5 h-2.5" />
-            Ultron
+            Ultron (Sentinel & Gateway)
           </span>
         </div>
 

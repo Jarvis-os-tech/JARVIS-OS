@@ -8,12 +8,14 @@ import json
 import base64
 import asyncio
 import time
+from datetime import datetime
 import websockets
 from typing import Optional, Callable, Dict, Any, List
 from .prompt_engine import prompt_engine
 from .actuator_dispatcher import actuator_dispatcher
 from .audio_bridge import audio_bridge
 from .memory import memory_engine
+from .logger import log_error, log_info, log_warn, log_tool
 
 GEMINI_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
 DEFAULT_MODEL = "models/gemini-3.1-flash-live-preview"
@@ -52,31 +54,44 @@ class GeminiLiveSession:
             self.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
         if not self.api_key:
-            print("[GeminiLive] ⚠️ No GEMINI_API_KEY found. Running in offline/mock mode.")
+            log_warn("No GEMINI_API_KEY found. Running in offline/mock mode.", source="GeminiLive")
             return
 
         if voice_name:
             self.voice_name = voice_name
 
         url = f"{GEMINI_WS_URL}?key={self.api_key}"
-        print(f"[GeminiLive] 🎙 Connecting to Gemini Live API ({self.model}, voice: {self.voice_name})...")
+        log_info(f"🎙 Connecting to Gemini Live API ({self.model}, voice: {self.voice_name})...", source="GeminiLive")
 
-        try:
-            self.ws = await websockets.connect(url, max_size=15_000_000)
-            self.is_connected = True
-            self.is_running = True
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                self.ws = await websockets.connect(
+                    url,
+                    max_size=15_000_000,
+                    open_timeout=30.0,
+                    ping_interval=20.0,
+                    ping_timeout=20.0
+                )
+                self.is_connected = True
+                self.is_running = True
 
-            # Send Setup handshake
-            await self._send_setup(custom_system_instruction)
+                # Send Setup handshake
+                await self._send_setup(custom_system_instruction)
 
-            # Start message receiver task
-            asyncio.create_task(self._receive_loop())
-            # Start audio sender task from Rust audio bridge queue
-            asyncio.create_task(self._audio_sender_loop())
+                # Start message receiver task
+                asyncio.create_task(self._receive_loop())
+                # Start audio sender task from Rust audio bridge queue
+                asyncio.create_task(self._audio_sender_loop())
+                return
 
-        except Exception as e:
-            print(f"[GeminiLive] Connection error: {e}")
-            self.is_connected = False
+            except Exception as e:
+                if attempt < max_retries:
+                    log_warn(f"Gemini Live connection attempt {attempt}/{max_retries} failed ({e}). Retrying in 2s...", source="GeminiLive")
+                    await asyncio.sleep(2.0)
+                else:
+                    log_error(f"Connection error after {max_retries} attempts: {e}", source="GeminiLive", exc=e)
+                    self.is_connected = False
 
     async def _send_setup(self, custom_system_instruction: Optional[str] = None):
         system_instruction = custom_system_instruction or prompt_engine.render_system_prompt(persona_id="jarvis")
@@ -133,7 +148,7 @@ class GeminiLiveSession:
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            print(f"[GeminiLive] Audio sender error: {e}")
+            log_error(f"Audio sender error: {e}", source="GeminiLive", exc=e)
 
     async def send_realtime_audio(self, b64_audio: str):
         if not self.ws or not self.is_connected:
@@ -174,7 +189,18 @@ class GeminiLiveSession:
                     self._emit({"type": "setup_complete"})
                     if not self._greeted:
                         self._greeted = True
-                        asyncio.create_task(self.send_text_message("Good day Sir. Please state a crisp, sharp 1-sentence greeting to your operator (e.g. 'Good day, Sir. J.A.R.V.I.S. core online. How may I assist you today?')."))
+                        hour = datetime.now().hour
+                        time_period = "morning" if 5 <= hour < 12 else "afternoon" if 12 <= hour < 17 else "evening" if 17 <= hour < 22 else "night"
+                        time_str = datetime.now().strftime("%I:%M %p")
+                        dynamic_greeting_prompt = (
+                            f"[SYSTEM EVENT: VOICE SESSION SYNCHRONIZED]\n"
+                            f"Current local time: {time_str} ({time_period}).\n"
+                            f"OPERATIONAL DIRECTIVE:\n"
+                            f"- Greet your operator Gopi immediately with a spontaneous, natural, crisp 1-sentence greeting.\n"
+                            f"- Pronounce your name naturally as 'Jarvis' (never spell it out letter-by-letter as 'J-A-R-V-I-S').\n"
+                            f"- Never use a fixed or repetitive cliché template. Reflect the current {time_period} time and system readiness in an alert, self-evolving Jarvis voice."
+                        )
+                        asyncio.create_task(self.send_text_message(dynamic_greeting_prompt))
 
                 if "goAway" in data or "goaway" in data:
                     print("[GeminiLive] 🔄 GoAway signal received. Gracefully closing and refreshing session...")
@@ -198,7 +224,7 @@ class GeminiLiveSession:
                     if handle:
                         self.session_resumption_handle = handle
 
-                # Transcriptions (when enabled)
+                # 1. Handle Model Audio Turn & Transcriptions
                 server_content = data.get("serverContent")
                 if server_content:
                     inp_tr = server_content.get("inputTranscription")
@@ -210,9 +236,6 @@ class GeminiLiveSession:
                     if out_tr and out_tr.get("text"):
                         self._emit({"type": "output_transcription", "text": out_tr["text"]})
 
-                # 1. Handle Model Audio Turn
-                server_content = data.get("serverContent")
-                if server_content:
                     model_turn = server_content.get("modelTurn")
                     if model_turn:
                         for part in model_turn.get("parts", []):
@@ -249,12 +272,82 @@ class GeminiLiveSession:
                     asyncio.create_task(self._process_tool_call_concurrently(tool_call))
 
         except Exception as e:
-            print(f"[GeminiLive] Receiver error: {e}")
+            log_error(f"Receiver error: {e}", source="GeminiLive", exc=e)
             self.is_connected = False
+
+    ASYNC_LONG_RUNNING_TOOLS = {
+        "run_full_system_diagnostics",
+        "execute_linux_command",
+        "forge_custom_tool",
+        "test_custom_tool",
+        "codebase_search_code",
+        "codebase_get_architecture",
+        "codebase_trace_path",
+        "codebase_detect_changes",
+        "codebase_query_graph",
+        "delegate_to_prime_agent",
+        "delegate_to_ultron",
+        "delegate_to_hermes",
+        "delegate_task",
+    }
+
+    async def _run_background_task(self, call_id: str, name: str, args: Dict[str, Any], task_future: Optional[asyncio.Task] = None):
+        start_ms = time.time() * 1000
+        is_self_emitting = name in [
+            "delegate_to_hermes", "hermes_chat", "delegate_to_ultron",
+            "delegate_to_openclaw", "ultron_execute", "start_background_task", "run_background_task"
+        ]
+        task_id = f"bg_{call_id or int(start_ms)}"
+        if not is_self_emitting:
+            category = "ultron" if any(k in name for k in ["audit", "boost", "security", "ultron"]) else "system"
+            await actuator_dispatcher.emit_task_started(task_id, name.replace("_", " ").title(), category, prompt=str(args))
+
+        try:
+            result = await task_future if task_future else await actuator_dispatcher.dispatch_tool(name, args)
+        except Exception as ex:
+            result = {"success": False, "error": str(ex)}
+
+        duration_ms = (time.time() * 1000) - start_ms
+        if not is_self_emitting:
+            card = result.get("displayCard")
+            await actuator_dispatcher.emit_task_completed(
+                task_id,
+                result.get("success", False),
+                result,
+                display_card=card,
+                error=result.get("error")
+            )
+
+        self._emit({"type": "tool_result", "toolName": name, "result": result})
+        memory_engine.log_tool_execution(name, args, result, duration_ms)
+
+        if self.ws and self.is_connected:
+            try:
+                ok = result.get("success", False)
+                detail = result.get("summary") or result.get("message") or result.get("output") or ("Completed successfully." if ok else result.get("error", "Execution failed"))
+                status_str = "COMPLETED" if ok else "FAILED"
+                directive = (
+                    "Proactively speak to your operator Gopi now to report the completion and key outcome in 1 to 2 articulate sentences in your signature Jarvis voice."
+                    if ok else
+                    "Inform operator Gopi that the background task encountered an error in 1 concise sentence."
+                )
+                notification = (
+                    f"[SYSTEM NOTIFICATION: BACKGROUND TASK {status_str}]\n"
+                    f"Task: {name}\n"
+                    f"Duration: {duration_ms:.0f}ms\n"
+                    f"Outcome: {str(detail)[:300]}\n\n"
+                    f"OPERATIONAL DIRECTIVE FOR JARVIS:\n- {directive}"
+                )
+                await self.send_text_message(notification)
+            except Exception as notify_err:
+                log_error(f"Failed to notify background task completion: {notify_err}", source="GeminiLive", exc=notify_err)
 
     async def _process_tool_call_concurrently(self, tool_call: Dict[str, Any]):
         """
         Executes tools in parallel while audio streaming continues uninterrupted.
+        Fast tools (< 350ms) return immediate ground truth.
+        Long-running tools immediately acknowledge in voice and execute in background,
+        allowing Jarvis to listen and speak full-duplex while work proceeds.
         """
         try:
             function_calls = tool_call.get("functionCalls", [])
@@ -266,22 +359,58 @@ class GeminiLiveSession:
                 name = call.get("name")
                 args = call.get("args", {})
                 start_ms = time.time() * 1000
-                print(f"[GeminiLive] ⚡ Simultaneous Tool Execution: {name}({args})")
+                print(f"[GeminiLive] ⚡ Tool Invoked: {name}({args})")
                 self._emit({"type": "tool_call", "name": name, "toolName": name, "args": args})
 
-                try:
-                    result = await actuator_dispatcher.dispatch_tool(name, args)
-                except Exception as ex:
-                    result = {"success": False, "error": str(ex)}
+                # If known long-running tool, dispatch to background immediately (< 5ms)
+                if name in self.ASYNC_LONG_RUNNING_TOOLS:
+                    asyncio.create_task(self._run_background_task(call_id, name, args))
+                    return {
+                        "id": call_id,
+                        "name": name,
+                        "response": {
+                            "output": {
+                                "status": "in_progress",
+                                "message": (
+                                    f"Task '{name}' has been initiated and is executing in the background. "
+                                    f"Speak an immediate, natural verbal acknowledgment to operator Gopi now "
+                                    f"(e.g., 'On it, Boss. Starting {name.replace('_', ' ')} now.', 'Working on that in the background, Sir.') "
+                                    f"in 1 concise sentence. Keep listening and stay active to converse with Gopi while the task executes."
+                                )
+                            }
+                        }
+                    }
 
-                duration_ms = (time.time() * 1000) - start_ms
-                self._emit({"type": "tool_result", "toolName": name, "result": result})
-                memory_engine.log_tool_execution(name, args, result, duration_ms)
-                return {
-                    "id": call_id,
-                    "name": name,
-                    "response": {"output": result}
-                }
+                # Otherwise, attempt fast execution within 350ms
+                dispatch_task = asyncio.create_task(actuator_dispatcher.dispatch_tool(name, args))
+                try:
+                    result = await asyncio.wait_for(asyncio.shield(dispatch_task), timeout=0.35)
+                    duration_ms = (time.time() * 1000) - start_ms
+                    self._emit({"type": "tool_result", "toolName": name, "result": result})
+                    memory_engine.log_tool_execution(name, args, result, duration_ms)
+                    return {
+                        "id": call_id,
+                        "name": name,
+                        "response": {"output": result}
+                    }
+                except asyncio.TimeoutError:
+                    # Tool took > 350ms: seamlessly transition to background task
+                    print(f"[GeminiLive] ⏳ Tool {name} transitioning to background execution (> 350ms).")
+                    asyncio.create_task(self._run_background_task(call_id, name, args, task_future=dispatch_task))
+                    return {
+                        "id": call_id,
+                        "name": name,
+                        "response": {
+                            "output": {
+                                "status": "in_progress",
+                                "message": (
+                                    f"Task '{name}' has been dispatched to background execution. "
+                                    f"Speak a brief acknowledgment to operator Gopi now confirming you are on it, "
+                                    f"and remain listening for further input from your operator while the work proceeds."
+                                )
+                            }
+                        }
+                    }
 
             # Run all simultaneous tool calls concurrently in parallel
             responses = await asyncio.gather(*[_execute_single(c) for c in function_calls])
@@ -293,15 +422,15 @@ class GeminiLiveSession:
                     }
                 }
                 await self.ws.send(json.dumps(tool_resp_msg))
-                print(f"[GeminiLive] ⚡ Tool response sent for {len(responses)} call(s).")
+                log_tool(f"{len(responses)} call(s)", status="response sent")
         except Exception as e:
-            print(f"[GeminiLive] Error processing concurrent tool call: {e}")
+            log_error(f"Error processing concurrent tool call: {e}", source="GeminiLive", exc=e)
 
     async def send_text_message(self, text: str):
         if not self.ws or not self.is_connected:
             return
 
-        if not text.startswith("Good day Sir. Please state a crisp"):
+        if not text.startswith("[SYSTEM"):
             memory_engine.log_conversation_turn("User (Gopi)", text, role="user")
 
         msg = {
