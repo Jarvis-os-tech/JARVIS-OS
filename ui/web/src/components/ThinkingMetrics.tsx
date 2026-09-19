@@ -112,7 +112,7 @@ export const ThinkingMetrics: React.FC<ThinkingMetricsProps> = ({
       <div className="hidden lg:flex flex-col justify-between p-2.5 rounded-xl bg-slate-950/50 border border-slate-800/60">
         <div className="flex items-center justify-between">
           <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">
-            Active Session
+            Continuous Core
           </span>
           <Activity className="w-3.5 h-3.5 text-slate-400" />
         </div>

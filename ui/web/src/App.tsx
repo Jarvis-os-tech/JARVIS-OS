@@ -30,6 +30,7 @@ import { SkillsHubModal } from './components/SkillsHubModal';
 import { ParallelTaskDock } from './components/ParallelTaskDock';
 import { AgentTaskSidebar } from './components/AgentTaskSidebar';
 import { LiveExecutionConsole } from './components/LiveExecutionConsole';
+import { ConversationHistoryModal } from './components/ConversationHistoryModal';
 import { VerbalFeedbackEngine, getContextualVerbalPhrase } from './utils/verbalFeedback';
 import { useVoiceControls } from './hooks/useVoiceControls';
 import {
@@ -61,6 +62,7 @@ import {
   Bot,
   PanelLeft,
   PanelRight,
+  History,
 } from 'lucide-react';
 
 const DEFAULT_SUBAGENTS: SubAgentMeta[] = [
@@ -233,6 +235,7 @@ export default function App() {
   const [dueReminderAlert, setDueReminderAlert] = useState<ReminderItem | null>(null);
   const [isRemindersOpen, setIsRemindersOpen] = useState(false);
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const notifiedRemindersRef = useRef<Set<string>>(new Set());
 
   // Parallel Execution & Background Tasks state
@@ -417,6 +420,34 @@ export default function App() {
   useEffect(() => {
     fetchReminders();
   }, [fetchReminders]);
+
+  // Hydrate continuous conversation history from persistent memory engine
+  const fetchConversationHistory = useCallback(async () => {
+    try {
+      const res = await fetch('/api/conversation/history?limit=50');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.messages) && data.messages.length > 0) {
+        const mapped: MessageExchange[] = data.messages.map((turn: any) => ({
+          id: turn.id || `turn-${turn.timestamp || Date.now()}`,
+          role: turn.role === 'agent' ? 'agent' : 'user',
+          text: turn.text || '',
+          timestamp: turn.timestamp || Date.now(),
+        }));
+        setMessages((prev) => {
+          if (prev.length === 0) {
+            return mapped;
+          }
+          return prev;
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to load conversation history:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchConversationHistory();
+  }, [fetchConversationHistory]);
 
   // Check for due reminders every 2.5 seconds
   useEffect(() => {
@@ -830,6 +861,22 @@ export default function App() {
                 setIsUserSpeaking(isSpeaking);
               }
             );
+          } else if (msg.type === 'history_sync') {
+            console.log('Received history_sync with continuous conversation turns:', msg.turns?.length);
+            if (Array.isArray(msg.turns) && msg.turns.length > 0) {
+              const mapped: MessageExchange[] = msg.turns.map((turn: any) => ({
+                id: turn.id || `turn-${turn.timestamp || Date.now()}`,
+                role: turn.role === 'agent' ? 'agent' : 'user',
+                text: turn.text || '',
+                timestamp: turn.timestamp || Date.now(),
+              }));
+              setMessages((prev) => {
+                if (prev.length === 0) {
+                  return mapped;
+                }
+                return prev;
+              });
+            }
           } else if (msg.type === 'audio') {
             // Model Audio Output Chunk (24kHz PCM)
             setStatus('speaking');
@@ -1202,7 +1249,7 @@ export default function App() {
         }
         setMessages((prev) => [...prev, { id: `user-${Date.now()}`, role: 'user', text: '/voice off', timestamp: Date.now() } as any]);
         disconnectSession();
-        setMessages((prev) => [...prev, { id: `sys-${Date.now()}`, role: 'agent', text: 'Voice session ended.', timestamp: Date.now() } as any]);
+        setMessages((prev) => [...prev, { id: `sys-${Date.now()}`, role: 'agent', text: 'Voice stream idle.', timestamp: Date.now() } as any]);
         return;
       }
 
@@ -1620,6 +1667,25 @@ export default function App() {
             )}
           </button>
 
+          {/* Continuous Living Conversation History Button with Count Badge */}
+          <button
+            id="open-conversation-history-btn"
+            onClick={() => setIsHistoryOpen(true)}
+            className={`p-2 rounded-full transition-colors relative ${
+              isHistoryOpen
+                ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40'
+                : 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60'
+            }`}
+            title="Continuous Living Conversation Memory"
+          >
+            <History className="w-4 h-4 text-cyan-400" />
+            {messages.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-1 rounded-full bg-cyan-600 text-[9px] font-mono font-bold text-white flex items-center justify-center">
+                {messages.length}
+              </span>
+            )}
+          </button>
+
           {/* Settings Button */}
           <button
             id="open-audio-settings-btn"
@@ -1968,6 +2034,15 @@ export default function App() {
         onRunPrompt={(prompt) => {
           handleMultiSend(prompt, []);
         }}
+      />
+
+      {/* Continuous Living Conversation Memory Modal */}
+      <ConversationHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        messages={messages}
+        onRefresh={fetchConversationHistory}
+        onPreviewAttachment={(att) => setPreviewAttachment(att)}
       />
     </div>
   );

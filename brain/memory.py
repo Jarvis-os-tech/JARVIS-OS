@@ -121,6 +121,7 @@ class DualStoreMemory:
 
     def log_conversation_turn(self, speaker: str, text: str, role: str = "user") -> None:
         self._fm.log_turn(speaker, text, role=role)
+        self._cached_snapshot = None
 
     def log_tool_execution(self, tool_name: str, args: Dict[str, Any],
                            result: Dict[str, Any], duration_ms: float = 0.0) -> None:
@@ -167,6 +168,12 @@ class DualStoreMemory:
 
     def get_recent_conversations_summary(self, max_days: int = 3) -> str:
         return self._fm.vault.get_recent_conversations(max_days=max_days)
+
+    def get_recent_conversation_turns(self, limit: int = 30) -> List[Dict[str, Any]]:
+        return self._fm.get_recent_conversation_turns(limit=limit)
+
+    def get_continuous_transcript(self, max_turns: int = 25) -> str:
+        return self._fm.vault.get_continuous_transcript(max_turns=max_turns)
 
     def get_sqlite_facts(self, limit: int = 20) -> List[Dict[str, Any]]:
         # Map new memory_nodes to old format for compatibility

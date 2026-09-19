@@ -98,47 +98,25 @@ class CogneeBridge:
 
         def _do_post():
             try:
-                import urllib.request
-                payload = json.dumps({
-                    "data": text,
-                    "dataset_name": dataset,
-                    "metadata": metadata or {},
-                }).encode("utf-8")
-
-                # Try high-level remember endpoint first
-                url = f"{self.api_url}/api/v1/remember"
-                req = urllib.request.Request(
-                    url,
-                    data=payload,
-                    headers={"Content-Type": "application/json", "User-Agent": "JARVIS-OS/1.0"},
-                    method="POST",
+                import requests
+                # Cognee 1.0+ /api/v1/remember expects form data with raw_data and datasetName
+                res = requests.post(
+                    f"{self.api_url}/api/v1/remember",
+                    data={
+                        "raw_data": [text],
+                        "datasetName": dataset,
+                        "run_in_background": "true",
+                    },
+                    timeout=5.0,
                 )
-                with urllib.request.urlopen(req, timeout=3.0) as resp:
-                    res_body = resp.read().decode("utf-8")
-                    return {"success": True, "data": res_body}
+                if res.status_code == 200:
+                    return {"success": True, "data": res.json()}
+                else:
+                    logger.debug(f"Cognee remember non-200: {res.status_code} {res.text}")
+                    return {"success": False, "status_code": res.status_code, "error": res.text}
             except Exception as e:
-                # Fallback to add endpoint
-                try:
-                    import urllib.request
-                    url = f"{self.api_url}/api/v1/add"
-                    payload = json.dumps({
-                        "data": text,
-                        "dataset_name": dataset,
-                    }).encode("utf-8")
-                    req = urllib.request.Request(
-                        url,
-                        data=payload,
-                        headers={"Content-Type": "application/json", "User-Agent": "JARVIS-OS/1.0"},
-                        method="POST",
-                    )
-                    with urllib.request.urlopen(req, timeout=3.0) as resp:
-                        res_body = resp.read().decode("utf-8")
-                        if run_cognify:
-                            self.trigger_cognify_async(dataset)
-                        return {"success": True, "data": res_body}
-                except Exception as inner_e:
-                    logger.debug(f"Cognee remember error: {inner_e}")
-                    return {"success": False, "error": str(inner_e)}
+                logger.debug(f"Cognee remember error: {e}")
+                return {"success": False, "error": str(e)}
 
         # Run in thread so callers (like voice turns) never stall
         t = threading.Thread(target=_do_post, daemon=True)
@@ -148,7 +126,7 @@ class CogneeBridge:
     def recall(
         self,
         query: str,
-        search_type: str = "SEARCH",
+        search_type: str = "HYBRID_COMPLETION",
         dataset_name: Optional[str] = None,
         limit: int = 5,
     ) -> List[Dict[str, Any]]:
@@ -160,28 +138,27 @@ class CogneeBridge:
 
         dataset = dataset_name or self.default_dataset
         try:
-            import urllib.request
-            payload = json.dumps({
+            import requests
+            payload = {
                 "query": query,
-                "search_type": search_type,
-                "dataset_name": dataset,
-                "limit": limit,
-            }).encode("utf-8")
-
-            url = f"{self.api_url}/api/v1/search"
-            req = urllib.request.Request(
-                url,
-                data=payload,
-                headers={"Content-Type": "application/json", "User-Agent": "JARVIS-OS/1.0"},
-                method="POST",
+                "datasets": [dataset],
+                "searchType": search_type,
+                "topK": limit,
+            }
+            res = requests.post(
+                f"{self.api_url}/api/v1/recall",
+                json=payload,
+                timeout=5.0,
             )
-            with urllib.request.urlopen(req, timeout=2.5) as resp:
-                raw = resp.read().decode("utf-8")
-                data = json.loads(raw) if raw else []
+            if res.status_code == 200:
+                data = res.json()
                 if isinstance(data, list):
                     return data
                 elif isinstance(data, dict):
                     return data.get("results", [data])
+                return []
+            else:
+                logger.debug(f"Cognee recall error: {res.status_code} {res.text}")
                 return []
         except Exception as e:
             logger.debug(f"Cognee recall error: {e}")

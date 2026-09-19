@@ -166,6 +166,18 @@ class MemoryEngine:
         conn.close()
         return [_row_to_turn(r) for r in rows]
 
+    def get_recent_turns(self, limit: int = 50) -> List[ConversationTurn]:
+        """Fetch the most recent N turns from the continuous conversation in chronological order."""
+        conn = self._conn()
+        rows = conn.execute(
+            "SELECT * FROM conversation_turns ORDER BY created_at DESC, rowid DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+        conn.close()
+        turns = [_row_to_turn(r) for r in rows]
+        turns.reverse()
+        return turns
+
     def search_turns(self, query: str, limit: int = 10) -> List[ConversationTurn]:
         conn = self._conn()
         rows = conn.execute("""

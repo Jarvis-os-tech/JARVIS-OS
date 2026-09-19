@@ -468,6 +468,19 @@ async def memory_today():
     }
 
 
+@app.get("/api/conversation/history")
+@app.get("/api/memory/conversation/history")
+async def get_conversation_history(limit: int = 50):
+    """Returns chronological turns from the single continuous living conversation."""
+    turns = memory_engine.get_recent_conversation_turns(limit=limit)
+    return {
+        "success": True,
+        "total": len(turns),
+        "session": "continuous",
+        "messages": turns
+    }
+
+
 @app.post("/api/memory/flush")
 async def flush_memory():
     return {
@@ -1090,13 +1103,24 @@ async def websocket_live_bridge(ws: WebSocket):
                 if not gemini_session.is_connected:
                     await gemini_session.connect(voice_name=voice_name, custom_system_instruction=sys_instruction)
 
+                recent_turns = memory_engine.get_recent_conversation_turns(limit=50)
+                has_history = len(recent_turns) > 0
+                greeting = "Continuous session active and synchronized." if has_history else "Good day, Sir. Jarvis core online and ready. How may I assist you?"
+
+                # 1. Sync continuous conversation history to UI
+                await ws.send_json({
+                    "type": "history_sync",
+                    "session": "continuous",
+                    "messages": recent_turns
+                })
+
                 await ws.send_json({
                     "type": "session_ready",
                     "status": "connected",
                     "voiceName": voice_name,
                     "sampleRateIn": 16000,
                     "sampleRateOut": 24000,
-                    "greetingText": "Good day, Sir. Jarvis core online and ready. How may I assist you?"
+                    "greetingText": greeting
                 })
                 await ws.send_json({
                     "type": "connected",
@@ -1160,8 +1184,7 @@ async def websocket_live_bridge(ws: WebSocket):
         if ws in _connected_ws_clients:
             _connected_ws_clients.remove(ws)
         gemini_session.remove_listener(on_gemini_event)
-        if len(_connected_ws_clients) == 0:
-            await gemini_session.close()
+        # Jarvis session is single and continuous: never destroy or cancel session on browser disconnect/reload.
 
 
 # ─── Serve Spatial Stage & AI-Visualizer Suite ───────────────────────────────

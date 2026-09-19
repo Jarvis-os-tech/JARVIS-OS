@@ -43,7 +43,31 @@ class VaultManager:
         now_time = time.strftime("%H:%M:%S")
         iso_time = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-        # Conversation log
+        # 1. Single Continuous Conversation Journal
+        continuous_path = os.path.join(CONVERSATIONS_DIR, "conversation.md")
+        if not os.path.exists(continuous_path):
+            header = f"""---
+title: "Continuous Conversation Log"
+type: continuous-conversation
+operator: Gopi
+created_at: "{iso_time}"
+---
+
+# 💬 J.A.R.V.I.S. — Continuous Living Dialogue
+
+- **Operator**: [[USER.md|Gopi]]
+- **System**: [[MEMORY.md|J.A.R.V.I.S.]]
+- **Index**: [[index.md|Memory Vault]]
+
+---
+
+### [{today} {now_time}] [System]
+⚡ Single Continuous Living Session active. Dialog capture permanent.
+
+"""
+            self._write_file(continuous_path, header)
+
+        # 2. Daily dated Conversation log for archival & day references
         conv_path = os.path.join(CONVERSATIONS_DIR, f"{today}.md")
         new_day_created = not os.path.exists(conv_path)
         if new_day_created:
@@ -101,16 +125,33 @@ created_at: "{iso_time}"
     # ─── Conversation Logging ────────────────────────────────────────────
 
     def log_conversation(self, speaker: str, text: str):
-        """Append a dialog turn to today's conversation log."""
+        """Append a dialog turn to both the continuous conversation and today's log."""
         if not text or not text.strip():
             return
         today = time.strftime("%Y-%m-%d")
         now_time = time.strftime("%H:%M:%S")
+
+        # Ensure directory initialized
+        continuous_path = os.path.join(CONVERSATIONS_DIR, "conversation.md")
         path = os.path.join(CONVERSATIONS_DIR, f"{today}.md")
-        if not os.path.exists(path):
+        if not os.path.exists(continuous_path) or not os.path.exists(path):
             self.init_daily_session()
-        entry = f"### [{now_time}] [{speaker}]\n{text.strip()}\n\n"
-        self._append_file(path, entry)
+
+        entry_continuous = f"### [{today} {now_time}] [{speaker}]\n{text.strip()}\n\n"
+        self._append_file(continuous_path, entry_continuous)
+
+        entry_daily = f"### [{now_time}] [{speaker}]\n{text.strip()}\n\n"
+        self._append_file(path, entry_daily)
+
+    def get_continuous_transcript(self, max_turns: int = 25) -> str:
+        """Read recent turns from the continuous conversation log."""
+        continuous_path = os.path.join(CONVERSATIONS_DIR, "conversation.md")
+        if not os.path.exists(continuous_path):
+            return ""
+        content = self._read_file(continuous_path)
+        blocks = re.split(r"\n(?=### \[)", content)
+        turn_blocks = [b.strip() for b in blocks if b.strip().startswith("### [")]
+        return "\n\n".join(turn_blocks[-max_turns:])
 
     # ─── Tool Execution Logging ──────────────────────────────────────────
 

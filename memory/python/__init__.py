@@ -16,7 +16,7 @@ Usage:
     memory.miner.mine_conversation(...)    # Extract memories
     memory.status()                        # Full system status
 """
-
+from typing import List, Dict, Any, Optional
 from .engine import MemoryEngine
 from .vault import VaultManager
 from .hermes_bridge import HermesBridge
@@ -75,10 +75,9 @@ class JarvisMemory:
         # 1. Log to Obsidian vault
         self.vault.log_conversation(speaker, text)
 
-        # 2. Log to SQLite
-        today = time.strftime("%Y-%m-%d")
+        # 2. Log to SQLite with single continuous session
         turn = ConversationTurn(
-            session_id=f"session_{today}",
+            session_id="continuous",
             role=role,
             content=text.strip(),
         )
@@ -89,8 +88,34 @@ class JarvisMemory:
             self.cognee.remember(
                 f"{speaker}: {text.strip()}",
                 dataset_name="jarvis_dialogue",
-                metadata={"role": role, "speaker": speaker, "agent_id": agent_id}
+                metadata={"role": role, "speaker": speaker, "agent_id": agent_id, "session": "continuous"}
             )
+
+    def get_recent_conversation_turns(self, limit: int = 30) -> List[Dict[str, Any]]:
+        """Get recent dialogue turns from the continuous conversation."""
+        turns = self.engine.get_recent_turns(limit=limit)
+        results = [
+            {
+                "id": t.id,
+                "role": "agent" if t.role in ("assistant", "agent") else "user",
+                "speaker": "JARVIS" if t.role in ("assistant", "agent") else "User (Gopi)",
+                "text": t.content,
+                "timestamp": t.created_at,
+            }
+            for t in turns
+        ]
+        return results
+
+    def get_continuous_dialogue_summary(self, max_turns: int = 15) -> str:
+        """Format recent continuous dialogue turns for injecting into prompt context."""
+        turns = self.get_recent_conversation_turns(limit=max_turns)
+        if not turns:
+            return "Continuous conversation active. No previous turns logged yet."
+        lines = []
+        for t in turns:
+            role_label = "Operator Gopi" if t["role"] == "user" else "JARVIS"
+            lines.append(f"[{role_label}]: {t['text']}")
+        return "\n".join(lines)
 
     def search(self, query: str, limit: int = 10):
         """Search across SQLite FTS, vault files, and Cognee Knowledge Graph."""
@@ -107,7 +132,7 @@ class JarvisMemory:
     def get_context_for_prompt(self, agent_id: str = DEFAULT_AGENT_ID) -> str:
         """
         Build the full memory context string for a system prompt.
-        Combines: MEMORY.md + USER.md + facts + agent context + conversations.
+        Combines: MEMORY.md + USER.md + facts + agent context + continuous conversation history.
         """
         parts = []
 
@@ -129,10 +154,14 @@ class JarvisMemory:
         if agent_ctx:
             parts.append(f"=== AGENT MEMORY ({agent_id}) ===\n{agent_ctx}")
 
-        # Today's conversation reference
-        import time
-        today = time.strftime("%Y-%m-%d")
-        parts.append(f"=== ACTIVE SESSION ===\n- Today: [[conversations/{today}|{today}]]")
+        # Continuous Living Conversation Context
+        recent_dialogue = self.get_continuous_dialogue_summary(max_turns=15)
+        parts.append(
+            f"=== 🔄 CONTINUOUS LIVING CONVERSATION CONTEXT ===\n"
+            f"You are in a single, perpetual, unbroken conversation with your operator Gopi.\n"
+            f"There are NO isolated sessions. You remember all preceding context, questions, and tasks.\n"
+            f"Recent dialogue history:\n{recent_dialogue}"
+        )
 
         return "\n\n".join(parts)
 

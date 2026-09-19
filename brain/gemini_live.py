@@ -21,6 +21,11 @@ GEMINI_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generative
 DEFAULT_MODEL = "models/gemini-3.1-flash-live-preview"
 
 
+SESSION_STATE_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "gemini_live_session.json"
+)
+
+
 class GeminiLiveSession:
     def __init__(self, api_key: Optional[str] = None, model: str = DEFAULT_MODEL, voice_name: str = "Puck"):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -31,7 +36,44 @@ class GeminiLiveSession:
         self.is_running = False
         self.listeners: List[Callable[[Dict[str, Any]], None]] = []
         self._greeted = False
-        self.session_resumption_handle: Optional[str] = None
+        self.session_resumption_handle: Optional[str] = self._load_persisted_resumption_handle()
+
+    def _load_persisted_resumption_handle(self) -> Optional[str]:
+        """Loads a valid non-expired resumption handle from persistent storage."""
+        try:
+            if os.path.exists(SESSION_STATE_FILE):
+                with open(SESSION_STATE_FILE, "r", encoding="utf-8") as f:
+                    st = json.load(f)
+                handle = st.get("handle")
+                ts = st.get("updated_at", 0)
+                # Google Gemini Live resumption handles are valid for up to 2 hours (7200s)
+                if handle and (time.time() - ts < 7000):
+                    return handle
+        except Exception as ex:
+            log_warn(f"Could not load persisted session resumption handle: {ex}", source="GeminiLive")
+        return None
+
+    def _save_resumption_handle(self, handle: str):
+        """Persists the session resumption handle to disk across process restarts."""
+        try:
+            os.makedirs(os.path.dirname(SESSION_STATE_FILE), exist_ok=True)
+            with open(SESSION_STATE_FILE, "w", encoding="utf-8") as f:
+                json.dump({
+                    "handle": handle,
+                    "updated_at": time.time(),
+                    "iso": datetime.now().isoformat()
+                }, f, indent=2)
+        except Exception as ex:
+            log_warn(f"Could not save session resumption handle: {ex}", source="GeminiLive")
+
+    def _clear_resumption_handle(self):
+        """Clears expired or invalidated resumption handle."""
+        self.session_resumption_handle = None
+        try:
+            if os.path.exists(SESSION_STATE_FILE):
+                os.remove(SESSION_STATE_FILE)
+        except Exception:
+            pass
 
     def add_listener(self, listener: Callable[[Dict[str, Any]], None]):
         if listener not in self.listeners:
@@ -60,8 +102,12 @@ class GeminiLiveSession:
         if voice_name:
             self.voice_name = voice_name
 
+        if not self.session_resumption_handle:
+            self.session_resumption_handle = self._load_persisted_resumption_handle()
+
         url = f"{GEMINI_WS_URL}?key={self.api_key}"
-        log_info(f"🎙 Connecting to Gemini Live API ({self.model}, voice: {self.voice_name})...", source="GeminiLive")
+        resumption_info = f" (resuming continuous handle {self.session_resumption_handle[:16]}...)" if self.session_resumption_handle else " (continuous context enabled)"
+        log_info(f"🎙 Connecting to Gemini Live API ({self.model}, voice: {self.voice_name}){resumption_info}...", source="GeminiLive")
 
         max_retries = 3
         for attempt in range(1, max_retries + 1):
@@ -86,6 +132,11 @@ class GeminiLiveSession:
                 return
 
             except Exception as e:
+                # If connection or setup failed and we attempted resumption, clear stale handle and retry clean
+                if self.session_resumption_handle:
+                    log_warn(f"Session resumption failed ({e}). Clearing stale handle and reconnecting cleanly...", source="GeminiLive")
+                    self._clear_resumption_handle()
+
                 if attempt < max_retries:
                     log_warn(f"Gemini Live connection attempt {attempt}/{max_retries} failed ({e}). Retrying in 2s...", source="GeminiLive")
                     await asyncio.sleep(2.0)
@@ -96,6 +147,8 @@ class GeminiLiveSession:
     async def _send_setup(self, custom_system_instruction: Optional[str] = None):
         system_instruction = custom_system_instruction or prompt_engine.render_system_prompt(persona_id="jarvis")
         tools = actuator_dispatcher.get_tool_declarations()
+
+        resumption_cfg = {"handle": self.session_resumption_handle} if self.session_resumption_handle else {}
 
         setup_msg = {
             "setup": {
@@ -126,7 +179,7 @@ class GeminiLiveSession:
                 },
                 "inputAudioTranscription": {},
                 "outputAudioTranscription": {},
-                "sessionResumption": {"handle": self.session_resumption_handle} if self.session_resumption_handle else {},
+                "sessionResumption": resumption_cfg,
                 "contextWindowCompression": {"slidingWindow": {}}
             }
         }
@@ -161,7 +214,12 @@ class GeminiLiveSession:
                 }
             }
         }
-        await self.ws.send(json.dumps(msg))
+        try:
+            await self.ws.send(json.dumps(msg))
+        except (websockets.exceptions.ConnectionClosed, ConnectionResetError):
+            self.is_connected = False
+        except Exception as ex:
+            log_warn(f"Audio send error: {ex}", source="GeminiLive")
 
     async def send_realtime_image(self, b64_image: str, mime_type: str = "image/jpeg"):
         if not self.ws or not self.is_connected:
@@ -174,7 +232,12 @@ class GeminiLiveSession:
                 }
             }
         }
-        await self.ws.send(json.dumps(msg))
+        try:
+            await self.ws.send(json.dumps(msg))
+        except (websockets.exceptions.ConnectionClosed, ConnectionResetError):
+            self.is_connected = False
+        except Exception as ex:
+            log_warn(f"Image send error: {ex}", source="GeminiLive")
 
     async def _receive_loop(self):
         """
@@ -189,18 +252,22 @@ class GeminiLiveSession:
                     self._emit({"type": "setup_complete"})
                     if not self._greeted:
                         self._greeted = True
-                        hour = datetime.now().hour
-                        time_period = "morning" if 5 <= hour < 12 else "afternoon" if 12 <= hour < 17 else "evening" if 17 <= hour < 22 else "night"
-                        time_str = datetime.now().strftime("%I:%M %p")
-                        dynamic_greeting_prompt = (
-                            f"[SYSTEM EVENT: VOICE SESSION SYNCHRONIZED]\n"
-                            f"Current local time: {time_str} ({time_period}).\n"
-                            f"OPERATIONAL DIRECTIVE:\n"
-                            f"- Greet your operator Gopi immediately with a spontaneous, natural, crisp 1-sentence greeting.\n"
-                            f"- Pronounce your name naturally as 'Jarvis' (never spell it out letter-by-letter as 'J-A-R-V-I-S').\n"
-                            f"- Never use a fixed or repetitive cliché template. Reflect the current {time_period} time and system readiness in an alert, self-evolving Jarvis voice."
-                        )
-                        asyncio.create_task(self.send_text_message(dynamic_greeting_prompt))
+                        recent_turns = memory_engine.get_recent_conversation_turns(limit=1)
+                        if not recent_turns:
+                            hour = datetime.now().hour
+                            time_period = "morning" if 5 <= hour < 12 else "afternoon" if 12 <= hour < 17 else "evening" if 17 <= hour < 22 else "night"
+                            time_str = datetime.now().strftime("%I:%M %p")
+                            dynamic_greeting_prompt = (
+                                f"[SYSTEM EVENT: VOICE SESSION SYNCHRONIZED]\n"
+                                f"Current local time: {time_str} ({time_period}).\n"
+                                f"OPERATIONAL DIRECTIVE:\n"
+                                f"- Greet your operator Gopi immediately with a spontaneous, natural, crisp 1-sentence greeting.\n"
+                                f"- Pronounce your name naturally as 'Jarvis' (never spell it out letter-by-letter as 'J-A-R-V-I-S').\n"
+                                f"- Never use a fixed or repetitive cliché template. Reflect the current {time_period} time and system readiness in an alert, self-evolving Jarvis voice."
+                            )
+                            asyncio.create_task(self.send_text_message(dynamic_greeting_prompt))
+                        else:
+                            log_info("🔄 Continuous living conversation synchronized. Staying in alert listening mode.", source="GeminiLive")
 
                 if "goAway" in data or "goaway" in data:
                     print("[GeminiLive] 🔄 GoAway signal received. Gracefully closing and refreshing session...")
@@ -223,6 +290,7 @@ class GeminiLiveSession:
                     handle = upd.get("newHandle") or upd.get("handle")
                     if handle:
                         self.session_resumption_handle = handle
+                        self._save_resumption_handle(handle)
 
                 # 1. Handle Model Audio Turn & Transcriptions
                 server_content = data.get("serverContent")
@@ -272,8 +340,22 @@ class GeminiLiveSession:
                     asyncio.create_task(self._process_tool_call_concurrently(tool_call))
 
         except Exception as e:
+            if not self.is_running:
+                return
             log_error(f"Receiver error: {e}", source="GeminiLive", exc=e)
             self.is_connected = False
+            if self.session_resumption_handle:
+                log_warn("Clearing potentially invalidated session resumption handle...", source="GeminiLive")
+                self._clear_resumption_handle()
+
+            # Auto-reconnect cleanly if session should remain alive
+            if self.is_running:
+                async def _auto_reconnect():
+                    log_info("🔄 Auto-reconnecting Gemini Live session in 1.5s...", source="GeminiLive")
+                    await asyncio.sleep(1.5)
+                    if self.is_running and not self.is_connected:
+                        await self.connect(self.voice_name)
+                asyncio.create_task(_auto_reconnect())
 
     ASYNC_LONG_RUNNING_TOOLS = {
         "run_full_system_diagnostics",
@@ -444,7 +526,12 @@ class GeminiLiveSession:
                 "turnComplete": True
             }
         }
-        await self.ws.send(json.dumps(msg))
+        try:
+            await self.ws.send(json.dumps(msg))
+        except (websockets.exceptions.ConnectionClosed, ConnectionResetError):
+            self.is_connected = False
+        except Exception as ex:
+            log_warn(f"Text send error: {ex}", source="GeminiLive")
 
     async def close(self):
         self.is_running = False

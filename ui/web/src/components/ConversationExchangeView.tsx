@@ -147,12 +147,12 @@ export const ConversationExchangeView: React.FC<ConversationExchangeViewProps> =
               </div>
             )}
 
-            {/* Agent Play Speech Button */}
-            {msg.role === 'agent' && onPlayAudio && msg.text && (
-              <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between">
-                <span className="text-[10px] text-slate-400">
-                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
+            {/* Turn Timestamp & Agent Play Speech */}
+            <div className="mt-2.5 pt-1.5 border-t border-slate-800/40 flex items-center justify-between text-[10px] text-slate-400">
+              <span className="font-mono">
+                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              {msg.role === 'agent' && onPlayAudio && msg.text && (
                 <button
                   type="button"
                   onClick={() => onPlayAudio(msg.text)}
@@ -161,8 +161,8 @@ export const ConversationExchangeView: React.FC<ConversationExchangeViewProps> =
                   <Volume2 className="w-3 h-3" />
                   <span>Listen Voice</span>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {msg.role === 'user' && (

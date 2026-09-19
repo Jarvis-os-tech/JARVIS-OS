@@ -22,8 +22,11 @@ client_secret*.json
 telethon*.session
 
 # ------------------------------------------------------------------------------
-# 2. Personal Memory Vault & Storage (PRIVATE — NEVER PUSH TO GITHUB)
+# 2. Documentation, Personal Memory Vault & Storage (PRIVATE — NEVER PUSH TO GITHUB)
 # ------------------------------------------------------------------------------
+# Exclude all internal system documentation, specs, roadmaps, and archives
+docs/
+
 # Exclude all personal memories, facts, conversation logs, and vault contents
 memory/vault/*
 !memory/vault/.gitkeep

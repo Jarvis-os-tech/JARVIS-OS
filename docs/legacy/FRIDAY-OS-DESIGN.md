@@ -1,1 +1,0 @@
-JARVIS-OS-DESIGN.md

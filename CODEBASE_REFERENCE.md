@@ -36,6 +36,89 @@ J.A.R.V.I.S. OS is a sovereign, voice-first, autonomous AI operating system that
 
 ---
 
+## 🛡️ HOST ARCHITECTURAL SPECIFICATION
+Target Baseline: Pure Hardware & Platform Blueprint for Jarvis OS Architecture
+
+───
+
+### 💻 1. Device & Motherboard
+• OEM / Model: HP Laptop 15s-fq5xxx  
+• Product SKU: 6P129PA#ACJ  
+• Motherboard: HP 8A20 (Chassis: Laptop / ID 10, Hardware Rev: 20.22)  
+• Firmware / BIOS: AMI UEFI F.22 (23 Apr 2024)  
+• Bootloader: Limine + Snapper Btrfs integration (UEFI x86_64)  
+
+───
+
+### ⚡ 2. Processor (CPU)
+• Model: 12th Gen Intel Core i5-1235U (Alder Lake-U15, Stepping 4, Microcode 0x43b)  
+• Topology: 10 Cores (2 Performance-Cores + 8 Efficient-Cores) / 12 Threads  
+• Clock Limits: 0.40 GHz Base — 4.40 GHz Max Turbo  
+• Cache Architecture:  
+  • L1d: 352 KiB (10 instances)  
+  • L1i: 576 KiB (10 instances)  
+  • L2: 6.5 MiB (4 instances)  
+  • L3: 12 MiB shared  
+• ISA & Instruction Sets: x86_64 (39-bit physical / 48-bit virtual), VT-x (VMX/EPT), AVX2, AVX-VNNI, AES-NI, SHA-NI, GFNI, VAES, VPCLMULQDQ, FMA, CET (user_shstk, IBT), MOVDIRI/MOVDIR64B, HWP/E-PP  
+• Security Mitigations: IBRS Enhanced, IBPB, SSBD, BHI_DIS_S, Clear Register File  
+
+───
+
+### 🧠 3. Memory & Virtual Storage Architecture
+• Physical RAM: 8.0 GB DDR4 (7.4 GiB addressable physical capacity)  
+• Swap Strategy:  
+  • zram0 (compressed in-RAM swap device, 7.4 GiB allocation)  
+  • NVMe swapfile backing (14–15.5 GiB max pool capacity)  
+
+───
+
+### 🎨 4. Graphics & Display Pipeline
+• Integrated GPU: Intel Iris Xe Graphics (Alder Lake-UP3 GT2, PCI ID: 8086:46a8, Rev 0c)  
+• Discrete GPU: None (Pure iGPU architecture)  
+• Kernel DRM Driver: i915 (Hardware acceleration via Mesa / VA-API)  
+• Display Protocol: Wayland native (Hyprland / Aquamarine compositor stack)  
+• Screen Capture & Portals: xdg-desktop-portal-hyprland, grim, slurp  
+
+───
+
+### 💾 5. Storage & Partition Layout
+• Storage Drive: Samsung PM9B1 NVMe SSD 512GB (476.9 GB usable, PCIe Gen4 x4, DRAM-less, PCI ID: 144d:a80b)  
+• Partition Table (GPT):  
+  • `/dev/nvme0n1p3` (2.0 GB, vfat, UUID: EDAB-7E61) → `/boot` (UEFI / Limine)  
+  • `/dev/nvme0n1p4` (255 GB, LUKS2 encrypted container 68f9fb43-... → mapped omarchy_root Btrfs 7a459a28-...)  
+    • Subvolumes: `@` (`/`), `@home` (`/home`), `@log` (`/var/log`), `@pkg` (`/var/cache/pacman/pkg`)  
+  • `/dev/nvme0n1p1` (218.9 GB, ext4, UUID: 6caae723) → Secondary / dual-boot data partition  
+  • `/dev/nvme0n1p2` (1.0 GB, vfat, UUID: 88D7-A6CB) → Recovery partition  
+
+───
+
+### 📡 6. Network & Wireless Communications
+• Wireless Card: Realtek RTL8822CE 802.11ac PCIe (PCI ID: 10ec:c822)  
+• Wireless Driver: rtw88_8822ce / rtw88_pci  
+• Bluetooth: Realtek Bluetooth 5.0 controller (BlueZ stack)  
+• Network Daemons: NetworkManager + systemd-resolved + wpa_supplicant  
+
+───
+
+### 🔊 7. Audio & Input Peripherals
+• Audio Hardware: Intel Alder Lake PCH HD Audio (PCI ID: 8086:51c8)  
+• Sound Engine: PipeWire + WirePlumber + PipeWire-Pulse  
+• Input System: fcitx5 (XCompose / Wayland native input mapping)  
+
+───
+
+### 🔋 8. Power & Thermals
+• Battery: HP OEM Li-ion (41.05 Wh design capacity / 31.68 Wh nominal capacity)  
+• Thermal Management: thermald + intel_lpmd + power-profiles-daemon  
+
+───
+
+### ⚙️ 9. Operating System Base & Core Runtimes
+• Base Distro: Arch Linux rolling distribution (Omarchy baseline)  
+• Kernel Architecture: Linux SMP PREEMPT_DYNAMIC x86_64  
+
+---
+
 ## 2. High-Level Architecture & Component Map
 
 ```
