@@ -1102,6 +1102,8 @@ async def websocket_live_bridge(ws: WebSocket):
 
                 if not gemini_session.is_connected:
                     await gemini_session.connect(voice_name=voice_name, custom_system_instruction=sys_instruction)
+                elif msg_type == "reinit" or not gemini_session._greeted:
+                    await gemini_session.trigger_greeting(force=(msg_type == "reinit"))
 
                 recent_turns = memory_engine.get_recent_conversation_turns(limit=50)
                 has_history = len(recent_turns) > 0
@@ -1111,7 +1113,8 @@ async def websocket_live_bridge(ws: WebSocket):
                 await ws.send_json({
                     "type": "history_sync",
                     "session": "continuous",
-                    "messages": recent_turns
+                    "messages": recent_turns,
+                    "turns": recent_turns
                 })
 
                 await ws.send_json({

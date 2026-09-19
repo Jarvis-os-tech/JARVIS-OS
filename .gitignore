@@ -154,3 +154,5 @@ Thumbs.db
 !.vscode/extensions.json
 *.sublime-project
 *.sublime-workspace
+.codebase-memory/
+

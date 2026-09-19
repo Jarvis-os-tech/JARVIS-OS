@@ -250,24 +250,7 @@ class GeminiLiveSession:
                 if "setupComplete" in data:
                     print("[GeminiLive] 🌟 Gemini Live Bidirectional Session Active & Synchronized.")
                     self._emit({"type": "setup_complete"})
-                    if not self._greeted:
-                        self._greeted = True
-                        recent_turns = memory_engine.get_recent_conversation_turns(limit=1)
-                        if not recent_turns:
-                            hour = datetime.now().hour
-                            time_period = "morning" if 5 <= hour < 12 else "afternoon" if 12 <= hour < 17 else "evening" if 17 <= hour < 22 else "night"
-                            time_str = datetime.now().strftime("%I:%M %p")
-                            dynamic_greeting_prompt = (
-                                f"[SYSTEM EVENT: VOICE SESSION SYNCHRONIZED]\n"
-                                f"Current local time: {time_str} ({time_period}).\n"
-                                f"OPERATIONAL DIRECTIVE:\n"
-                                f"- Greet your operator Gopi immediately with a spontaneous, natural, crisp 1-sentence greeting.\n"
-                                f"- Pronounce your name naturally as 'Jarvis' (never spell it out letter-by-letter as 'J-A-R-V-I-S').\n"
-                                f"- Never use a fixed or repetitive cliché template. Reflect the current {time_period} time and system readiness in an alert, self-evolving Jarvis voice."
-                            )
-                            asyncio.create_task(self.send_text_message(dynamic_greeting_prompt))
-                        else:
-                            log_info("🔄 Continuous living conversation synchronized. Staying in alert listening mode.", source="GeminiLive")
+                    asyncio.create_task(self.trigger_greeting())
 
                 if "goAway" in data or "goaway" in data:
                     print("[GeminiLive] 🔄 GoAway signal received. Gracefully closing and refreshing session...")
@@ -532,6 +515,44 @@ class GeminiLiveSession:
             self.is_connected = False
         except Exception as ex:
             log_warn(f"Text send error: {ex}", source="GeminiLive")
+
+    async def trigger_greeting(self, force: bool = False):
+        """
+        Triggers a natural, time-aware voice greeting from JARVIS to operator Gopi.
+        Called on session setup completion or explicit UI activation.
+        """
+        if not self.ws or not self.is_connected:
+            return
+        if self._greeted and not force:
+            return
+        self._greeted = True
+
+        recent_turns = memory_engine.get_recent_conversation_turns(limit=1)
+        hour = datetime.now().hour
+        time_period = "morning" if 5 <= hour < 12 else "afternoon" if 12 <= hour < 17 else "evening" if 17 <= hour < 22 else "night"
+        time_str = datetime.now().strftime("%I:%M %p")
+
+        if recent_turns:
+            directive = (
+                "- Welcome back your operator Gopi immediately with a spontaneous, natural, crisp 1-sentence greeting "
+                "acknowledging system readiness and returning to the session (e.g. 'Welcome back, Sir', 'Online and ready, Gopi', or 'Good evening, Sir. All systems standing by')."
+            )
+        else:
+            directive = (
+                "- Greet your operator Gopi immediately with a spontaneous, natural, crisp 1-sentence greeting "
+                "acknowledging system readiness."
+            )
+
+        dynamic_greeting_prompt = (
+            f"[SYSTEM EVENT: VOICE SESSION SYNCHRONIZED]\n"
+            f"Current local time: {time_str} ({time_period}).\n"
+            f"OPERATIONAL DIRECTIVE:\n"
+            f"{directive}\n"
+            f"- Pronounce your name naturally as 'Jarvis' (never spell it out letter-by-letter as 'J-A-R-V-I-S').\n"
+            f"- Never use a fixed or repetitive cliché template. Reflect the current {time_period} time and system readiness in an alert, self-evolving Jarvis voice."
+        )
+        log_info(f"🎙 Triggering session greeting (time: {time_str}, period: {time_period}, has_history: {bool(recent_turns)})...", source="GeminiLive")
+        await self.send_text_message(dynamic_greeting_prompt)
 
     async def close(self):
         self.is_running = False
