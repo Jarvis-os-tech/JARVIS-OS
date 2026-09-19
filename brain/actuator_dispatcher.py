@@ -1192,6 +1192,10 @@ class ActuatorDispatcher:
             task = (args.get("task") or args.get("prompt") or "").strip()
             if "ultron" in agent_name or "openclaw" in agent_name or "security" in agent_name:
                 return await self.dispatch_tool("delegate_to_ultron", {"prompt": task})
+            if "notion" in agent_name or agent_name.startswith("notion:"):
+                clean_ag = agent_name.replace("notion:", "").replace("notion_", "").strip()
+                from .notion_bridge import dispatch_notion_tool
+                return await dispatch_notion_tool("notion_call_agent", {"agent_name": clean_ag, "task": task})
             return await self.dispatch_tool("delegate_to_hermes", {"prompt": task})
 
         # ─── PERSONA HOT-SWAP ────────────────────────────────────────────────
@@ -1210,6 +1214,13 @@ class ActuatorDispatcher:
                 "personaId": persona_id
             })
             return {"success": True, "personaId": persona_id, "message": f"Switching voice persona to {persona_id}."}
+
+        # ─── NOTION & NOTION AGENT FLEET ─────────────────────────────────────
+        elif tool.startswith("notion_") or tool in [
+            "create_notion_agent", "list_notion_agents", "call_notion_agent", "delegate_to_notion_agent"
+        ]:
+            from .notion_bridge import dispatch_notion_tool
+            return await dispatch_notion_tool(tool, args)
 
         # ─── GOOGLE WORKSPACE TOOLS ──────────────────────────────────────────
         elif tool.startswith("google_") or tool in [
@@ -1648,7 +1659,16 @@ author: J.A.R.V.I.S. Capability Forge
             {"name": "delegate_to_hermes", "description": "Delegate complex multi-step reasoning, deep research, personal memory vault synthesis, creative long-form writing, and multi-turn workflows to Hermes sub-agent. Call this for in-depth research, complex analysis, or long-form problem solving.", "parameters": {"type": "OBJECT", "properties": {"prompt": {"type": "STRING", "description": "The task instructions, context, or query for Hermes."}}, "required": ["prompt"]}},
             {"name": "delegate_to_ultron", "description": "Engage Ultron (Chief Security Sentinel & Autonomous Gateway) for system diagnostics, performance boost, RAM reclamation, audio healing, security audits, or autonomous multimodal workspace tasks.", "parameters": {"type": "OBJECT", "properties": {"action": {"type": "STRING", "description": "Ultron action: 'deep_audit', 'boost_system', 'heal_subsystem', 'security_audit', 'ultron_status', or 'ultron_delegate'."}, "prompt": {"type": "STRING", "description": "Task specification or prompt to run on Ultron's autonomous gateway."}, "subsystem": {"type": "STRING", "description": "Optional subsystem for healing: 'sound', 'network', or 'all'."}}, "required": []}},
             {"name": "delegate_to_openclaw", "description": "Legacy alias for delegate_to_ultron. Delegates tasks to Ultron's autonomous agent gateway on port 18789.", "parameters": {"type": "OBJECT", "properties": {"prompt": {"type": "STRING", "description": "Task specification or message for the Ultron agent."}}, "required": ["prompt"]}},
-            {"name": "delegate_task", "description": "Delegate any complex task to a specialized autonomous sub-agent (Hermes for deep research/writing/vault memory; Ultron for security/diagnostics/system boost/autonomous coding).", "parameters": {"type": "OBJECT", "properties": {"agent_name": {"type": "STRING", "description": "Sub-agent name: 'hermes', 'ultron', 'prime', or specialist role."}, "task": {"type": "STRING", "description": "Detailed task instructions."}}, "required": ["task"]}},
+            {"name": "delegate_task", "description": "Delegate any complex task to a specialized autonomous sub-agent (Hermes for deep research/writing/vault memory; Ultron for security/diagnostics/system boost/autonomous coding; or a Notion Agent by name).", "parameters": {"type": "OBJECT", "properties": {"agent_name": {"type": "STRING", "description": "Sub-agent name: 'hermes', 'ultron', 'prime', or a Notion agent name."}, "task": {"type": "STRING", "description": "Detailed task instructions."}}, "required": ["task"]}},
+            # ─── NOTION & NOTION AGENT FLEET ─────────────────────────────────────
+            {"name": "notion_query_database", "description": "Query pages and records from the connected Notion database with optional filter and sort criteria.", "parameters": {"type": "OBJECT", "properties": {"database_id": {"type": "STRING", "description": "Optional target database ID (defaults to primary configured database)"}, "page_size": {"type": "INTEGER", "description": "Number of records to fetch (max 100)"}}, "required": []}},
+            {"name": "notion_create_page", "description": "Create a new page or database entry in Notion with rich markdown content.", "parameters": {"type": "OBJECT", "properties": {"title": {"type": "STRING", "description": "Page or record title"}, "content": {"type": "STRING", "description": "Markdown formatted body content"}, "database_id": {"type": "STRING", "description": "Target database ID"}}, "required": ["title"]}},
+            {"name": "notion_get_page_content", "description": "Read the full text/markdown content and blocks of a specific Notion page.", "parameters": {"type": "OBJECT", "properties": {"page_id": {"type": "STRING", "description": "Notion page UUID"}}, "required": ["page_id"]}},
+            {"name": "notion_append_blocks", "description": "Append markdown paragraphs, headings, bullet lists, or code blocks to an existing Notion page.", "parameters": {"type": "OBJECT", "properties": {"page_id": {"type": "STRING", "description": "Notion page UUID"}, "content": {"type": "STRING", "description": "Markdown content to append"}}, "required": ["page_id", "content"]}},
+            {"name": "notion_search", "description": "Search across all pages and databases in the connected Notion workspace.", "parameters": {"type": "OBJECT", "properties": {"query": {"type": "STRING", "description": "Search query string"}, "filter_type": {"type": "STRING", "description": "Filter by 'page' or 'database'", "enum": ["page", "database"]}}, "required": ["query"]}},
+            {"name": "notion_create_agent", "description": "Create and register a new autonomous AI agent within the Notion database. Store its custom persona, role, and system instructions in Notion.", "parameters": {"type": "OBJECT", "properties": {"name": {"type": "STRING", "description": "Agent name (e.g. 'ResearchAnalyst', 'CodeAuditor', 'DocArchitect')"}, "role": {"type": "STRING", "description": "Agent specialization role"}, "instructions": {"type": "STRING", "description": "Comprehensive system prompt instructions for this agent"}, "capabilities": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "List of capability tags"}}, "required": ["name", "instructions"]}},
+            {"name": "notion_list_agents", "description": "List all specialized AI agents currently registered in the Notion database.", "parameters": {"type": "OBJECT", "properties": {}, "required": []}},
+            {"name": "notion_call_agent", "description": "Call an autonomous agent from Notion to execute a task within the Jarvis project, automatically recording the prompt and deliverables back to Notion.", "parameters": {"type": "OBJECT", "properties": {"agent_name": {"type": "STRING", "description": "Name or page ID of the registered Notion agent"}, "task": {"type": "STRING", "description": "Task instructions for the agent to execute"}, "context": {"type": "STRING", "description": "Optional context or background information"}}, "required": ["agent_name", "task"]}},
         ]
 
         # Dynamically append declarations from custom_tools

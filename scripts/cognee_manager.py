@@ -254,7 +254,7 @@ def main():
     elif args.action == "patch-ui":
         patch_cognee_environment()
     elif args.action == "remember":
-        res = cognee_bridge.remember(args.text, dataset_name=args.dataset)
+        res = cognee_bridge.remember(args.text, dataset_name=args.dataset, wait=True)
         print(json.dumps(res, indent=2))
     elif args.action == "recall":
         res = cognee_bridge.recall(args.query, dataset_name=args.dataset)

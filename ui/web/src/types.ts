@@ -101,6 +101,8 @@ export interface SkillDisplayCard {
     | 'system_control'
     | 'obsidian_note'
     | 'obsidian_search'
+    | 'notion_response'
+    | 'notion_agent_response'
     | string;
   title: string;
   data: any;

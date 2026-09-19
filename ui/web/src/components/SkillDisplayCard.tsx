@@ -486,6 +486,159 @@ export const SkillDisplayCard: React.FC<SkillDisplayCardProps> = ({
     );
   }
 
+  // 7.5. Notion Response Card
+  if (type === 'notion_response') {
+    const { action, title: pageTitle, url, items = [], count = 0, query } = data || {};
+    return (
+      <div className="w-full max-w-xl mx-auto my-3 rounded-2xl bg-gradient-to-br from-slate-900/95 via-stone-900/50 to-slate-900/95 border border-amber-500/30 p-4 text-slate-100 shadow-xl backdrop-blur-md animate-fadeIn">
+        <div className="flex items-center justify-between pb-2.5 border-b border-amber-500/20">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-300">
+              <FileText className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-mono font-semibold uppercase tracking-wider text-amber-300">
+                Notion Workspace
+              </span>
+              <h3 className="text-xs text-slate-300 truncate max-w-xs" title={title}>
+                {title}
+              </h3>
+            </div>
+          </div>
+          {onDismiss && (
+            <button onClick={onDismiss} className="p-1 rounded text-slate-400 hover:text-white transition-colors" title="Dismiss">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {action === 'create_page' && (
+          <div className="my-3 p-3 rounded-xl bg-slate-950/60 border border-amber-500/20">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-medium text-white flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>{pageTitle || 'New Notion Page'}</span>
+              </div>
+              {url && (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 text-[11px] font-mono text-amber-400 hover:text-amber-300 transition-colors"
+                >
+                  <span>Open in Notion</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {(action === 'query' || action === 'search') && (
+          <div className="space-y-2 my-2.5 max-h-64 overflow-y-auto">
+            {count === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-3">No Notion entries found {query ? `for “${query}”` : ''}.</p>
+            ) : (
+              items.map((it: any, idx: number) => (
+                <div key={idx} className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-700/40 hover:border-amber-500/30 transition-all flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs text-slate-200 truncate pr-2">
+                    <span className="text-amber-400 font-mono text-[10px]">#{idx + 1}</span>
+                    <span className="font-medium truncate">{it.title || 'Untitled'}</span>
+                  </div>
+                  {it.url && (
+                    <a
+                      href={it.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-1 rounded text-slate-400 hover:text-amber-300 transition-colors shrink-0"
+                      title="Open in Notion"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-800 text-[10px] font-mono text-slate-400">
+          <span>Notion Database ID: {data?.page_id?.slice(0, 8) || '3df3aa10...'}</span>
+          <span className="text-emerald-400 flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" /> Connected
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // 7.6. Notion Agent Autonomous Response Card
+  if (type === 'notion_agent_response') {
+    const { agentName, role, task, output, pageId, synced } = data || {};
+    return (
+      <div className="w-full max-w-xl mx-auto my-3 rounded-2xl bg-gradient-to-br from-slate-900/95 via-amber-950/40 to-slate-900/95 border border-amber-500/40 p-4 text-slate-100 shadow-xl backdrop-blur-md animate-fadeIn">
+        <div className="flex items-center justify-between pb-2.5 border-b border-amber-500/20">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-300">
+              <Bot className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-mono font-semibold uppercase tracking-wider text-amber-300">
+                Notion Agent • {agentName || 'Specialist'}
+              </span>
+              <h3 className="text-xs text-slate-300 truncate max-w-xs" title={role}>
+                {role || 'Autonomous Notion-Hosted Agent'}
+              </h3>
+            </div>
+          </div>
+          {onDismiss && (
+            <button onClick={onDismiss} className="p-1 rounded text-slate-400 hover:text-white transition-colors" title="Dismiss">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Task dispatched to the Notion Agent */}
+        {task && (
+          <div className="my-2.5 rounded-xl bg-slate-950/70 border border-amber-500/20 p-2.5">
+            <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-amber-300/80 mb-1">
+              <Terminal className="w-3 h-3" />
+              <span>JARVIS dispatched to Notion Agent</span>
+            </div>
+            <div className="text-xs leading-relaxed whitespace-pre-wrap text-slate-200">{task}</div>
+          </div>
+        )}
+
+        {/* Output delivered by the Agent */}
+        <div className="my-2.5 text-xs leading-relaxed whitespace-pre-wrap text-slate-200 max-h-72 overflow-y-auto pr-1">
+          {output || 'Execution complete with no textual output.'}
+        </div>
+
+        {/* Footer with Notion sync status */}
+        <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-amber-500/20 text-[10px] font-mono text-amber-300/80">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-amber-400" />
+            <span>Notion Agent Fleet</span>
+          </div>
+          <div className="flex items-center gap-1">
+            {synced ? (
+              <span className="text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> Synced to Notion
+              </span>
+            ) : (
+              <span className="text-amber-400/80">Local Execution</span>
+            )}
+            {pageId && (
+              <span className="ml-1 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300" title="Notion Page ID">
+                {pageId.slice(0, 8)}...
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // 8. Prime Agent Coding & Software Engineering Response Card
   if (type === 'prime_response') {
     const { text, prompt, codeSnippets = [] } = data || {};

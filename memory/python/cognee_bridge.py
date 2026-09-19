@@ -22,6 +22,7 @@ logger = logging.getLogger("jarvis.cognee_bridge")
 DEFAULT_API_URL = os.environ.get("COGNEE_API_URL", "http://127.0.0.1:8020")
 DEFAULT_MCP_URL = os.environ.get("COGNEE_MCP_URL", "http://127.0.0.1:8021/mcp")
 DEFAULT_DATASET = os.environ.get("COGNEE_DATASET", "jarvis_knowledge")
+DEFAULT_API_KEY = os.environ.get("COGNEE_API_KEY", "")
 COGNEE_ENABLED = os.environ.get("COGNEE_ENABLED", "true").lower() in ("1", "true", "yes", "on")
 
 
@@ -46,17 +47,28 @@ class CogneeBridge:
         api_url: str = DEFAULT_API_URL,
         mcp_url: str = DEFAULT_MCP_URL,
         default_dataset: str = DEFAULT_DATASET,
+        api_key: str = DEFAULT_API_KEY,
         enabled: bool = COGNEE_ENABLED,
     ):
         self.api_url = api_url.rstrip("/")
         self.mcp_url = mcp_url
         self.default_dataset = default_dataset
+        self.api_key = api_key or os.environ.get("COGNEE_API_KEY", "")
         self.enabled = enabled
 
         # Cached availability to prevent blocking on repeated calls when offline
         self._is_available: Optional[bool] = None
         self._last_health_check: float = 0.0
         self._health_check_ttl: float = 15.0  # re-check every 15s
+
+    def _headers(self, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        """Construct standard HTTP headers with API key authentication."""
+        h = {"User-Agent": "JARVIS-OS/1.0"}
+        if self.api_key:
+            h["X-Api-Key"] = self.api_key
+        if extra:
+            h.update(extra)
+        return h
 
     def is_available(self, force: bool = False) -> bool:
         """Checks if Cognee REST API is reachable with a rapid timeout."""
@@ -86,10 +98,12 @@ class CogneeBridge:
         dataset_name: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         run_cognify: bool = True,
+        wait: bool = False,
     ) -> Dict[str, Any]:
         """
-        Synchronously store information in Cognee.
-        Fires in background worker or fast HTTP POST to avoid blocking the voice loop.
+        Store information in Cognee.
+        If wait=True: runs synchronously and returns completed result.
+        If wait=False (default): fires in background thread to avoid blocking voice loop.
         """
         if not self.is_available():
             return {"success": False, "reason": "cognee_offline", "detail": "Cognee service is not reachable"}
@@ -102,12 +116,13 @@ class CogneeBridge:
                 # Cognee 1.0+ /api/v1/remember expects form data with raw_data and datasetName
                 res = requests.post(
                     f"{self.api_url}/api/v1/remember",
+                    headers=self._headers(),
                     data={
                         "raw_data": [text],
                         "datasetName": dataset,
-                        "run_in_background": "true",
+                        "run_in_background": "false" if wait else "true",
                     },
-                    timeout=5.0,
+                    timeout=45.0 if wait else 5.0,
                 )
                 if res.status_code == 200:
                     return {"success": True, "data": res.json()}
@@ -118,6 +133,9 @@ class CogneeBridge:
                 logger.debug(f"Cognee remember error: {e}")
                 return {"success": False, "error": str(e)}
 
+        if wait:
+            return _do_post()
+
         # Run in thread so callers (like voice turns) never stall
         t = threading.Thread(target=_do_post, daemon=True)
         t.start()
@@ -126,7 +144,7 @@ class CogneeBridge:
     def recall(
         self,
         query: str,
-        search_type: str = "HYBRID_COMPLETION",
+        search_type: str = "GRAPH_COMPLETION",
         dataset_name: Optional[str] = None,
         limit: int = 5,
     ) -> List[Dict[str, Any]]:
@@ -141,14 +159,15 @@ class CogneeBridge:
             import requests
             payload = {
                 "query": query,
-                "datasets": [dataset],
-                "searchType": search_type,
-                "topK": limit,
+                "datasets": [dataset] if dataset else None,
+                "search_type": search_type,
+                "top_k": limit,
             }
             res = requests.post(
-                f"{self.api_url}/api/v1/recall",
+                f"{self.api_url}/api/v1/search",
+                headers=self._headers({"Content-Type": "application/json"}),
                 json=payload,
-                timeout=5.0,
+                timeout=25.0,
             )
             if res.status_code == 200:
                 data = res.json()
@@ -176,7 +195,7 @@ class CogneeBridge:
                 req = urllib.request.Request(
                     url,
                     data=payload,
-                    headers={"Content-Type": "application/json", "User-Agent": "JARVIS-OS/1.0"},
+                    headers=self._headers({"Content-Type": "application/json"}),
                     method="POST",
                 )
                 with urllib.request.urlopen(req, timeout=10.0) as resp:

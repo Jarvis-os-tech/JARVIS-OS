@@ -714,7 +714,103 @@ async def get_agents_endpoint():
             ]
         }
     ]
+    # Fetch Notion agents if configured
+    try:
+        from .notion_bridge import notion_agent_manager, get_notion_config
+        token, db_id = get_notion_config()
+        if token and db_id:
+            notion_res = await notion_agent_manager.list_agents()
+            if notion_res.get("success"):
+                for n_ag in notion_res.get("agents", []):
+                    agents.append({
+                        "id": f"notion_{n_ag['id']}",
+                        "name": f"Notion • {n_ag['name']}",
+                        "tagline": "Notion Sovereign Agent",
+                        "role": "Notion-Hosted Autonomous Agent & Deliverables Sync",
+                        "status": "live",
+                        "badge": "NOTION AGENT",
+                        "badgeColor": "amber",
+                        "description": f"Autonomous agent stored and synced in Notion database ({n_ag['name']}).",
+                        "modelEndpoint": "Notion Bridge ↔ J.A.R.V.I.S. LLM",
+                        "capabilities": ["Notion Knowledge Sync", "Task Deliverables", "Persona Persistence", "Autonomous Execution"],
+                        "quickActions": [
+                            {"id": f"call_{n_ag['id']}", "label": f"Call {n_ag['name']}", "prompt": f"delegate_task to {n_ag['name']}", "actionType": "chat"}
+                        ]
+                    })
+    except Exception:
+        pass
+
     return {"agents": agents}
+
+
+# ─── Notion & Notion Agent REST Endpoints ─────────────────────────────────────
+
+@app.get("/api/notion/status")
+async def notion_status_endpoint():
+    from .notion_bridge import notion_client, get_notion_config
+    token, db_id = get_notion_config()
+    if not token or not db_id:
+        return {"configured": False, "error": "NOTION_TOKEN or NOTION_DATABASE_ID missing"}
+
+    db_res = await notion_client.get_database()
+    return {
+        "configured": True,
+        "database_id": db_id,
+        "ok": db_res.get("success", False),
+        "database": db_res.get("result", {})
+    }
+
+
+@app.post("/api/notion/query")
+async def notion_query_endpoint(req: Dict[str, Any] = Body(default={})):
+    from .notion_bridge import notion_client
+    return await notion_client.query_database(
+        database_id=req.get("database_id"),
+        filter_dict=req.get("filter"),
+        sorts=req.get("sorts"),
+        page_size=int(req.get("page_size", 25))
+    )
+
+
+@app.post("/api/notion/create-page")
+async def notion_create_page_endpoint(req: Dict[str, Any] = Body(default={})):
+    from .notion_bridge import dispatch_notion_tool
+    return await dispatch_notion_tool("notion_create_page", req)
+
+
+@app.get("/api/notion/search")
+async def notion_search_endpoint(query: str = "", filter_type: Optional[str] = None):
+    from .notion_bridge import notion_client
+    return await notion_client.search(query=query, filter_type=filter_type)
+
+
+@app.get("/api/notion/agents")
+async def notion_list_agents_endpoint():
+    from .notion_bridge import notion_agent_manager
+    return await notion_agent_manager.list_agents()
+
+
+@app.post("/api/notion/agents/create")
+async def notion_create_agent_endpoint(req: Dict[str, Any] = Body(default={})):
+    from .notion_bridge import notion_agent_manager
+    name = req.get("name", "").strip()
+    role = req.get("role", "Specialist Autonomous Agent").strip()
+    instructions = req.get("instructions", "").strip()
+    capabilities = req.get("capabilities", [])
+    if not name or not instructions:
+        return {"success": False, "error": "name and instructions are required"}
+    return await notion_agent_manager.create_agent(name, role, instructions, capabilities)
+
+
+@app.post("/api/notion/agents/call")
+async def notion_call_agent_endpoint(req: Dict[str, Any] = Body(default={})):
+    from .notion_bridge import notion_agent_manager
+    agent_name = req.get("agent_name") or req.get("name") or ""
+    task = req.get("task") or req.get("prompt") or ""
+    context = req.get("context")
+    if not agent_name or not task:
+        return {"success": False, "error": "agent_name and task are required"}
+    return await notion_agent_manager.call_agent(agent_name, task, context)
 
 
 @app.get("/api/llm/status")
