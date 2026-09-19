@@ -528,6 +528,8 @@ export default function App() {
   const durationIntervalRef = useRef<any>(null);
   const settingsRef = useRef<VoiceSettings>(settings);
   settingsRef.current = settings;
+  const isIntentionalDisconnectRef = useRef(false);
+  const reconnectTimeoutRef = useRef<any>(null);
 
   // 1. Camera Controls (supports desktop webcams, mobile front & rear cameras)
   const startCameraFeed = useCallback(async (targetFacing?: 'user' | 'environment') => {
@@ -736,6 +738,11 @@ export default function App() {
   const connectSession = async () => {
     try {
       setErrorMessage(null);
+      isIntentionalDisconnectRef.current = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
       setStatus('connecting');
 
       const streamer = streamerRef.current;
@@ -1089,6 +1096,12 @@ export default function App() {
           } else if (msg.type === 'pong') {
             const rtt = Date.now() - msg.clientTimestamp;
             setTelemetry((prev) => ({ ...prev, roundTripLatencyMs: rtt }));
+          } else if (msg.type === 'session_reconnecting') {
+            console.log('Gemini Live session reconnecting...');
+            setStatus('connecting');
+          } else if (msg.type === 'session_reconnected') {
+            console.log('Gemini Live session reconnected!');
+            setStatus('listening');
           } else if (msg.type === 'session_ended') {
             console.log('Gemini live session ended:', msg.message);
             setStatus('idle');
@@ -1102,15 +1115,30 @@ export default function App() {
         }
       };
 
-      ws.onclose = () => {
-        console.log('WebSocket closed');
-        disconnectSession();
+      ws.onclose = (ev) => {
+        console.log('WebSocket closed:', ev.code, ev.reason);
+        if (!isIntentionalDisconnectRef.current) {
+          console.log('Unexpected disconnect, auto-reconnecting in 2s...');
+          setStatus('connecting');
+          if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (!isIntentionalDisconnectRef.current) {
+              connectSession();
+            }
+          }, 2000);
+        } else {
+          disconnectSession();
+        }
       };
 
       ws.onerror = (err) => {
         console.error('WebSocket connection error:', err);
-        setErrorMessage('Could not establish real-time voice connection.');
-        disconnectSession();
+        if (!isIntentionalDisconnectRef.current) {
+          setErrorMessage('Reconnecting to voice session...');
+        } else {
+          setErrorMessage('Could not establish real-time voice connection.');
+          disconnectSession();
+        }
       };
     } catch (err: any) {
       console.error('Error connecting session:', err);
@@ -1121,6 +1149,11 @@ export default function App() {
 
   // Disconnect voice session
   const disconnectSession = useCallback(() => {
+    isIntentionalDisconnectRef.current = true;
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
     if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
     if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
 

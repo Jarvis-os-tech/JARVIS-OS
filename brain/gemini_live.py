@@ -37,6 +37,10 @@ class GeminiLiveSession:
         self.listeners: List[Callable[[Dict[str, Any]], None]] = []
         self._greeted = False
         self.session_resumption_handle: Optional[str] = self._load_persisted_resumption_handle()
+        self._reconnect_lock = asyncio.Lock()
+        self._is_reconnecting = False
+        self._receiver_task: Optional[asyncio.Task] = None
+        self._audio_task: Optional[asyncio.Task] = None
 
     def _load_persisted_resumption_handle(self) -> Optional[str]:
         """Loads a valid non-expired resumption handle from persistent storage."""
@@ -90,6 +94,22 @@ class GeminiLiveSession:
             except Exception:
                 pass
 
+    async def _teardown_ws(self):
+        """Safely tears down active websocket connection and cancels background streaming tasks."""
+        self.is_connected = False
+        if self._receiver_task and not self._receiver_task.done():
+            self._receiver_task.cancel()
+            self._receiver_task = None
+        if self._audio_task and not self._audio_task.done():
+            self._audio_task.cancel()
+            self._audio_task = None
+        if self.ws:
+            try:
+                await asyncio.wait_for(self.ws.close(), timeout=2.0)
+            except Exception:
+                pass
+            self.ws = None
+
     async def connect(self, voice_name: Optional[str] = None, custom_system_instruction: Optional[str] = None):
         self._greeted = False
         if not self.api_key:
@@ -109,15 +129,18 @@ class GeminiLiveSession:
         resumption_info = f" (resuming continuous handle {self.session_resumption_handle[:16]}...)" if self.session_resumption_handle else " (continuous context enabled)"
         log_info(f"🎙 Connecting to Gemini Live API ({self.model}, voice: {self.voice_name}){resumption_info}...", source="GeminiLive")
 
+        await self._teardown_ws()
+
         max_retries = 3
         for attempt in range(1, max_retries + 1):
             try:
                 self.ws = await websockets.connect(
                     url,
                     max_size=15_000_000,
-                    open_timeout=30.0,
-                    ping_interval=20.0,
-                    ping_timeout=20.0
+                    open_timeout=15.0,
+                    ping_interval=None,
+                    ping_timeout=None,
+                    close_timeout=5.0,
                 )
                 self.is_connected = True
                 self.is_running = True
@@ -125,10 +148,9 @@ class GeminiLiveSession:
                 # Send Setup handshake
                 await self._send_setup(custom_system_instruction)
 
-                # Start message receiver task
-                asyncio.create_task(self._receive_loop())
-                # Start audio sender task from Rust audio bridge queue
-                asyncio.create_task(self._audio_sender_loop())
+                # Start message receiver task and audio sender task
+                self._receiver_task = asyncio.create_task(self._receive_loop())
+                self._audio_task = asyncio.create_task(self._audio_sender_loop())
                 return
 
             except Exception as e:
@@ -143,6 +165,7 @@ class GeminiLiveSession:
                 else:
                     log_error(f"Connection error after {max_retries} attempts: {e}", source="GeminiLive", exc=e)
                     self.is_connected = False
+                    raise
 
     async def _send_setup(self, custom_system_instruction: Optional[str] = None):
         system_instruction = custom_system_instruction or prompt_engine.render_system_prompt(persona_id="jarvis")
@@ -189,11 +212,16 @@ class GeminiLiveSession:
     async def _audio_sender_loop(self):
         """
         Continuously pulls 16kHz PCM audio from AudioBridge and streams to Gemini Live.
+        Uses timeout-based queue polling to exit cleanly on disconnect.
         """
         try:
             while self.is_running and self.is_connected:
-                pcm_chunk = await audio_bridge.inbound_audio_queue.get()
-                if not pcm_chunk or not self.ws:
+                try:
+                    pcm_chunk = await asyncio.wait_for(audio_bridge.inbound_audio_queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    continue
+
+                if not pcm_chunk or not self.ws or not self.is_connected:
                     continue
 
                 b64_audio = base64.b64encode(pcm_chunk).decode("utf-8")
@@ -218,6 +246,7 @@ class GeminiLiveSession:
             await self.ws.send(json.dumps(msg))
         except (websockets.exceptions.ConnectionClosed, ConnectionResetError):
             self.is_connected = False
+            asyncio.create_task(self.reconnect_with_backoff(initial_delay=1.0))
         except Exception as ex:
             log_warn(f"Audio send error: {ex}", source="GeminiLive")
 
@@ -236,6 +265,7 @@ class GeminiLiveSession:
             await self.ws.send(json.dumps(msg))
         except (websockets.exceptions.ConnectionClosed, ConnectionResetError):
             self.is_connected = False
+            asyncio.create_task(self.reconnect_with_backoff(initial_delay=1.0))
         except Exception as ex:
             log_warn(f"Image send error: {ex}", source="GeminiLive")
 
@@ -253,18 +283,9 @@ class GeminiLiveSession:
                     asyncio.create_task(self.trigger_greeting())
 
                 if "goAway" in data or "goaway" in data:
-                    print("[GeminiLive] 🔄 GoAway signal received. Gracefully closing and refreshing session...")
-                    self.is_connected = False
-                    if self.ws:
-                        try:
-                            await self.ws.close()
-                        except Exception:
-                            pass
-                    # Auto-reconnect cleanly with backoff (aligns with Rust bridge 1s->30s)
-                    async def _reconnect():
-                        await asyncio.sleep(1)
-                        await self.connect(self.voice_name)
-                    asyncio.create_task(_reconnect())
+                    log_warn("GoAway signal received from Gemini Live. Refreshing session with resumption handle...", source="GeminiLive")
+                    await self._teardown_ws()
+                    asyncio.create_task(self.reconnect_with_backoff(initial_delay=0.5))
                     return
 
                 # Session resumption handle (2h window)
@@ -322,23 +343,52 @@ class GeminiLiveSession:
                     # Spawn tool execution in background task so receive/audio loop NEVER blocks
                     asyncio.create_task(self._process_tool_call_concurrently(tool_call))
 
+        except asyncio.CancelledError:
+            pass
         except Exception as e:
             if not self.is_running:
                 return
-            log_error(f"Receiver error: {e}", source="GeminiLive", exc=e)
-            self.is_connected = False
-            if self.session_resumption_handle:
-                log_warn("Clearing potentially invalidated session resumption handle...", source="GeminiLive")
-                self._clear_resumption_handle()
+            log_warn(f"Gemini Live connection dropped ({e}). Scheduling resilient reconnect...", source="GeminiLive")
+            await self._teardown_ws()
+            asyncio.create_task(self.reconnect_with_backoff(initial_delay=1.0))
 
-            # Auto-reconnect cleanly if session should remain alive
-            if self.is_running:
-                async def _auto_reconnect():
-                    log_info("🔄 Auto-reconnecting Gemini Live session in 1.5s...", source="GeminiLive")
-                    await asyncio.sleep(1.5)
-                    if self.is_running and not self.is_connected:
-                        await self.connect(self.voice_name)
-                asyncio.create_task(_auto_reconnect())
+    async def reconnect_with_backoff(self, initial_delay: float = 1.0, max_retries: int = 15):
+        """
+        Rock-solid auto-reconnection loop with exponential backoff and single-flight lock.
+        Prevents multiple parallel reconnect tasks from trampling each other.
+        """
+        async with self._reconnect_lock:
+            if self.is_connected or not self.is_running:
+                return
+            if self._is_reconnecting:
+                return
+            self._is_reconnecting = True
+
+        try:
+            self._emit({"type": "session_reconnecting", "status": "reconnecting"})
+            delay = initial_delay
+            for attempt in range(1, max_retries + 1):
+                if not self.is_running or self.is_connected:
+                    break
+
+                log_info(f"🔄 Auto-reconnecting Gemini Live (attempt {attempt}/{max_retries}) in {delay:.1f}s...", source="GeminiLive")
+                await asyncio.sleep(delay)
+
+                try:
+                    await self.connect(voice_name=self.voice_name)
+                    if self.is_connected:
+                        log_info("🌟 Gemini Live session successfully reconnected and restored!", source="GeminiLive")
+                        self._emit({"type": "session_reconnected", "status": "connected"})
+                        return
+                except Exception as e:
+                    log_warn(f"Reconnect attempt {attempt} failed: {e}", source="GeminiLive")
+
+                delay = min(delay * 1.5, 12.0)
+
+            log_error(f"Gemini Live auto-reconnection failed after {max_retries} attempts.", source="GeminiLive")
+            self._emit({"type": "session_error", "message": "Voice session lost. Please re-initialize."})
+        finally:
+            self._is_reconnecting = False
 
     ASYNC_LONG_RUNNING_TOOLS = {
         "run_full_system_diagnostics",
@@ -513,6 +563,7 @@ class GeminiLiveSession:
             await self.ws.send(json.dumps(msg))
         except (websockets.exceptions.ConnectionClosed, ConnectionResetError):
             self.is_connected = False
+            asyncio.create_task(self.reconnect_with_backoff(initial_delay=1.0))
         except Exception as ex:
             log_warn(f"Text send error: {ex}", source="GeminiLive")
 
@@ -557,8 +608,7 @@ class GeminiLiveSession:
     async def close(self):
         self.is_running = False
         self.is_connected = False
-        if self.ws:
-            await self.ws.close()
+        await self._teardown_ws()
         print("[GeminiLive] Session closed.")
 
 
