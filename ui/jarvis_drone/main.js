@@ -140,3 +140,15 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
+function handleTerminationSignal(sig) {
+  isQuitting = true;
+  if (win && !win.isDestroyed()) {
+    win.destroy();
+  }
+  app.quit();
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => handleTerminationSignal('SIGTERM'));
+process.on('SIGINT', () => handleTerminationSignal('SIGINT'));

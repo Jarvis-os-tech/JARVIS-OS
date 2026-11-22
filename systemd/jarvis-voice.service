@@ -2,6 +2,7 @@
 Description=JARVIS Voice Core — ambient voice assistant
 After=graphical-session.target pipewire.service wireplumber.service
 PartOf=graphical-session.target
+Wants=jarvis-drone.service
 StartLimitIntervalSec=300
 StartLimitBurst=5
 

@@ -291,3 +291,45 @@ async def test_unified_skills_drone_control(monkeypatch):
     assert res["action"] == "toggle"
     assert calls[-1][-1] == "toggle"
 
+
+def test_map_jarvis_state_filtering():
+    import time
+    bridge = DroneBridge()
+
+    # 1. Benign / stale turn error should NOT trigger alert if state is idle
+    stale_error_data = {
+        "state": "idle",
+        "error": "No spoken answer was received.",
+        "connected": True,
+        "tools_in_flight": 0
+    }
+    assert bridge._map_jarvis_state(stale_error_data) == "idle"
+
+    # 2. Genuine raw_state error or alert triggers alert
+    assert bridge._map_jarvis_state({"state": "alert"}) == "alert"
+    assert bridge._map_jarvis_state({"state": "error"}) == "alert"
+
+    # 3. Active recent critical alert within 6 seconds triggers alert
+    active_alert_data = {
+        "state": "idle",
+        "recent_alerts": [
+            {"priority": "critical", "timestamp": time.time() - 2, "text": "High temp"}
+        ]
+    }
+    assert bridge._map_jarvis_state(active_alert_data) == "alert"
+
+    # 4. Expired alert does not trigger alert
+    expired_alert_data = {
+        "state": "idle",
+        "recent_alerts": [
+            {"priority": "critical", "timestamp": time.time() - 10, "text": "Old alert"}
+        ]
+    }
+    assert bridge._map_jarvis_state(expired_alert_data) == "idle"
+
+    # 5. Normal states
+    assert bridge._map_jarvis_state({"state": "speaking"}) == "speaking"
+    assert bridge._map_jarvis_state({"state": "listening", "listening": True}) == "listening"
+    assert bridge._map_jarvis_state({"state": "thinking", "tools_in_flight": 1}) == "thinking"
+
+

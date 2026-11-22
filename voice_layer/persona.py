@@ -222,6 +222,14 @@ about a particular department. Agents with a department run through its workflow
 and null availability means readiness is unverified. Available local commands are
 installed, with sign-in unverified. Use job-list tools for jobs or temporary helpers.
 """
+    if 'drone_control' in names:
+        instruction += """
+VISUAL DRONE COMPANION CONTROL
+When the user asks to appear, disappear, hide, show, or toggle the holographic drone
+companion (e.g. 'appear the drone', 'hide the drone', 'show the drone', 'toggle drone'),
+immediately call drone_control with action='appear', 'disappear', or 'toggle'.
+The drone provides ambient visual status and gestures in the desktop overlay.
+"""
     if 'enter_standby' in names:
         instruction += """
 CONVERSATION CONTROLS

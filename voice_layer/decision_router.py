@@ -156,8 +156,6 @@ class DecisionRouter:
                     'type': 'audio',
                     'mime_type': 'audio/wav',
                     'data': b64_audio,
-                    'sample_rate': 16000,
-                    'channels': 1,
                 }
             else:
                 input_param = transcript.strip()

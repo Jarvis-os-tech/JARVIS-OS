@@ -75,7 +75,7 @@ class DroneBridge:
                 if time.time() - last_alert.get("timestamp", 0) < 6:
                     has_active_alert = True
 
-        if has_active_alert or (error and data.get("connected", True)):
+        if has_active_alert or raw_state in ("alert", "error"):
             return "alert"
         if tools_in_flight > 0 or raw_state == "thinking":
             return "thinking"

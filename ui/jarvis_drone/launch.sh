@@ -91,4 +91,4 @@ if command -v electron &>/dev/null; then
 fi
 
 echo "Launching JARVIS Drone Companion (port ${DRONE_PORT})..."
-$ELECTRON_CMD "${SCRIPT_DIR}" --ozone-platform=x11 --port="${DRONE_PORT}" "${PASS_ARGS[@]}"
+$ELECTRON_CMD "${SCRIPT_DIR}" --ozone-platform=x11 --port="${DRONE_PORT}" "${PASS_ARGS[@]}" || true

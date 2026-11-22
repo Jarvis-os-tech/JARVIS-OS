@@ -6,6 +6,7 @@ import pytest
 
 from voice_layer.config import Config
 from voice_layer.daemon import LiveVoice
+from voice_layer.decision_router import DecisionResult
 from voice_layer.local_speech import LocalSpeechConfig, WhistleClient, app_names, command_for
 from voice_layer.playback import Playback
 from voice_layer.speech import GateFrame
@@ -41,7 +42,10 @@ def test_ambiguous_application_name_is_not_routed():
 
 def instance(text='volume down'):
     skills = NS(execute=AsyncMock(return_value='{"ok":true,"status":"completed"}'))
-    voice = LiveVoice(Playback('test'), config=Config(), skills=skills)
+    voice = LiveVoice(Playback('test'), config=Config(auto_vad=False), skills=skills)
+    voice.decision_router.evaluate = AsyncMock(
+        return_value=DecisionResult(is_for_jarvis=True, ack_clip='none', route='gemini_live')
+    )
     voice.local_speech = NS(ready=True, config=LocalSpeechConfig(enabled=True),
                             transcribe=AsyncMock(return_value=text))
     voice._reply_authorized = True
