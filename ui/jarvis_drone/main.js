@@ -97,7 +97,24 @@ ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
 ipcMain.on('move-window-by', (event, { dx, dy }) => {
   if (win && !win.isDestroyed()) {
     const [curX, curY] = win.getPosition();
-    win.setPosition(Math.round(curX + dx), Math.round(curY + dy));
+    try {
+      const display = screen.getDisplayNearestPoint({ x: curX, y: curY });
+      const bounds = display ? (display.workArea || display.bounds) : null;
+      if (bounds) {
+        const minX = bounds.x;
+        const maxX = bounds.x + bounds.width - WINDOW_SIZE;
+        const minY = bounds.y;
+        const maxY = bounds.y + bounds.height - WINDOW_SIZE;
+        win.setPosition(
+          Math.round(Math.max(minX, Math.min(maxX, curX + dx))),
+          Math.round(Math.max(minY, Math.min(maxY, curY + dy)))
+        );
+      } else {
+        win.setPosition(Math.round(curX + dx), Math.round(curY + dy));
+      }
+    } catch (_) {
+      win.setPosition(Math.round(curX + dx), Math.round(curY + dy));
+    }
   }
 });
 

@@ -62,6 +62,7 @@ def test_dragging_interaction_wiring():
     assert "hitbox.addEventListener('pointermove'" in html_content
     assert "hitbox.addEventListener('pointerup'" in html_content
     assert "window.addEventListener('pointerup'" in html_content, "Window pointerup fallback ensures drag is never stuck"
+    assert "window.electronAPI.moveWindowBy" in html_content, "moveWindowBy must be invoked during electron drag"
 
 
 def test_main_js_and_preload_window_movement_support():
@@ -85,10 +86,10 @@ def test_compact_overlay_window_size():
     launch_sh = (REPO_ROOT / "ui" / "jarvis_drone" / "launch.sh").read_text(encoding="utf-8")
 
     assert "const WINDOW_SIZE = 96;" in main_content, "WINDOW_SIZE in main.js must be 96"
-    assert "width: 96px;" in html_content, "is-electron stage width must be 96px"
-    assert "height: 96px;" in html_content, "is-electron stage height must be 96px"
-    assert "left: 48px;" in html_content, "drone anchor center must be 48px"
-    assert "top: 48px;" in html_content, "drone anchor center must be 48px"
+    assert ("width: 96px;" in html_content or "width: 100%;" in html_content), "stage width must be specified"
+    assert ("height: 96px;" in html_content or "height: 100%;" in html_content), "stage height must be specified"
+    assert ("left: 48px;" in html_content or "left: 50%" in html_content), "drone anchor center must be centered"
+    assert ("top: 48px;" in html_content or "top: calc(50%" in html_content or "top: 50%" in html_content), "drone anchor center must be centered"
     assert "size 96 96" in launch_sh, "Hyprland windowrulev2 must specify size 96 96"
 
 

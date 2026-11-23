@@ -59,9 +59,9 @@
     }
 
     body.is-electron,
-    body.is-electron html {
-      width: 96px;
-      height: 96px;
+    html.is-electron {
+      width: 100%;
+      height: 100%;
       overflow: hidden;
     }
 
@@ -74,8 +74,8 @@
     }
 
     body.is-electron #jarvis-stage {
-      width: 96px;
-      height: 96px;
+      width: 100%;
+      height: 100%;
       overflow: hidden;
     }
 
@@ -95,8 +95,8 @@
 
     body.is-electron #drone-anchor {
       position: absolute;
-      left: 48px;
-      top: 48px;
+      left: 50%;
+      top: calc(50% - 3px);
       transform: none !important;
     }
 
@@ -134,10 +134,10 @@
     }
 
     body.is-electron #drone-hitbox {
-      width: 64px;
-      height: 64px;
-      left: -32px;
-      top: -32px;
+      width: 68px;
+      height: 68px;
+      left: -34px;
+      top: -34px;
     }
 
     /* 3D Scene Root */
@@ -154,7 +154,7 @@
     }
 
     body.is-electron .drone-scene {
-      transform: scale(0.65);
+      transform: scale(0.48);
     }
 
     /* Cloaked / Disappeared State */
@@ -959,6 +959,7 @@
       // Detect Electron environment
       const isElectron = Boolean(window.electronAPI && typeof window.electronAPI.setWindowPosition === 'function');
       if (isElectron) {
+        document.documentElement.classList.add('is-electron');
         document.body.classList.add('is-electron');
       }
 
@@ -1249,6 +1250,9 @@
         velocityY = 0;
       }
 
+      let lastDragScreenX = 0;
+      let lastDragScreenY = 0;
+
       hitbox.addEventListener('pointerdown', (e) => {
         hitbox.setPointerCapture(e.pointerId);
         isDragging = true;
@@ -1262,6 +1266,8 @@
 
         dragStartX = startPtX;
         dragStartY = startPtY;
+        lastDragScreenX = e.screenX;
+        lastDragScreenY = e.screenY;
         droneStartX = posX;
         droneStartY = posY;
 
@@ -1279,18 +1285,31 @@
       hitbox.addEventListener('pointermove', (e) => {
         if (!isDragging) return;
 
-        const currentPtX = isElectron ? e.screenX : e.clientX;
-        const currentPtY = isElectron ? e.screenY : e.clientY;
+        if (isElectron) {
+          const dx = e.screenX - lastDragScreenX;
+          const dy = e.screenY - lastDragScreenY;
+          lastDragScreenX = e.screenX;
+          lastDragScreenY = e.screenY;
 
-        const deltaX = currentPtX - dragStartX;
-        const deltaY = currentPtY - dragStartY;
+          if ((dx !== 0 || dy !== 0) && window.electronAPI && typeof window.electronAPI.moveWindowBy === 'function') {
+            window.electronAPI.moveWindowBy(dx, dy);
+          }
+        } else {
+          const currentPtX = e.clientX;
+          const currentPtY = e.clientY;
 
-        posX = Math.max(minX - 20, Math.min(maxX + 20, droneStartX + deltaX));
-        posY = Math.max(minY - 20, Math.min(maxY + 20, droneStartY + deltaY));
-        updateDroneTransform();
+          const deltaX = currentPtX - dragStartX;
+          const deltaY = currentPtY - dragStartY;
+
+          posX = Math.max(minX - 20, Math.min(maxX + 20, droneStartX + deltaX));
+          posY = Math.max(minY - 20, Math.min(maxY + 20, droneStartY + deltaY));
+          updateDroneTransform();
+        }
 
         const now = performance.now();
-        velocityHistory.push({ x: currentPtX, y: currentPtY, t: now });
+        const curSampleX = isElectron ? e.screenX : e.clientX;
+        const curSampleY = isElectron ? e.screenY : e.clientY;
+        velocityHistory.push({ x: curSampleX, y: curSampleY, t: now });
 
         // Maintain small 100ms window of samples
         while (velocityHistory.length > 6 || (velocityHistory.length > 2 && now - velocityHistory[0].t > 120)) {
@@ -1318,8 +1337,8 @@
         if (moveDistance < 5) {
           // Treated as TAP!
           handleTap();
-        } else {
-          // Calculate release velocity from sample window
+        } else if (!isElectron) {
+          // Calculate release velocity from sample window (canvas/browser preview only)
           const now = performance.now();
           if (velocityHistory.length >= 2) {
             const first = velocityHistory[0];
@@ -1433,9 +1452,6 @@
         if (!el) return;
         el.addEventListener('mouseenter', () => {
           isHoveringDrone = true;
-          if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
-            window.electronAPI.setIgnoreMouseEvents(false);
-          }
           window.dispatchEvent(new CustomEvent('drone-hover', { detail: { hovering: true, element: el.id } }));
         });
 
@@ -1444,9 +1460,6 @@
           if (!isDragging) {
             targetEyeX = 0;
             targetEyeY = 0;
-            if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
-              window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
-            }
           }
           window.dispatchEvent(new CustomEvent('drone-hover', { detail: { hovering: false, element: el.id } }));
         });
@@ -1455,10 +1468,8 @@
       setupPassthroughElement(hitbox);
       setupPassthroughElement(controlBar);
 
-      // Initialize with mouse click forwarding outside the interactive hitbox
-      if (window.electronAPI && window.electronAPI.setIgnoreMouseEvents) {
-        window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
-      }
+      // Note: On Linux XWayland, setIgnoreMouseEvents(true) empties the input region and breaks pointer events.
+      // Pointer capture, clicks, and dragging are handled natively on the compact 96x96 overlay window without setIgnoreMouseEvents.
 
       // =======================================================================
       // Bi-directional WebSocket Client (with Auto-Reconnect)
