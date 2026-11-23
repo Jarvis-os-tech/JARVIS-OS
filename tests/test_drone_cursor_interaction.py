@@ -97,3 +97,27 @@ def test_no_square_tooltip_or_outline_on_hover():
     html_content = INDEX_HTML.read_text(encoding="utf-8")
     assert 'id="drone-hitbox" class="drone-hitbox">' in html_content, "drone-hitbox must not have a title tooltip attribute"
     assert "outline: none" in html_content, "CSS must suppress outlines"
+
+
+def test_drone_no_blur_no_clip_and_no_brightening():
+    """Verify background blur suppression, drone scaling to avoid clipping, and no hover brightness flare."""
+    html_content = INDEX_HTML.read_text(encoding="utf-8")
+    main_content = MAIN_JS.read_text(encoding="utf-8")
+    launch_sh = (REPO_ROOT / "ui" / "jarvis_drone" / "launch.sh").read_text(encoding="utf-8")
+
+    # 1. No background blur or shadow in Hyprland window rules
+    assert "noblur" in launch_sh
+    assert "no_blur = true" in launch_sh
+
+    # 2. Drone scene scaled in Electron so full body, wings, antenna, and plume fit within 96px without clipping
+    assert "body.is-electron .drone-scene" in html_content
+    assert "scale(" in html_content
+
+    # 3. No hover brightening or extra glow flare
+    assert "#drone-posture-layer.is-hovered" in html_content
+    assert "brightness(1.18)" not in html_content
+
+    # 4. IPC handler for dynamic click-through passthrough
+    assert "set-ignore-mouse-events" in main_content
+    assert "setIgnoreMouseEvents" in html_content
+

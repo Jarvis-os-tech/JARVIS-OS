@@ -86,6 +86,13 @@ function createWindow() {
   });
 }
 
+// IPC handler: dynamic click-through ignore mouse events
+ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
+  if (win && !win.isDestroyed()) {
+    win.setIgnoreMouseEvents(ignore, options);
+  }
+});
+
 // IPC handler: move window relatively
 ipcMain.on('move-window-by', (event, { dx, dy }) => {
   if (win && !win.isDestroyed()) {
