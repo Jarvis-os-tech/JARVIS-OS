@@ -1,10 +1,10 @@
 import QtQuick
 import QtTest
-import "../../ui/jarvis_widgets"
-import "../../ui/jarvis_widgets/WorkspaceModel.js" as Workspace
-import "../../ui/jarvis_widgets/SessionModel.js" as Session
-import "../../ui/jarvis_widgets/TaskEvents.js" as Tasks
-import "../../ui/jarvis_shell/HudModel.js" as Hud
+import "../../widgets"
+import "../../widgets/WorkspaceModel.js" as Workspace
+import "../../widgets/SessionModel.js" as Session
+import "../../widgets/TaskEvents.js" as Tasks
+import "../../shell/HudModel.js" as Hud
 
 TestCase {
     id: test

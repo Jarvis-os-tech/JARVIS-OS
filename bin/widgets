@@ -6,4 +6,4 @@ import sys
 
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(root))
-runpy.run_path(str(root / "ui/jarvis_widgets/backend.py"), run_name="__main__")
+runpy.run_path(str(root / "widgets/backend.py"), run_name="__main__")

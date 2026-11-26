@@ -66,7 +66,7 @@ case "$cmd" in
         ;;
     widgets)
         shift || true
-        exec "${SCRIPT_DIR}/bin/jarvis-widgets" "$@"
+        exec "${SCRIPT_DIR}/bin/widgets" "$@"
         ;;
     restart)
         echo "Restarting JARVIS..."

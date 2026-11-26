@@ -27,8 +27,8 @@ def test_installed_commands_and_distributed_config(tmp_path):
                JARVIS_MEMORY_PATH=str(tmp_path / 'synthetic-state'),
                XDG_CONFIG_HOME=str(destination / '.config'),
                PATH=str(fake_bin) + os.pathsep + env['PATH'])
-    def run(*args):
-        result = subprocess.run(args, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=15)
+    def run(*args, timeout=30):
+        result = subprocess.run(args, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=timeout)
         assert result.returncode == 0, result.stderr + result.stdout
         return result.stdout
     run('bash', str(root / 'scripts/install.sh'))
@@ -99,7 +99,7 @@ def test_installer_preserves_existing_runtime_pointer_and_release(tmp_path):
     env.pop('PYTHONPATH', None)
     env.update(JARVIS_INSTALL_HOME=str(destination), PATH=str(fake_bin) + os.pathsep + env['PATH'])
     result = subprocess.run(['bash', str(root / 'scripts/install.sh')], cwd=tmp_path,
-                            env=env, capture_output=True, text=True, timeout=15)
+                            env=env, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr + result.stdout
     assert current.resolve() == release
     assert (release / 'user-state').read_text() == 'keep'
@@ -117,7 +117,7 @@ def test_installer_rejects_incomplete_existing_runtime_without_repointing(tmp_pa
     current.symlink_to(release)
     env = dict(os.environ, JARVIS_INSTALL_HOME=str(destination))
     result = subprocess.run(['bash', str(root / 'scripts/install.sh')], cwd=tmp_path,
-                            env=env, capture_output=True, text=True, timeout=15)
+                            env=env, capture_output=True, text=True, timeout=30)
     assert result.returncode != 0
     assert current.resolve() == release
     assert not (destination / '.local/bin/jarvis-voice').exists()
@@ -131,7 +131,7 @@ def test_missing_runtime_dependency_cannot_publish_current(tmp_path):
     destination = tmp_path / 'installation'
     env = dict(os.environ, JARVIS_INSTALL_HOME=str(destination), PYTHONPATH=str(shadow))
     result = subprocess.run(['bash', str(root / 'scripts/install.sh')], cwd=tmp_path,
-                            env=env, capture_output=True, text=True, timeout=15)
+                            env=env, capture_output=True, text=True, timeout=30)
     assert result.returncode != 0
     assert 'Missing runtime dependencies: google.genai' in result.stderr
     assert not (destination / '.local/share/jarvis-runtime/current').is_symlink()

@@ -257,15 +257,21 @@ def theme_hud_entry():
         if state.read_text().strip().lower() != "jarvis":
             return None
         launcher = (Path.home() / ".local/bin/jarvis-shell").resolve(strict=True)
-        entry = launcher.parents[1] / "JarvisTheme.qml"
-        return entry if entry.is_file() else None
+        entries = (launcher.with_name("Theme.qml"), launcher.with_name("JarvisTheme.qml"),
+                   launcher.parents[1] / "JarvisTheme.qml")
+        if launcher.parent.name == "shell":
+            entries = (launcher.parents[1] / "shell.qml", *entries)
+        return next((entry for entry in entries if entry.is_file()), None)
     except OSError:
         return None
 
 
 def running_standalone_entry():
+    root = Path(__file__).resolve().parents[1]
     entries = {
-        Path(__file__).resolve().parents[1] / "JarvisDesktop.qml",
+        root / "shell/Desktop.qml",
+        root / "ui/JarvisDesktop.qml",
+        Path("/usr/lib/jarvis-de/shell/Desktop.qml"),
         Path("/usr/lib/jarvis-de/ui/JarvisDesktop.qml"),
     }
     try:

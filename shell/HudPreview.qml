@@ -5,7 +5,7 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import "HudModel.js" as Hud
 import "style"
-import "../omarchy-ai.orbit/OrbitState.js" as OrbitState
+import "orbit/OrbitState.js" as OrbitState
 import "../widgets/WidgetModel.js" as Widgets
 import "../widgets/TaskEvents.js" as Tasks
 import "../widgets/WorkspaceModel.js" as Workspaces
@@ -442,7 +442,7 @@ ShellRoot {
         submissionErrors = Object.assign({}, submissionErrors, {[id]: ""})
         submissionFeedback = Object.assign({}, submissionFeedback, {[id]: "Sending request…"})
         sendingWidget = id
-        submitProcess.command = ["python3", "-u", Quickshell.shellPath("jarvis_widgets/backend.py"), "send", message]
+        submitProcess.command = ["python3", "-u", Quickshell.shellPath("widgets/backend.py"), "send", message]
         submitProcess.running = true
     }
 
@@ -521,7 +521,7 @@ ShellRoot {
             }
             sendingPalette = true
             paletteFeedback = ""
-            submitProcess.command = ["python3", "-u", Quickshell.shellPath("jarvis_widgets/backend.py"),
+            submitProcess.command = ["python3", "-u", Quickshell.shellPath("widgets/backend.py"),
                                      "send", text.trim().slice(4)]
             submitProcess.running = true
         } else if (command === "lock session" && liveMode) {
@@ -843,7 +843,7 @@ ShellRoot {
             feedback: root.approvalFeedback
             onDecided: (requestId, approve) => {
                 if (approvalProcess.running || root.pendingApproval?.id !== requestId) return
-                approvalProcess.command = ["python3", "-u", Quickshell.shellPath("jarvis_widgets/backend.py"),
+                approvalProcess.command = ["python3", "-u", Quickshell.shellPath("widgets/backend.py"),
                     "approval", requestId, approve ? "approve" : "cancel"]
                 approvalProcess.running = true
             }

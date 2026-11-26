@@ -25,6 +25,15 @@ function decode(text, now) {
         if (!Number.isSafeInteger(group.revision) || group.revision < 0 || typeof group.digest !== "string" || typeof group.closed !== "boolean")
             throw Error("Invalid workspace revision record");
     });
+    for (const id of Object.keys(s.workspaces.groups)) {
+        const group = s.workspaces.groups[id];
+        if (!group.digest) continue;
+        const digest = JSON.parse(group.digest);
+        if (Array.isArray(digest) && digest.length && digest.every(panel => panel && typeof panel.section === "string")) {
+            const panel = s.widgets.find(item => item.workspace === id.slice(3));
+            group.digest = panel ? JSON.stringify([panel.title, digest]) : "";
+        }
+    }
     const tasks = Tasks.initial();
     if (s.tasks && typeof s.tasks.stream_id === "string" && /^[a-f0-9]{32}$/.test(s.tasks.stream_id) &&
         Number.isSafeInteger(s.tasks.cursor) && s.tasks.cursor >= 0 && s.tasks.hidden && Object.keys(s.tasks.hidden).length <= 256) {

@@ -6,7 +6,7 @@ dock or background GUI process. It starts hidden.
 
 ## Native JARVIS engine · 2026-11-26
 
-The active JARVIS theme uses `ui/JarvisTheme.qml` and the `jarvis-hud-preview`
+The active JARVIS theme uses `shell.qml` and the `jarvis-hud-preview`
 controller. The older Omarchy plugin described below remains a separate fallback.
 The native engine renders validated QML; it does not embed ADA's browser UI.
 
@@ -224,3 +224,5 @@ This adaptation uses the supplied native-shell prototype's card vocabulary.
 ADA's project-panel behavior was inspected at
 https://github.com/nazirlouis/ada-jarvis-public/blob/7697c32b929e762836291c83b070f51385ad793b/frontend/workspace.js .
 Rendering and interactions use JARVIS's existing native components.
+
+The root `shell.qml` is the Quickshell entry so sibling `shell/` and `widgets/` imports share one configuration root. Runtime code remains in those modules.

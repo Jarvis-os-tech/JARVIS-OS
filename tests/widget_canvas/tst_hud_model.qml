@@ -1,7 +1,7 @@
 import QtTest
-import "../../ui/jarvis_shell"
-import "../../ui/jarvis_shell/style"
-import "../../ui/jarvis_shell/HudModel.js" as Hud
+import "../../shell"
+import "../../shell/style"
+import "../../shell/HudModel.js" as Hud
 
 TestCase {
     name: "HudModel"

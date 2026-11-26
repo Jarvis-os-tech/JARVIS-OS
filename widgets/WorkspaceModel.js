@@ -45,19 +45,21 @@ function apply(items, state, payload) {
     const panels = validate(payload), id = key(payload.id), old = state.groups[id];
     if ((state.versions || {})[id] || state.dismissed[id] || items.some(item => item.id === payload.id))
         throw Error("This ID belongs to an ordinary widget");
+    if (Object.keys(state.groups).some(group => group !== id && sections.some(section => payload.id === group.slice(3) + "__" + section)))
+        throw Error("Workspace ID is reserved by another workspace panel");
     for (const panel of panels) {
         const marker = state.dismissed[key(panel.id)];
-        if ((state.versions || {})[key(panel.id)] || (marker && typeof marker === "object" && !marker.workspace))
+        if (state.groups[key(panel.id)] || (state.versions || {})[key(panel.id)] || (marker && typeof marker === "object" && !marker.workspace))
             throw Error("Workspace panel ID belongs to an ordinary widget");
     }
     const version = payload.data.revision;
-    const digest = JSON.stringify(payload.data.panels);
+    const digest = JSON.stringify([payload.title, payload.data.panels]);
     if (old && old.revision && version < old.revision) return {items: items, state: state, stale: true};
     if (old && old.closed && (!payload.data.reopen || version <= old.revision))
         return {items: items, state: state, dismissed: true};
     if (old && version && version === old.revision && old.digest && digest !== old.digest)
         throw Error("Workspace revision conflict; increment revision for changed content");
-    if (old && old.revision && version === old.revision && !old.digest && !payload.data.reopen)
+    if (old && old.revision && version === old.revision && !old.digest)
         return {items: items, state: state, stale: true};
     const next = {groups: Object.assign({}, state.groups), dismissed: Object.assign({}, state.dismissed), versions: state.versions || {}};
     next.groups[id] = {revision: version || (old ? old.revision : 0), digest: digest, closed: false};
@@ -107,7 +109,7 @@ function checkUpdate(state, payload) {
     if (state.dismissed[k] && (!payload.reopen || revision <= dismissalRevision(state.dismissed[k], previous?.revision))) return {dismissed: true};
     if (previous && revision && revision === previous.revision && previous.digest && digest !== previous.digest)
         throw Error("Widget revision conflict; increment revision for changed content");
-    if (previous && revision && revision === previous.revision && !previous.digest && !payload.reopen) return {stale: true};
+    if (previous && revision && revision === previous.revision && !previous.digest) return {stale: true};
     const versions = Object.assign({}, state.versions || {});
     if (revision) versions[k] = {revision: revision, digest: digest};
     else delete versions[k];

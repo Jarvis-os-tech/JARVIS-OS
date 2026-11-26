@@ -64,7 +64,7 @@ def prepare(destination):
                 raise RuntimeError("Input handler boundary not found")
         body = body[:target_start] + local[source_start:source_end] + body[target_end:]
     write(relative, body)
-    relative = "orchestration/tool_tiers.py"
+    relative = "harness/tool_tiers.py"
     body = (target / relative).read_text()
     body = replace_once(body, "'cancel_task', 'open_input_bar', 'close_input_bar',",
                         "'cancel_task', 'open_input_bar', 'close_input_bar', 'show_widget', 'manage_canvas', 'manage_widget', 'widget_schema',")
@@ -72,17 +72,16 @@ def prepare(destination):
     relative = "bin/jarvis"
     body = (target / relative).read_text()
     body = replace_once(body, "  jarvis control [cmd]", "  jarvis widgets [cmd] Canvas, QR, PiP and input widgets in the existing shell\n  jarvis control [cmd]")
-    body = replace_once(body, 'case "$cmd" in', 'case "$cmd" in\n    widgets)\n        shift || true\n        exec "${SCRIPT_DIR}/bin/jarvis-widgets" "$@"\n        ;;')
+    body = replace_once(body, 'case "$cmd" in', 'case "$cmd" in\n    widgets)\n        shift || true\n        exec "${SCRIPT_DIR}/bin/widgets" "$@"\n        ;;')
     write(relative, body)
     (target / relative).chmod(0o755)
     for relative in (
-        "skills/domains/widgets.py", "skill_manifests/widgets.json", "bin/jarvis-widgets",
-        "ui/jarvis_widgets/backend.py", "ui/jarvis_widgets/native_cards.py",
-        "ui/jarvis_widgets/three_compiler.py", "ui/jarvis_widgets/view_schema.py",
-        "ui/jarvis_widgets/workspace.py",
+        "skills/domains/widgets.py", "skill_manifests/widgets.json", "bin/widgets",
+        "widgets/backend.py", "widgets/native_cards.py", "widgets/three_compiler.py",
+        "widgets/view_schema.py", "widgets/workspace.py",
     ):
         write(relative, (SOURCE / relative).read_text())
-    (target / "bin/jarvis-widgets").chmod(0o755)
+    (target / "bin/widgets").chmod(0o755)
     env = dict(os.environ, PYTHONPATH=str(target), PYTHONDONTWRITEBYTECODE="1")
     check = (
         "from pathlib import Path; from skills.skills import DesktopSkills; "

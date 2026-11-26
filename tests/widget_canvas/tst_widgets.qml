@@ -1,12 +1,12 @@
 import QtQuick
 import QtQuick.Controls
 import QtTest
-import "../../ui/jarvis_widgets"
-import "../../ui/jarvis_widgets/WidgetModel.js" as Model
-import "../../ui/jarvis_widgets/ViewSchema.js" as Schema
-import "../../ui/jarvis_widgets/TaskEvents.js" as Tasks
-import "../../ui/jarvis_widgets/WorkspaceModel.js" as Workspace
-import "../../ui/jarvis_widgets/SessionModel.js" as Session
+import "../../widgets"
+import "../../widgets/WidgetModel.js" as Model
+import "../../widgets/ViewSchema.js" as Schema
+import "../../widgets/TaskEvents.js" as Tasks
+import "../../widgets/WorkspaceModel.js" as Workspace
+import "../../widgets/SessionModel.js" as Session
 
 TestCase {
     id: test
