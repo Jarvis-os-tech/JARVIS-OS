@@ -1,1 +1,0 @@
-"""Audio compatibility package."""
