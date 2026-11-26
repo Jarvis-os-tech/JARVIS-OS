@@ -7,6 +7,11 @@ sys.path = [p for p in sys.path if p != root]
 sys.path.insert(0, root)
 
 try:
+    import sitecustomize  # noqa: F401
+except ImportError:
+    pass
+
+try:
     import sounddevice  # noqa: F401
 except Exception:
     mock_sd = MagicMock()

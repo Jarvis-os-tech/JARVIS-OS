@@ -46,7 +46,9 @@ def source_digest():
                    'jarvis_control', 'jarvis_memory', 'learning', 'voice_layer',
                    'orchestration', 'packaging', 'plugins', 'proactive', 'quickshell',
                    'skills', 'systemd', 'ui', 'widget_engine', 'scripts',
-                   'skill_manifests', 'configs', 'contracts', 'tests')
+                   'skill_manifests', 'configs', 'contracts', 'tests',
+                   'kernel', 'control', 'voice', 'memory', 'harness', 'shell',
+                   'widgets', 'department_agents', 'display_server', 'youtube_brain')
     paths = []
     for directory in directories:
         base = ROOT / directory
