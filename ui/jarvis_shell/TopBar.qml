@@ -10,29 +10,16 @@ Rectangle {
     id: topBar
     property string voiceState: "idle"
     property bool muted: false
-    property string currentTime: "12:00 PM"
-    property string currentDate: "Monday, Nov 9, 2026"
+    readonly property string currentTime: Qt.formatTime(clock.date, "hh:mm AP")
+    readonly property string currentDate: Qt.formatDate(clock.date, "dddd, MMM d, yyyy")
 
     implicitWidth: 1240
     implicitHeight: 40
     color: "transparent"
 
-    Timer {
-        interval: 1000
-        repeat: true
-        running: true
-        triggeredOnStart: true
-        onTriggered: {
-            var d = new Date();
-            var days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-            var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            topBar.currentDate = days[d.getDay()] + ", " + months[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear();
-            var hours = d.getHours();
-            var ampm = hours >= 12 ? "PM" : "AM";
-            hours = hours % 12; hours = hours ? hours : 12;
-            var mins = d.getMinutes();
-            topBar.currentTime = (hours < 10 ? "0" + hours : hours) + ":" + (mins < 10 ? "0" + mins : mins) + " " + ampm;
-        }
+    SystemClock {
+        id: clock
+        precision: SystemClock.Minutes
     }
 
     // 1. Left Section: JARVIS Branding + Workspaces
@@ -121,6 +108,7 @@ Rectangle {
 
         Text {
             text: topBar.currentDate
+            textFormat: Text.PlainText
             color: "#8aa2b3"
             font.family: "Inter, sans-serif"
             font.pixelSize: 10
@@ -136,6 +124,7 @@ Rectangle {
             Text { text: "󰥔"; color: "#00e5ff"; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 10 }
             Text {
                 text: topBar.currentTime
+                textFormat: Text.PlainText
                 color: "#d8f6ff"
                 font.family: "JetBrainsMono Nerd Font, monospace"
                 font.pixelSize: 10
@@ -171,12 +160,14 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             Text {
                 text: Pipewire.defaultAudioSink && Pipewire.defaultAudioSink.audio.muted ? "󰝟" : "󰕾"
+                textFormat: Text.PlainText
                 color: Pipewire.defaultAudioSink && Pipewire.defaultAudioSink.audio.muted ? "#ff3b5c" : "#00e5ff"
                 font.family: "JetBrainsMono Nerd Font"
                 font.pixelSize: 12
             }
             Text {
                 text: Pipewire.defaultAudioSink ? Math.round(Pipewire.defaultAudioSink.audio.volume * 100) + "%" : "100%"
+                textFormat: Text.PlainText
                 color: "#d8f6ff"
                 font.family: "JetBrainsMono Nerd Font, monospace"
                 font.pixelSize: 10
@@ -192,12 +183,14 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             Text {
                 text: UPower.displayDevice && UPower.displayDevice.isCharging ? "󰂄" : "󰁹"
+                textFormat: Text.PlainText
                 color: UPower.displayDevice && UPower.displayDevice.percentage < 20 ? "#ff3b5c" : "#00f0a8"
                 font.family: "JetBrainsMono Nerd Font"
                 font.pixelSize: 12
             }
             Text {
                 text: UPower.displayDevice ? Math.round(UPower.displayDevice.percentage) + "%" : "100%"
+                textFormat: Text.PlainText
                 color: "#d8f6ff"
                 font.family: "JetBrainsMono Nerd Font, monospace"
                 font.pixelSize: 10
@@ -218,6 +211,7 @@ Rectangle {
             }
             Text {
                 text: topBar.muted ? "Muted" : "Online"
+                textFormat: Text.PlainText
                 color: topBar.muted ? "#ff8da1" : "#00f0a8"
                 font.family: "Inter, sans-serif"
                 font.pixelSize: 9
@@ -236,6 +230,7 @@ Rectangle {
             Text {
                 anchors.centerIn: parent
                 text: topBar.muted ? "󰍭" : "󰍬"
+                textFormat: Text.PlainText
                 color: topBar.muted ? "#ff3b5c" : "#00e5ff"
                 font.family: "JetBrainsMono Nerd Font"
                 font.pixelSize: 12
@@ -246,7 +241,7 @@ Rectangle {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: micProc.running = true
             }
-            Process { id: micProc; command: ["/home/g0pi/.local/bin/jarvis-voice-toggle"] }
+            Process { id: micProc; command: [Quickshell.env("HOME") + "/.local/bin/jarvis-voice-toggle"] }
         }
 
         // Power Menu Button

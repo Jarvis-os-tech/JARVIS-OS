@@ -55,8 +55,15 @@ def test_linkedin_department_routing_does_not_require_hermes():
     prompt = system_persona({'discover_domain_tools', 'execute_domain_tool'})
     assert 'The LinkedIn Department owns requests to work on LinkedIn' in prompt
     assert 'discover the linkedin domain' in prompt
-    assert 'Use API Anything for operations on online services other than LinkedIn and\nGoogle Workspace' in prompt
+    assert 'Use API Anything for operations on online services other than LinkedIn, YouTube Production,\nand Google Workspace' in prompt
     assert 'Google Workspace Department' in prompt
+
+
+def test_youtube_production_routing_is_distinct_from_youtube_brain():
+    prompt = ' '.join(system_persona({'youtube_production_create_brief', 'yt_brain_search'}).split())
+    assert 'YOUTUBE PRODUCTION DEPARTMENT' in prompt
+    assert 'YouTube Brain tools only for watched-video notes' in prompt
+    assert 'does not authorize scheduling or publishing' in prompt
 
 
 def test_system_contract_uses_evidence_and_scoped_execution():

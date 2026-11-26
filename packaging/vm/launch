@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+here="$(cd -- "$(dirname -- "$0")" && pwd)"
+default_vm="$here/../dist/vm"
+if [[ -d "$default_vm/active" ]]; then default_vm="$default_vm/active"; fi
+vm="${JARVIS_VM_DIR:-$default_vm}"
+cd "$vm"
+if [[ -d host-modules/usr/lib/qemu ]]; then
+    export QEMU_MODULE_DIR="$PWD/host-modules/usr/lib/qemu"
+    export LD_LIBRARY_PATH="$PWD/host-modules/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+boot_args="root=/dev/vda rw rootwait console=ttyS0 console=tty1"
+shell_drive=()
+if [[ -f shell.raw ]]; then
+    boot_args+=" systemd.mount-extra=/dev/vdb:/opt/jarvis-live:ext4:ro"
+    shell_drive=(-drive file=shell.raw,format=raw,if=virtio,readonly=on)
+fi
+exec qemu-system-x86_64 -name 'JARVIS Desktop' -accel kvm -cpu host -m 2048 -smp 2 \
+    -kernel vmlinuz -append "$boot_args" \
+    -drive file=desktop.raw,format=raw,if=virtio "${shell_drive[@]}" -nic none \
+    -vga none -device virtio-vga-gl,xres=1920,yres=1080 -display sdl,gl=on \
+    -device qemu-xhci -device usb-tablet -serial file:boot.log \
+    -monitor "unix:monitor.sock,server=on,wait=off"

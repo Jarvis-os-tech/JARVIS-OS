@@ -28,7 +28,8 @@ DESTRUCTIVE_COMMAND_PATTERNS = [
 
 DESTRUCTIVE_TOOL_NAMES = frozenset({
     'uninstall_app', 'execute_system_command', 'modify_system_config',
-    'manage_system_service', 'privileged_exec',
+    'manage_system_service', 'privileged_exec', 'shutdown_system',
+    'restart_system', 'lock_screen',
 })
 
 
@@ -63,4 +64,4 @@ def tool_timeout(name, arguments=None):
         return 135
     if name.startswith('cli_hub_'):
         return 75
-    return 90 if name in SLOW_TOOLS else 30 if name == 'system_control' else 45
+    return 90 if name in SLOW_TOOLS else 30 if name == 'system_control' else 45 if name == 'system_control_extension' else 45

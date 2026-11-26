@@ -1,7 +1,6 @@
 [Desktop Entry]
-Name=JARVIS Desktop Environment
-Comment=Holographic AI Desktop Environment for Arch Linux powered by Gemini
-Exec=jarvis-de
+Name=JARVIS Desktop
+Comment=Voice-first JARVIS desktop on Hyprland
+Exec=/usr/bin/jarvis-de
+TryExec=/usr/bin/jarvis-de
 Type=Application
-DesktopNames=JARVIS-DE
-Keywords=launch;Hyprland;Wayland;JARVIS;AI;desktop;

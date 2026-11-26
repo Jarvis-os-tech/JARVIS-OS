@@ -43,6 +43,7 @@ class AgentConfig:
     groq_tool_model: str = 'openai/gpt-oss-20b'
     tool_router_timeout_seconds: int = 8
     connect_timeout_seconds: int = 10
+    auto_heal: bool = True
 
 
 @dataclass

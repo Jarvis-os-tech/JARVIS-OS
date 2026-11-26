@@ -1,4 +1,5 @@
 import QtQuick
+import "style"
 
 Item {
     id: core
@@ -6,203 +7,183 @@ Item {
     property string voiceState: "idle"
     property bool muted: false
 
+    readonly property bool active: !muted && ["idle", "listening", "thinking", "speaking", "working", "complete", "alert"].includes(voiceState)
+    readonly property bool animating: !muted && !Style.reduceMotion && ["listening", "thinking", "speaking", "working", "complete", "alert"].includes(voiceState)
+    readonly property color accent: voiceState === "alert" ? "#FF5577"
+        : voiceState === "complete" ? "#34D399" : muted ? "#FFB300"
+        : ["offline", "connecting", "standby", "microphone_silent"].includes(voiceState) ? "#B6C9DB"
+        : ["thinking", "speaking", "working"].includes(voiceState) ? "#FFCE69" : "#00E5FF"
+    readonly property string statusText: core.voiceState === "complete" ? "COMPLETE"
+        : core.voiceState === "alert" ? "ALERT"
+        : core.voiceState === "microphone_muted" ? "MIC MUTED"
+        : core.muted ? "MUTED"
+        : core.voiceState === "offline" ? "OFFLINE"
+        : core.voiceState === "connecting" ? "CONNECTING"
+        : core.voiceState === "microphone_silent" ? "MIC LEVEL ZERO"
+        : core.voiceState === "speaking" ? "SPEAKING"
+        : core.voiceState === "thinking" ? "THINKING"
+        : core.voiceState === "listening" ? "LISTENING"
+        : core.voiceState === "working" ? "EXECUTING"
+        : core.voiceState === "standby" ? "STANDBY"
+        : "ONLINE"
+
     implicitWidth: 320
     implicitHeight: 320
 
+    property real reactionX: 0
+    property real reactionY: 0
+    transform: Translate { x: core.reactionX; y: core.reactionY }
+    onVoiceStateChanged: {
+        if (Style.reduceMotion) return;
+        if (voiceState === "listening") nod.restart();
+        else if (voiceState === "complete") roll.restart();
+        else if (voiceState === "alert") recoil.restart();
+    }
+    SequentialAnimation {
+        id: nod
+        NumberAnimation { target: core; property: "reactionY"; to: 6; duration: Style.duration(110); easing.type: Easing.OutCubic }
+        NumberAnimation { target: core; property: "reactionY"; to: 0; duration: Style.duration(180); easing.type: Easing.OutCubic }
+    }
+    NumberAnimation { id: roll; target: contours; property: "rotation"; from: 0; to: 360; duration: Style.duration(280); easing.type: Easing.OutCubic }
+    SequentialAnimation {
+        id: recoil
+        NumberAnimation { target: core; property: "reactionX"; to: -6; duration: Style.duration(70); easing.type: Easing.OutCubic }
+        NumberAnimation { target: core; property: "reactionX"; to: 5; duration: Style.duration(90); easing.type: Easing.OutCubic }
+        NumberAnimation { target: core; property: "reactionX"; to: 0; duration: Style.duration(110); easing.type: Easing.OutCubic }
+    }
+
     Canvas {
-        id: canvas
+        id: contours
         anchors.fill: parent
-        property real angleOuter: 0
-        property real angleInner: 0
-        property real angleGear: 0
-        property real pulse: 0
+        property real phase: 0
 
         Timer {
-            interval: 16
+            interval: 33
             repeat: true
-            running: true
+            running: core.visible && core.animating
             onTriggered: {
-                var speed = core.voiceState === "speaking" ? 0.04
-                          : core.voiceState === "thinking" ? 0.03
-                          : core.voiceState === "listening" ? 0.02 : 0.009;
-                canvas.angleOuter = (canvas.angleOuter + speed) % (Math.PI * 2);
-                canvas.angleInner = (canvas.angleInner - speed * 1.4) % (Math.PI * 2);
-                canvas.angleGear = (canvas.angleGear + speed * 0.8) % (Math.PI * 2);
-                canvas.pulse = (canvas.pulse + 0.05) % (Math.PI * 2);
-                canvas.requestPaint();
+                contours.phase = (contours.phase + (core.voiceState === "speaking" ? 0.036 : 0.018)) % (Math.PI * 2)
+                contours.requestPaint()
             }
         }
 
+        Connections {
+            target: core
+            function onActiveChanged() { contours.requestPaint() }
+            function onAnimatingChanged() { if (!core.animating) { contours.phase = 0; contours.requestPaint() } }
+            function onAccentChanged() { contours.requestPaint() }
+            function onEnergyChanged() { contours.requestPaint() }
+            function onVoiceStateChanged() { contours.requestPaint() }
+            function onMutedChanged() { contours.requestPaint() }
+        }
+
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+
         onPaint: {
-            var ctx = getContext("2d");
+            const ctx = getContext("2d");
             ctx.reset();
-            var cx = width / 2;
-            var cy = height / 2;
-            var maxR = Math.min(width, height) / 2 - 10;
+            const radius = Math.min(width, height) / 2;
+            if (radius <= 0) return;
+            ctx.translate(width / 2, height * 0.42);
+            ctx.scale(0.86, 0.86);
+            const phase = core.active ? contours.phase : 0;
+            const energy = core.active ? Math.max(0, Math.min(1, core.energy)) : 0;
 
-            var primaryCyan = core.muted ? "#ff3b5c"
-                            : core.voiceState === "speaking" ? "#ffb86b"
-                            : core.voiceState === "thinking" ? "#a855f7"
-                            : "#00e5ff";
-            var goldAmber = "#ffb020";
+            const warm = core.muted || ["thinking", "speaking", "working"].includes(core.voiceState);
+            const light = warm ? "#FFD38B" : "#62F7FF";
+            const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+            glow.addColorStop(0, warm ? "#40291A" : "#0C3948");
+            glow.addColorStop(0.65, "#0A1D32");
+            glow.addColorStop(1, "transparent");
+            ctx.fillStyle = glow;
+            ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
 
-            // 1. Deep Core Ambient Volumetric Glow
-            var ambientGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, maxR);
-            ambientGrad.addColorStop(0, "rgba(0, 229, 255, 0.22)");
-            ambientGrad.addColorStop(0.5, "rgba(0, 100, 200, 0.08)");
-            ambientGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
-            ctx.fillStyle = ambientGrad;
-            ctx.beginPath();
-            ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.save();
-
-            // 2. Outermost Segmented Cyan Shield Ring
-            ctx.strokeStyle = Qt.rgba(0.0, 0.898, 1.0, 0.22);
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(cx, cy, maxR - 2, 0, Math.PI * 2);
-            ctx.stroke();
-
-            // Rotating Shield Segments
-            ctx.strokeStyle = primaryCyan;
-            ctx.lineWidth = 3.5;
-            for (var s = 0; s < 4; s++) {
-                var sStart = canvas.angleOuter + s * (Math.PI / 2);
+            const tau = 2 * Math.PI;
+            function arc(r, start, end, color, weight) {
                 ctx.beginPath();
-                ctx.arc(cx, cy, maxR - 2, sStart, sStart + 0.65);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = weight;
+                ctx.arc(0, 0, radius * r, start, end);
                 ctx.stroke();
             }
-
-            // 3. Rotating Mechanical Gear Ring (24 teeth)
-            var gearR = maxR - 14;
-            ctx.strokeStyle = goldAmber;
-            ctx.lineWidth = 2.0;
-            var teeth = 24;
-            for (var g = 0; g < teeth; g++) {
-                var theta = canvas.angleGear + g * (Math.PI * 2 / teeth);
-                var r0 = gearR - 4;
-                var r1 = gearR + 4;
+            for (const ring of [0.19, 0.31, 0.54, 0.68, 0.79, 0.96])
+                arc(ring, 0, tau, "#286076", 1);
+            const ticks = core.width < 180 ? 48 : 120;
+            for (let i = 0; i < ticks; i++) {
+                const angle = i * tau / ticks;
+                const major = i % 6 === 0;
+                const inner = major ? 0.84 : 0.88;
                 ctx.beginPath();
-                ctx.moveTo(cx + Math.cos(theta) * r0, cy + Math.sin(theta) * r0);
-                ctx.lineTo(cx + Math.cos(theta) * r1, cy + Math.sin(theta) * r1);
+                ctx.moveTo(radius * inner * Math.cos(angle), radius * inner * Math.sin(angle));
+                ctx.lineTo(radius * 0.91 * Math.cos(angle), radius * 0.91 * Math.sin(angle));
+                ctx.strokeStyle = major ? "#588B9D" : "#214253";
+                ctx.lineWidth = 1;
                 ctx.stroke();
             }
-
-            // 4. Dense Radial Tick Marks (72 precision marks)
-            var tickR = maxR - 28;
-            var numTicks = 72;
-            for (var t = 0; t < numTicks; t++) {
-                var tTheta = t * (Math.PI * 2 / numTicks);
-                var isMajor = (t % 6 === 0);
-                var len = isMajor ? 8 : 4;
-                ctx.strokeStyle = isMajor ? primaryCyan : Qt.rgba(0.0, 0.898, 1.0, 0.35);
-                ctx.lineWidth = isMajor ? 1.8 : 1.0;
+            for (let segment = 0; segment < 3; segment++) {
+                const start = segment * tau / 3 + phase * 0.08;
+                arc(0.76, start, start + 0.96, "#174956", 7);
+                arc(0.76, start, start + 0.96, light, 2);
+            }
+            for (let band = 0; band < 3; band++) {
                 ctx.beginPath();
-                ctx.moveTo(cx + Math.cos(tTheta) * (tickR - len), cy + Math.sin(tTheta) * (tickR - len));
-                ctx.lineTo(cx + Math.cos(tTheta) * tickR, cy + Math.sin(tTheta) * tickR);
+                for (let i = 0; i <= 192; i++) {
+                    const a = i * tau / 192;
+                    const ripple = Math.sin(9*a + phase + band*0.65) * Math.cos(4*a - phase);
+                    const r = radius * (0.57 + band*0.026 + ripple*(0.055 + energy*0.065));
+                    if (i === 0) ctx.moveTo(r*Math.cos(a), r*Math.sin(a));
+                    else ctx.lineTo(r*Math.cos(a), r*Math.sin(a));
+                }
+                ctx.strokeStyle = band === 0 ? light : band === 1 ? "#308DAA" : "#4869C1";
+                ctx.lineWidth = band === 0 ? 2 : 1;
                 ctx.stroke();
             }
-
-            // 5. Counter-Rotating Middle Heavy Arc Ring (3 segments)
-            var midR = maxR - 38;
-            ctx.strokeStyle = goldAmber;
-            ctx.lineWidth = 2.5;
-            for (var m = 0; m < 3; m++) {
-                var mStart = canvas.angleInner + m * (Math.PI * 2 / 3);
+            for (let i = 0; i < 72; i++) {
+                const a = i*tau/72;
+                const r = radius*(0.22 + (0.11 + energy * 0.12)*Math.pow(Math.sin(13*a+phase), 4));
                 ctx.beginPath();
-                ctx.arc(cx, cy, midR, mStart, mStart + 1.1);
+                ctx.moveTo(radius*0.15*Math.cos(a), radius*0.15*Math.sin(a));
+                ctx.lineTo(r*Math.cos(a), r*Math.sin(a));
+                ctx.strokeStyle = i % 3 ? "#287688" : light;
+                ctx.lineWidth = 1;
                 ctx.stroke();
             }
-
-            // 6. Inner Transformer Ring with 8 Solenoid Coils
-            var coilR = maxR - 54;
-            ctx.strokeStyle = primaryCyan;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(cx, cy, coilR, 0, Math.PI * 2);
-            ctx.stroke();
-
-            var coils = 8;
-            for (var c = 0; c < coils; c++) {
-                var cTheta = c * (Math.PI * 2 / coils);
-                var padX = cx + Math.cos(cTheta) * coilR;
-                var padY = cy + Math.sin(cTheta) * coilR;
-                ctx.fillStyle = primaryCyan;
-                ctx.beginPath();
-                ctx.arc(padX, padY, 3.5, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // 7. Dark Glass Core Well
-            var innerR = maxR - 64;
-            var coreGrad = ctx.createRadialGradient(cx, cy, 4, cx, cy, innerR);
-            coreGrad.addColorStop(0, "rgba(4, 18, 32, 0.96)");
-            coreGrad.addColorStop(0.75, "rgba(1, 8, 18, 0.99)");
-            coreGrad.addColorStop(1, Qt.rgba(0.0, 0.898, 1.0, 0.5));
-            ctx.fillStyle = coreGrad;
-            ctx.beginPath();
-            ctx.arc(cx, cy, innerR, 0, Math.PI * 2);
-            ctx.fill();
-
-            // 8. Dynamic Energy Pulse Corona
-            var pulseR = (innerR - 12) * (0.8 + 0.2 * Math.sin(canvas.pulse));
-            var pGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, pulseR);
-            pGlow.addColorStop(0, Qt.rgba(0.0, 0.898, 1.0, 0.45 + core.energy * 0.4));
-            pGlow.addColorStop(0.6, Qt.rgba(0.0, 0.55, 0.9, 0.2));
-            pGlow.addColorStop(1, "rgba(0,0,0,0)");
-            ctx.fillStyle = pGlow;
-            ctx.beginPath();
-            ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.restore();
+            arc(0.13 + energy * 0.025, 0, tau, light, 2 + energy * 2);
         }
     }
 
-    // Centered Holographic Stark Typography
-    Column {
-        anchors.centerIn: parent
-        spacing: 5
+    Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: parent.height * 0.86 - height / 2
+        text: "JARVIS"
+        textFormat: Text.PlainText
+        color: "#F5F9FF"
+        font.family: "Inter"
+        font.pixelSize: Math.max(11, Math.min(28, core.width * 0.054))
+        font.weight: Font.Medium
+        font.letterSpacing: core.width < 180 ? 2 : 4
+    }
+
+    Rectangle {
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: parent.height * 0.96 - height / 2
+        width: label.implicitWidth + 24
+        height: core.width < 180 ? 17 : 23
+        radius: height / 2
+        color: "#0B1628"
+        border.color: "#304E6C"
 
         Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: "J . A . R . V . I . S ."
-            color: "#00e5ff"
-            font.family: "JetBrainsMono Nerd Font, monospace"
-            font.pixelSize: 22
-            font.weight: Font.Black
-            font.letterSpacing: 2.8
-            style: Text.Outline
-            styleColor: Qt.rgba(0, 0.898, 1.0, 0.6)
-        }
-
-        Row {
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 6
-
-            Rectangle {
-                anchors.verticalCenter: parent.verticalCenter
-                width: 7
-                height: 7
-                radius: 3.5
-                color: core.muted ? "#ff3b5c" : "#00f0a8"
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: core.muted ? "MUTED"
-                    : core.voiceState === "speaking" ? "SPEAKING"
-                    : core.voiceState === "thinking" ? "THINKING"
-                    : core.voiceState === "listening" ? "LISTENING"
-                    : "ONLINE"
-                color: core.muted ? "#ff8da1" : "#00f0a8"
-                font.family: "JetBrainsMono Nerd Font, monospace"
-                font.pixelSize: 11
-                font.weight: Font.Black
-                font.letterSpacing: 2.0
-            }
+            id: label
+            anchors.centerIn: parent
+            text: core.statusText
+            textFormat: Text.PlainText
+            color: core.accent
+            font.family: "Inter"
+            font.pixelSize: 11
+            font.weight: Font.Medium
+            font.letterSpacing: 1.2
         }
     }
 }

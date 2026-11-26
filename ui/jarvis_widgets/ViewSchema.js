@@ -2,8 +2,10 @@
 
 var fields = {
     column: ["children"], row: ["children"], text: ["text", "tone"], heading: ["text"],
-    metric: ["label", "value"], input: ["label", "bind"], slider: ["label", "bind", "min", "max", "step"],
+    metric: ["label", "value"], input: ["label", "bind", "placeholder", "required"], slider: ["label", "bind", "min", "max", "step"],
     toggle: ["label", "bind"], select: ["label", "bind", "options"], button: ["label", "prompt"],
+    choice: ["index", "label", "detail", "value", "prompt"],
+    entry: ["label", "detail", "style", "number", "prompt"],
     canvas: ["height", "shapes"], divider: []
 };
 var operations = ["add", "subtract", "multiply", "divide", "min", "max", "round"];
@@ -32,7 +34,7 @@ function validate(spec) {
         } else throw Error("Unsupported expression");
     }
     Object.keys(computed).forEach(k => expression(computed[k], 0, [k]));
-    let count = 0; const ids = [];
+    let count = 0; const ids = []; const choiceIndices = [];
     function node(n, depth) {
         if (++count > 160 || depth > 8 || !n || !fields[n.type]) throw Error("Unsupported layout");
         if (Object.keys(n).some(k => !["type", "id"].concat(fields[n.type]).includes(k))) throw Error("Unknown component property");
@@ -42,7 +44,7 @@ function validate(spec) {
         }
         ["text", "label", "prompt"].forEach(k => { if (n[k] !== undefined && (typeof n[k] !== "string" || n[k].length > 2000)) throw Error("Invalid text"); });
         if (["text", "heading"].includes(n.type) && typeof n.text !== "string") throw Error("Text required");
-        if (["input", "slider", "toggle", "select", "button", "metric"].includes(n.type) && typeof n.label !== "string") throw Error("Label required");
+        if (["input", "slider", "toggle", "select", "button", "metric", "choice"].includes(n.type) && typeof n.label !== "string") throw Error("Label required");
         if (["row", "column"].includes(n.type)) {
             if (!Array.isArray(n.children) || !n.children.length || n.children.length > 32) throw Error("Invalid children");
             n.children.forEach(c => node(c, depth + 1));
@@ -53,6 +55,20 @@ function validate(spec) {
         if (n.type === "slider" && (typeof state[n.bind] !== "number" || !isFinite(n.min ?? 0) || !isFinite(n.max ?? 100) || (n.min ?? 0) >= (n.max ?? 100) || (n.step ?? 1) <= 0 || state[n.bind] < (n.min ?? 0) || state[n.bind] > (n.max ?? 100))) throw Error("Invalid slider");
         if (n.type === "select" && (!Array.isArray(n.options) || n.options.length > 30 || !n.options.includes(state[n.bind]) || n.options.some(x => typeof x !== "string" || x.length > 160))) throw Error("Invalid options");
         if (n.type === "button" && typeof n.prompt !== "string") throw Error("Button prompt required");
+        if (n.type === "choice") {
+            if (typeof n.index !== "number" || !Number.isInteger(n.index) || n.index < 1 || n.index > 9 || choiceIndices.includes(n.index))
+                throw Error("Invalid choice index");
+            choiceIndices.push(n.index);
+            if (!n.label.trim() || n.label.length > 160) throw Error("Invalid choice label");
+            if (n.detail !== undefined && (typeof n.detail !== "string" || n.detail.length > 300)) throw Error("Invalid choice detail");
+            if (n.value !== undefined && (typeof n.value !== "string" || n.value.length > 500)) throw Error("Invalid choice value");
+            if (typeof n.prompt !== "string" || !n.prompt.trim() || n.prompt.length > 500) throw Error("Invalid choice prompt");
+        }
+        if (n.type === "entry") {
+            if (typeof n.label !== "string" || typeof (n.detail || "") !== "string" || (n.detail || "").length > 2000 ||
+                !["files", "ideas", "plan"].includes(n.style) || !Number.isInteger(n.number) || n.number < 1 || n.number > 64)
+                throw Error("Invalid workspace entry");
+        }
         if (n.type === "metric") expression(n.value, 0, []);
         if (n.type === "canvas") {
             if ((n.height ?? 240) < 80 || (n.height ?? 240) > 600 || !Array.isArray(n.shapes) || n.shapes.length > 200) throw Error("Invalid canvas");
@@ -69,6 +85,12 @@ function validate(spec) {
     }
     node(spec.layout, 0);
     if (typeof (spec.width ?? 480) !== "number" || (spec.width ?? 480) < 300 || (spec.width ?? 480) > 960) throw Error("Invalid view width");
+    function checkInputs(n) {
+        if (n.type === "input" && ((n.required !== undefined && typeof n.required !== "boolean") ||
+            (n.placeholder !== undefined && (typeof n.placeholder !== "string" || n.placeholder.length > 2000)))) throw Error("Invalid input options");
+        (n.children || []).forEach(checkInputs);
+    }
+    checkInputs(spec.layout);
     return spec;
 }
 

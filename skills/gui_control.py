@@ -528,7 +528,8 @@ class GuiControl:
             tabs = tabs if isinstance(tabs, list) else []
             tab = snapshot if snapshot.get('tab_id') == tab_id else next(
                 (item for item in tabs if isinstance(item, dict) and item.get('tab_id') == tab_id), {})
-            observed_url = tab.get('url')
+            page = snapshot.get('page') if isinstance(snapshot.get('page'), dict) else {}
+            observed_url = tab.get('url') or (page.get('url') if snapshot.get('tab_id') == tab_id else None)
             if observed_url and canonical(url) is not None and canonical(observed_url) == canonical(url):
                 from datetime import datetime, timezone
                 return {'status': 'navigated', 'verified': True, 'url': url,

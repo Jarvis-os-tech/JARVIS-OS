@@ -41,7 +41,12 @@ def main():
             raise ValueError('Invalid command text')
         started = time.monotonic()
         lowered = text.casefold()
-        if re.search(r'\b(volume|sound|audio|speaker|speakers|louder|quieter|softer)\b', lowered):
+        if re.search(r'\b(switch|change|set|use)\b', lowered) and re.search(
+            r'\b(audio|sound|output|input|speaker|speakers|headphone|headphones|headset|earbuds|mic|microphone|device|sink|source|bluetooth|hdmi)\b',
+            lowered,
+        ) and not re.search(r'\b(volume|louder|quieter|softer|mute|unmute)\b', lowered):
+            names = ('switch_audio_device',)
+        elif re.search(r'\b(volume|sound|audio|speaker|speakers|louder|quieter|softer)\b', lowered):
             if re.search(r'\d|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\b', lowered):
                 names = ('set_volume',)
             elif re.search(r'\b(quieter|softer|decrease|lower|down)\b', lowered):
@@ -50,7 +55,9 @@ def main():
                 names = ('increase_volume',)
             else:
                 names = ()
-        elif re.search(r'\b(brightness|screen|display|brighter|dimmer)\b', lowered):
+        elif re.search(r'\b(brightness|display|brighter|dimmer)\b', lowered) or (
+            'screen' in lowered and re.search(r'\b(brighter|dimmer|brightness|increase|decrease|raise|lower|set)\b|\d', lowered)
+        ):
             if re.search(r'\d|\b(one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\b', lowered):
                 names = ('set_brightness',)
             elif re.search(r'\b(dimmer|decrease|lower|down)\b', lowered):
@@ -59,8 +66,24 @@ def main():
                 names = ('increase_brightness',)
             else:
                 names = ()
+        elif re.search(r'\b(screenshot|capture)\b', lowered):
+            names = ('take_screenshot',)
+        elif re.search(r'\block\b', lowered) and re.search(r'\b(screen|pc|computer|session)\b', lowered):
+            names = ('lock_screen',)
         elif 'workspace' in lowered:
-            names = ('switch_workspace',)
+            if re.search(r'\b(move|send|put)\b', lowered):
+                names = ('move_window_to_workspace',)
+            elif re.search(r'\b(back|previous|prev|last)\b', lowered):
+                names = ('workspace_back',)
+            else:
+                names = ('switch_workspace',)
+        elif 'window' in lowered or re.search(
+            r'\b(fullscreen|full screen|maximize|minimize|minimise|close|focus|bring|activate|switch)\b',
+            lowered,
+        ):
+            names = ('close_window', 'fullscreen_window', 'minimize_window', 'focus_window')
+        elif re.search(r'\b(play|pause|resume|skip|next|previous|prev)\b', lowered):
+            names = ('media_play', 'media_pause', 'media_next', 'media_previous')
         elif re.search(r'\b(open|launch|start)\b', lowered):
             names = ('open_application',)
         else:

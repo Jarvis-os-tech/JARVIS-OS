@@ -1,5 +1,7 @@
 import QtQuick
+import Quickshell
 import Quickshell.Io
+import "style"
 
 SciFiPanel {
     id: agentsPanel
@@ -7,6 +9,7 @@ SciFiPanel {
     titleColor: "#00e5ff"
     implicitWidth: 320
     implicitHeight: 204
+    property bool activeVoice: false
     property string updateAgentStatus: "Scheduled"
 
     function updateStatusLabel(raw) {
@@ -20,7 +23,7 @@ SciFiPanel {
 
     FileView {
         id: agentRegistry
-        path: "/home/g0pi/.local/state/jarvis/agents.json"
+        path: Quickshell.env("HOME") + "/.local/state/jarvis/agents.json"
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
@@ -99,7 +102,7 @@ SciFiPanel {
                 spacing: 8
                 Text { text: "󰚰"; color: "#f59e0b"; font.pixelSize: 11; width: 14; font.family: "JetBrainsMono Nerd Font" }
                 Text { text: "Update Agent"; color: "#d8f6ff"; font.pixelSize: 10; font.weight: Font.DemiBold; width: 90 }
-                Text { text: agentsPanel.updateAgentStatus; color: "#f59e0b"; font.pixelSize: 9; font.weight: Font.Bold }
+                Text { text: agentsPanel.updateAgentStatus; textFormat: Text.PlainText; color: "#f59e0b"; font.pixelSize: 9; font.weight: Font.Bold }
             }
         }
 
@@ -113,7 +116,7 @@ SciFiPanel {
             Timer {
                 interval: 20
                 repeat: true
-                running: true
+                running: agentsPanel.visible && agentsPanel.activeVoice && !Style.reduceMotion
                 onTriggered: {
                     armorCanvas.scanY = (armorCanvas.scanY + 1.4) % armorCanvas.height;
                     armorCanvas.requestPaint();

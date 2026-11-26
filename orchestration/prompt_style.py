@@ -45,6 +45,24 @@ DEFAULT_GUIDELINES = (
 )
 
 
+def normalize_role(role: str | None) -> str:
+    """Normalize freeform or persona role descriptions to canonical role keys."""
+    if not role or not isinstance(role, str):
+        return 'general'
+    r = role.lower()
+    if any(k in r for k in ('research', 'plan', 'spec')):
+        return 'research'
+    if any(k in r for k in ('qa', 'test', 'verif', 'check')):
+        return 'qa'
+    if any(k in r for k in ('triage', 'crash', 'diagnos', 'segfault', 'oom')):
+        return 'triage'
+    if any(k in r for k in ('custom', 'theme', 'style')):
+        return 'customization'
+    if any(k in r for k in ('dev', 'code', 'engineer', 'implement')):
+        return 'coding'
+    return 'general'
+
+
 def format_prompt(
     task: str,
     *,
@@ -63,8 +81,16 @@ def format_prompt(
     if context and context.strip():
         lines.extend(["Evidence & Context", context.strip(), ""])
 
-    guidelines = ROLE_GUIDELINES.get(role, DEFAULT_GUIDELINES) if role else DEFAULT_GUIDELINES
-    lines.extend(["Operating Principles (JARVIS / Omarchy Style)", guidelines, ""])
+    norm_role = normalize_role(role)
+    guidelines = ROLE_GUIDELINES.get(norm_role, DEFAULT_GUIDELINES) if norm_role != 'general' else (
+        ROLE_GUIDELINES.get(role, DEFAULT_GUIDELINES) if role else DEFAULT_GUIDELINES
+    )
+    lines.extend([
+        "Operating Principles (JARVIS / Omarchy Style)",
+        "- Strictly follow the JARVIS Prompt Style guide (~/.agents/skills/jarvis-prompt-style/SKILL.md).",
+        guidelines,
+        ""
+    ])
 
     lines.extend([
         "Expected Result",

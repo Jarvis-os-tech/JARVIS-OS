@@ -7,15 +7,14 @@ import json
 import uuid
 
 from jarvis_control.outcomes import classify_result
+from jarvis_control.execution_policy import requires_confirmation
 
 
 FILE_TASK_TOOLS = frozenset({
     'make_directory', 'write_file', 'append_file', 'edit_file',
     'copy_path', 'move_path', 'trash_path',
 })
-TASK_TOOLS = FILE_TASK_TOOLS | {
-    'linkedin_draft_post', 'linkedin_plan_sprint', 'linkedin_audit_profile',
-}
+TASK_CONTROL_TOOLS = frozenset({'start_task', 'task_status', 'list_tasks', 'cancel_task'})
 MAX_STEPS = 30
 MAX_JOBS = 20
 MAX_EVENTS = 32
@@ -54,7 +53,9 @@ class TaskRunner:
             if not isinstance(step, dict) or set(step) != {'tool', 'args'}:
                 raise TaskPlanError(f'step {index} must contain tool and args')
             tool, args = step['tool'], step['args']
-            if tool not in TASK_TOOLS or not isinstance(args, dict) or not self._validate(tool, args):
+            if (not isinstance(tool, str) or tool in TASK_CONTROL_TOOLS
+                    or not isinstance(args, dict) or requires_confirmation(tool, args)
+                    or not self._validate(tool, args)):
                 raise TaskPlanError(f'step {index} uses an unavailable tool or invalid arguments')
             steps.append({'tool': tool, 'args': args, 'status': 'pending'})
         if len(self._jobs) >= MAX_JOBS:

@@ -104,6 +104,17 @@ class GuiControlTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(GuiControlError):
             await control.browser_navigate('target', 'tab', 'file:///etc/passwd')
 
+    async def test_browser_navigation_accepts_semantic_page_url(self):
+        control = GuiControl('/usr/bin/cua-driver')
+        control._browser_tabs['target'] = {'tab'}
+        control._call = AsyncMock(side_effect=[
+            {'effect': 'dispatched'},
+            {'target_id': 'target', 'tab_id': 'tab',
+             'page': {'url': 'https://example.com/path'}},
+        ])
+        result = await control.browser_navigate('target', 'tab', 'https://example.com/path')
+        self.assertTrue(result['verified'])
+
     async def test_browser_double_click_uses_verified_route(self):
         control = GuiControl('/usr/bin/cua-driver')
         control._browser_tabs['target'] = {'tab'}

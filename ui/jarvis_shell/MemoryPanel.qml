@@ -1,4 +1,5 @@
 import QtQuick
+import "style"
 
 SciFiPanel {
     id: memoryPanel
@@ -7,6 +8,7 @@ SciFiPanel {
     implicitWidth: 320
     implicitHeight: 96
     showHeaderAccent: false
+    property bool activeVoice: false
 
     Row {
         anchors.fill: parent
@@ -49,7 +51,7 @@ SciFiPanel {
             Timer {
                 interval: 40
                 repeat: true
-                running: true
+                running: memoryPanel.visible && memoryPanel.activeVoice && !Style.reduceMotion
                 onTriggered: {
                     memCanvas.tick = (memCanvas.tick + 0.12) % (Math.PI * 2);
                     memCanvas.requestPaint();

@@ -6,17 +6,62 @@ import json
 from datetime import datetime
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
+import time
+from typing import Optional
 import uuid
 
 from core.secret_env import sanitized_subprocess_env
-from orchestration.personas import PERSONAS
+from orchestration.personas import PERSONAS, AGENT_FALLBACK_CANDIDATES, get_fallback_candidates
 from orchestration.harness2_adapter import Harness2Adapter
 from orchestration.executables import installed_executables, installed_path
+from orchestration.state_graph import TeamStateGraph, EdgeAction
 
-AGENTS = ('codex', 'claude', 'opencode', 'gemini', 'hermes', 'omp', 'pi', 'crush')
+AGENTS = ('codex', 'claude', 'opencode', 'gemini', 'hermes', 'omp', 'pi', 'crush', 'antigravity', 'api_agent')
 TERMINAL = frozenset({'completed', 'failed', 'cancelled', 'timed_out'})
+
+FAILOVER_PATTERNS_QUOTA = (
+    re.compile(r"\busage\s+limit\b", re.IGNORECASE),
+    re.compile(r"\brate[\s_-]*limit", re.IGNORECASE),
+    re.compile(
+        r"(?:\b(?:http(?:/[\d.]+)?|status(?:\s+code)?|code|error)\b[^\n\r\d]{0,12}\b429\b"
+        r"|\b429\s*[:\-]?\s*(?:too\s+many\s+requests|rate[\s_-]*limit|quota|resource_?exhausted))",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\btoo\s+many\s+requests\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:quota\s+exceeded|exceeded\s+your\s+(?:current\s+)?quota|insufficient_quota|out\s+of\s+quota)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bcredit\s+balance\s+is\s+too\s+low\b", re.IGNORECASE),
+    re.compile(r"\bresource_?exhausted\b", re.IGNORECASE),
+)
+
+FAILOVER_PATTERNS_CONNECTION = (
+    re.compile(r"\bECONNREFUSED\b", re.IGNORECASE),
+    re.compile(r"\bconnection\s+refused\b", re.IGNORECASE),
+    re.compile(r"\bconnecterror\b", re.IGNORECASE),
+    re.compile(r"\bfailed\s+to\s+connect\b", re.IGNORECASE),
+    re.compile(r"\bnetwork\s+is\s+unreachable\b", re.IGNORECASE),
+    re.compile(r"\btemporary\s+failure\s+in\s+name\s+resolution\b", re.IGNORECASE),
+    re.compile(r"\bfailed\s+to\s+refresh\s+available\s+models:\s*request\s+timed\s+out\b", re.IGNORECASE),
+    re.compile(r"\bsocket\s+hang\s+up\b", re.IGNORECASE),
+)
+
+
+def detect_failover_reason(output: str, exit_code: Optional[int] = None) -> Optional[str]:
+    """Detect if an agent output/error indicates quota exhaustion or connection refusal."""
+    if not output or exit_code == 0:
+        return None
+    for pat in FAILOVER_PATTERNS_QUOTA:
+        if pat.search(output):
+            return "quota_limit"
+    for pat in FAILOVER_PATTERNS_CONNECTION:
+        if pat.search(output):
+            return "connection_refused"
+    return None
 
 
 class OrchestrationError(ValueError):
@@ -86,10 +131,13 @@ def command_for(agent, executable, prompt, model=None):
         'opencode': [executable, 'run', '--standalone', message],
         'gemini': [executable, '--prompt', message,
                    '--approval-mode', 'auto_edit', '--skip-trust'],
+        'antigravity': [executable, '--mode', 'accept-edits', '--sandbox',
+                        '--disable-slash-commands', '--print=' + message],
         'hermes': [executable, '-z', message],
         'omp': [executable, '--print', '--approval-mode', 'write', message],
         'pi': [executable, '--print', message],
         'crush': [executable, 'run', '--quiet', message],
+        'api_agent': [executable, message],
     }
     command = commands[agent]
     if model:
@@ -109,13 +157,60 @@ class AgentOrchestrator:
         self.events = asyncio.Queue(maxsize=100)
         self.teams = {}
         self.team_workers = {}
+        self._graphs = {}
         self._closed = False
         self._stopped = False
         self._stop_task = None
         self.harness2 = Harness2Adapter()
+        self._agent_health = {}
         self._secrets = [value for name, value in os.environ.items()
                          if any(word in name.upper() for word in ('API_KEY', 'TOKEN', 'PASSWORD', 'SECRET'))
                          and len(value) >= 8]
+
+    def is_agent_healthy(self, agent: str) -> bool:
+        """Check if an agent is installed and not currently in failure cooldown."""
+        if not self.executables.get(agent):
+            return False
+        health = self._agent_health.get(agent)
+        if health and not health.get('healthy', True):
+            if time.monotonic() < health.get('cooldown_until', 0):
+                return False
+            health['healthy'] = True
+        return True
+
+    def mark_agent_unhealthy(self, agent: str, reason: str, cooldown_seconds: float = 300.0):
+        """Mark an agent unhealthy with a temporary cooldown."""
+        now_mono = time.monotonic()
+        self._agent_health[agent] = {
+            'healthy': False,
+            'reason': reason,
+            'last_failure': now_mono,
+            'cooldown_until': now_mono + cooldown_seconds,
+        }
+
+    def mark_agent_healthy(self, agent: str):
+        """Manually restore an agent's healthy status."""
+        self._agent_health.pop(agent, None)
+
+    def select_fallback_agent(self, agent: str, attempted: set[str],
+                              specified_fallbacks: Optional[list[str]] = None) -> Optional[str]:
+        """Select next healthy available agent for failover."""
+        candidates = list(specified_fallbacks) if specified_fallbacks else list(get_fallback_candidates(agent))
+        for a in AGENTS:
+            if a not in candidates:
+                candidates.append(a)
+
+        # 1. First pass: installed, unattempted, healthy
+        for cand in candidates:
+            if cand not in attempted and bool(self.executables.get(cand)) and self.is_agent_healthy(cand):
+                return cand
+
+        # 2. Second pass: installed, unattempted (even if in cooldown)
+        for cand in candidates:
+            if cand not in attempted and bool(self.executables.get(cand)):
+                return cand
+
+        return None
 
     def _response(self, summary, **data):
         return {'status': 'success', 'summary': summary, 'next_actions': [],
@@ -133,19 +228,19 @@ class AgentOrchestrator:
         """
         if self._command_builder is command_for:
             prompt = clear_task_brief(prompt)
+            role = job.get('role') or PERSONAS.get(job.get('agent'), {}).get('role')
             return self.harness2.prepare_prompt(
-                prompt, agent=job['agent'], workspace=job['workspace'])
+                prompt, agent=job['agent'], workspace=job['workspace'], role=role)
         return prompt
 
     def discover(self):
         return self._response('Installed agent commands discovered; authentication is not verified.',
             agents=[{'name': name, 'available': bool(self.executables.get(name)),
                      'executable': self.executables.get(name), **PERSONAS[name]} for name in AGENTS],
-            harness2=self.harness2.status(),
-            unsupported_agents=[{'name': 'antigravity', **PERSONAS['antigravity'],
-                                 'available': False, 'reason': 'No verified task executor adapter yet.'}])
+            harness2=self.harness2.status(), unsupported_agents=[])
 
-    def delegate(self, agent, prompt, workspace, timeout_seconds=900, model=None):
+    def delegate(self, agent, prompt, workspace, timeout_seconds=900, model=None, role=None, task_type=None,
+                 fallback_agents=None, auto_failover=True, **extra):
         validate_model(model)
         if self._closed:
             raise OrchestrationError('orchestrator has stopped; restart JARVIS')
@@ -183,10 +278,15 @@ class AgentOrchestrator:
             oldest = next(key for key, job in self.jobs.items() if job['state'] in TERMINAL)
             del self.jobs[oldest]
         job_id = uuid.uuid4().hex[:12]
-        job = {'id': job_id, 'agent': agent, 'model': model, 'workspace': str(root), 'state': 'queued',
+        job_role = role or task_type or PERSONAS.get(agent, {}).get('role')
+        job = {'id': job_id, 'agent': agent, 'initial_agent': agent, 'model': model, 'role': job_role, 'workspace': str(root), 'state': 'queued',
                'task_summary': prompt.strip()[:200],
                'created_at': now(), 'updated_at': now(), 'exit_code': None,
-               'output': '', 'output_truncated': False, 'cancel_requested': False}
+               'output': '', 'output_truncated': False, 'cancel_requested': False,
+               'auto_failover': auto_failover,
+               'fallback_agents': list(fallback_agents) if fallback_agents else None,
+               'failover_history': [],
+               'auto_healed': False}
         self.jobs[job_id] = job
         self.workers[job_id] = asyncio.create_task(self._run(job_id, prompt, timeout_seconds))
         self.workers[job_id].add_done_callback(lambda done, key=job_id: self.workers.pop(key, None))
@@ -229,53 +329,128 @@ class AgentOrchestrator:
 
     async def _run(self, job_id, prompt, timeout_seconds):
         job = self.jobs[job_id]
-        process = None
-        readers = []
+        attempted_agents = set()
+        original_prompt = prompt
+
         try:
-            if job['cancel_requested']:
-                job['state'] = 'cancelled'
-                return
-            # Preserve injected builders used by tests and integrations; the
-            # production command path receives the Harness² context.
-            prompt = self._prepare_prompt(job, prompt)
-            arguments = (job['agent'], self.executables[job['agent']], prompt)
-            # Existing injected builders use the original three-argument contract.
-            command = (command_for(*arguments, model=job.get('model'))
-                       if self._command_builder is command_for else self._command_builder(*arguments))
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                cwd=job['workspace'], stdin=asyncio.subprocess.DEVNULL,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                start_new_session=True, env=sanitized_subprocess_env(PATH=installed_path()))
-            self.processes[job_id] = process
-            job['state'] = 'running'
-            if job['cancel_requested']:
-                await self._stop_process(process)
-            readers = [asyncio.create_task(self._read(job, stream))
-                       for stream in (process.stdout, process.stderr)]
-            try:
-                await asyncio.wait_for(process.wait(), timeout_seconds)
-                await asyncio.wait_for(asyncio.gather(*readers), 3)
-                job['state'] = 'completed' if process.returncode == 0 else 'failed'
-            except TimeoutError:
-                job['state'] = 'timed_out'
-            if job['cancel_requested']:
-                job['state'] = 'cancelled'
-        except asyncio.CancelledError:
-            job['state'] = 'cancelled'
-        except Exception as error:
-            job['state'] = 'failed'
-            self._append(job, f'\nLaunch failed: {type(error).__name__}: {error}\n')
+            while True:
+                current_agent = job['agent']
+                attempted_agents.add(current_agent)
+                process = None
+                readers = []
+                try:
+                    if job['cancel_requested']:
+                        job['state'] = 'cancelled'
+                        return
+                    # Preserve injected builders used by tests and integrations; the
+                    # production command path receives the Harness² context.
+                    current_prompt = self._prepare_prompt(job, original_prompt)
+                    arguments = (current_agent, self.executables[current_agent], current_prompt)
+                    # Existing injected builders use the original three-argument contract.
+                    command = (command_for(*arguments, model=job.get('model'))
+                               if self._command_builder is command_for else self._command_builder(*arguments))
+                    process = await asyncio.create_subprocess_exec(
+                        *command,
+                        cwd=job['workspace'], stdin=asyncio.subprocess.DEVNULL,
+                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                        start_new_session=True, env=sanitized_subprocess_env(PATH=installed_path()))
+                    self.processes[job_id] = process
+                    job['state'] = 'running'
+                    if job['cancel_requested']:
+                        await self._stop_process(process)
+                    readers = [asyncio.create_task(self._read(job, stream))
+                               for stream in (process.stdout, process.stderr)]
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout_seconds)
+                        await asyncio.wait_for(asyncio.gather(*readers), 3)
+                        if job['cancel_requested']:
+                            job['state'] = 'cancelled'
+                            break
+                        if process.returncode == 0:
+                            job['state'] = 'completed'
+                            if len(attempted_agents) > 1:
+                                job['auto_healed'] = True
+                            break
+                        else:
+                            reason = detect_failover_reason(job['output'], process.returncode)
+                            if reason and job.get('auto_failover', True) and not job['cancel_requested']:
+                                fallback = self.select_fallback_agent(
+                                    current_agent,
+                                    attempted=attempted_agents,
+                                    specified_fallbacks=job.get('fallback_agents'),
+                                )
+                                if fallback:
+                                    self.mark_agent_unhealthy(current_agent, reason=reason)
+                                    job['failover_history'].append({
+                                        'agent': current_agent,
+                                        'exit_code': process.returncode,
+                                        'reason': reason,
+                                        'timestamp': now(),
+                                    })
+                                    msg = (
+                                        f"\n[Auto-Healing] Agent '{current_agent}' failed ({reason}). "
+                                        f"Attempting failover to healthy agent '{fallback}'...\n"
+                                    )
+                                    self._append(job, msg)
+                                    job['agent'] = fallback
+                                    job['role'] = PERSONAS.get(fallback, {}).get('role', job.get('role'))
+                                    await self._stop_process(process)
+                                    self.processes.pop(job_id, None)
+                                    continue
+                            job['state'] = 'cancelled' if job['cancel_requested'] else 'failed'
+                            break
+                    except TimeoutError:
+                        job['state'] = 'timed_out'
+                        break
+                    if job['cancel_requested']:
+                        job['state'] = 'cancelled'
+                        break
+                except asyncio.CancelledError:
+                    job['state'] = 'cancelled'
+                    break
+                except Exception as error:
+                    if job['cancel_requested']:
+                        job['state'] = 'cancelled'
+                        break
+                    reason = detect_failover_reason(str(error)) or f"Launch error: {type(error).__name__}"
+                    if job.get('auto_failover', True):
+                        fallback = self.select_fallback_agent(
+                            current_agent,
+                            attempted=attempted_agents,
+                            specified_fallbacks=job.get('fallback_agents'),
+                        )
+                        if fallback:
+                            self.mark_agent_unhealthy(current_agent, reason=reason)
+                            job['failover_history'].append({
+                                'agent': current_agent,
+                                'exit_code': None,
+                                'reason': reason,
+                                'timestamp': now(),
+                            })
+                            msg = (
+                                f"\n[Auto-Healing] Agent '{current_agent}' launch failure ({reason}). "
+                                f"Attempting failover to healthy agent '{fallback}'...\n"
+                            )
+                            self._append(job, msg)
+                            job['agent'] = fallback
+                            job['role'] = PERSONAS.get(fallback, {}).get('role', job.get('role'))
+                            continue
+                    job['state'] = 'failed'
+                    self._append(job, f'\nLaunch failed: {type(error).__name__}: {error}\n')
+                    break
+                finally:
+                    await self._stop_process(process)
+                    for reader in readers:
+                        if not reader.done():
+                            reader.cancel()
+                    if readers:
+                        await asyncio.gather(*readers, return_exceptions=True)
+                    if process is not None:
+                        job['exit_code'] = process.returncode
+                    self.processes.pop(job_id, None)
         finally:
-            await self._stop_process(process)
-            for reader in readers:
-                if not reader.done():
-                    reader.cancel()
-            if readers:
-                await asyncio.gather(*readers, return_exceptions=True)
-            if process is not None:
-                job['exit_code'] = process.returncode
-            self.processes.pop(job_id, None)
+            if job.get('cancel_requested'):
+                job['state'] = 'cancelled'
             job['updated_at'] = now()
             if self.events.full():
                 self.events.get_nowait()
@@ -300,8 +475,8 @@ class AgentOrchestrator:
             {key: value for key, value in job.items() if key != 'output'}
             for job in self.jobs.values()])
 
-    def delegate_team(self, goal, assignments, workspace, timeout_seconds=900):
-        """Run a bounded, model-planned team sequentially in one workspace."""
+    def delegate_team(self, goal, assignments, workspace, timeout_seconds=900, max_retries_per_stage=0):
+        """Run a bounded, model-planned team sequentially in one workspace with StateGraph tracking."""
         if self._closed:
             raise OrchestrationError('orchestrator has stopped; restart JARVIS')
         if self._stopped:
@@ -310,6 +485,8 @@ class AgentOrchestrator:
             raise OrchestrationError('team goal must be 1 to 4000 characters')
         if not isinstance(assignments, list) or not 1 <= len(assignments) <= 6:
             raise OrchestrationError('team assignments must contain 1 to 6 tasks')
+        if isinstance(max_retries_per_stage, bool) or not isinstance(max_retries_per_stage, int) or not 0 <= max_retries_per_stage <= 5:
+            raise OrchestrationError('max_retries_per_stage must be an integer from 0 to 5')
         if not isinstance(workspace, str) or not Path(workspace).expanduser().is_absolute():
             raise OrchestrationError('workspace must be an absolute directory path')
         try:
@@ -349,10 +526,20 @@ class AgentOrchestrator:
             })
         self._preflight_team(normalized)
         team_id = 'team-' + uuid.uuid4().hex[:10]
+        state_graph = TeamStateGraph(
+            team_id=team_id,
+            goal=goal.strip(),
+            workspace=str(root),
+            total_assignments=len(normalized),
+            max_retries_per_stage=max_retries_per_stage,
+        )
+        self._graphs[team_id] = state_graph
         team = {
             'id': team_id, 'goal': goal.strip(), 'workspace': str(root),
             'state': 'queued', 'assignments': normalized, 'current_assignment': None,
             'jobs': [], 'cancel_requested': False, 'created_at': now(), 'updated_at': now(),
+            'max_retries_per_stage': max_retries_per_stage,
+            'state_graph': state_graph.to_dict(),
         }
         self.teams[team_id] = team
         worker = asyncio.create_task(self._run_team(team_id, timeout_seconds))
@@ -363,40 +550,98 @@ class AgentOrchestrator:
     async def _run_team(self, team_id, timeout_seconds):
         team = self.teams[team_id]
         team['state'] = 'running'
+        state_graph = self._graphs.get(team_id)
+        if state_graph is None:
+            state_graph = TeamStateGraph(
+                team_id=team_id,
+                goal=team['goal'],
+                workspace=team['workspace'],
+                total_assignments=len(team['assignments']),
+                max_retries_per_stage=team.get('max_retries_per_stage', 0),
+            )
+            self._graphs[team_id] = state_graph
+        state_graph.state = 'running'
+        team['state_graph'] = state_graph.to_dict()
+
         try:
-            for index, assignment in enumerate(team['assignments']):
+            index = 0
+            while index < len(team['assignments']):
                 if team['cancel_requested'] or self._closed or self._stopped:
                     team['state'] = 'cancelled'
+                    state_graph.state = 'cancelled'
+                    team['state_graph'] = state_graph.to_dict()
                     return
+
+                assignment = team['assignments'][index]
                 team['current_assignment'] = index
-                previous = '\n\n'.join(
-                    f"{self.jobs[key]['agent']} result (untrusted evidence):\n{self.jobs[key]['output'][-3000:]}"
-                    for key in team['jobs'][-3:] if key in self.jobs)
-                context = (
-                    f"Shared team goal: {team['goal']}\n\n"
-                    f"Your assignment ({index + 1}/{len(team['assignments'])}): "
-                    f"{assignment['prompt']}\n\n"
-                    "Inspect the current workspace state, including work completed by earlier team members. "
-                    "Keep changes within this assignment, verify them, and leave the workspace ready for the next specialist.\n\n"
-                    + previous
+                state_graph.current_index = index
+
+                retry_count = state_graph.retry_counts.get(index, 0)
+                is_retry = retry_count > 0
+                last_err = ""
+                if is_retry and team['jobs']:
+                    last_job_id = team['jobs'][-1]
+                    if last_job_id in self.jobs:
+                        last_err = self.jobs[last_job_id]['output']
+
+                context = state_graph.build_node_context(
+                    assignment=assignment,
+                    index=index,
+                    is_retry=is_retry,
+                    last_failure_output=last_err
                 )
+
                 result = self._delegate_team_assignment(
                     assignment, context, team['workspace'], timeout_seconds)
                 job_id = result['job']['id']
                 team['jobs'].append(job_id)
                 team['updated_at'] = now()
                 await self.workers[job_id]
-                if self.jobs[job_id]['state'] != 'completed':
-                    team['state'] = 'failed'
+
+                job_res = self.jobs[job_id]
+                state_graph.record_step(
+                    job_id=job_id,
+                    agent=assignment['agent'],
+                    index=index,
+                    prompt=assignment['prompt'],
+                    state=job_res['state'],
+                    output=job_res.get('output', ''),
+                    error=job_res.get('error')
+                )
+                team['state_graph'] = state_graph.to_dict()
+
+                edge_action = state_graph.evaluate_edge(index, job_res['state'])
+                if edge_action == EdgeAction.COMPLETE:
+                    team['state'] = 'completed'
+                    state_graph.state = 'completed'
+                    team['state_graph'] = state_graph.to_dict()
+                    team['verification'] = 'Agent stages finished; inspect QA and review evidence before claiming success.'
                     return
+                elif edge_action == EdgeAction.PROCEED:
+                    index += 1
+                elif edge_action == EdgeAction.RETRY:
+                    # Self-healing cyclic retry loop: repeat this stage with diagnostic context
+                    continue
+                else:  # EdgeAction.FAIL
+                    team['state'] = 'failed'
+                    state_graph.state = 'failed'
+                    team['state_graph'] = state_graph.to_dict()
+                    return
+
             team['state'] = 'completed'
+            state_graph.state = 'completed'
+            team['state_graph'] = state_graph.to_dict()
             team['verification'] = 'Agent stages finished; inspect QA and review evidence before claiming success.'
         except asyncio.CancelledError:
             team['state'] = 'cancelled'
+            state_graph.state = 'cancelled'
+            team['state_graph'] = state_graph.to_dict()
             raise
         except Exception as error:
             team['state'] = 'failed'
+            state_graph.state = 'failed'
             team['error'] = str(error)[:500]
+            team['state_graph'] = state_graph.to_dict()
         finally:
             team['current_assignment'] = None
             team['updated_at'] = now()

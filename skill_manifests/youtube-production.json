@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "name": "youtube_production_create_brief",
+      "description": "Create a durable Telugu YouTube production brief. This starts a draft workflow and never generates or publishes a video.",
+      "adapter": "youtube_production.create_brief",
+      "parameters_json_schema": {
+        "type": "object",
+        "properties": {
+          "topic": {"type": "string"},
+          "format": {"type": "string", "enum": ["short", "weekly_update"]},
+          "audience": {"type": "string"},
+          "language": {"type": "string", "enum": ["te", "te-en-metadata"]},
+          "goal": {"type": "string"}
+        },
+        "required": ["topic"], "additionalProperties": false
+      }
+    },
+    {
+      "name": "youtube_production_prepare_draft",
+      "description": "Run the YouTube text specialists on a brief with verified notes or source excerpts and stage a Telugu draft, Gemini prompt, and review notes. Runs no video generation or publishing.",
+      "adapter": "youtube_production.prepare_draft",
+      "parameters_json_schema": {
+        "type": "object", "properties": {
+          "episode_id": {"type": "string"},
+          "sources": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+        }, "required": ["episode_id", "sources"], "additionalProperties": false
+      }
+    },
+    {
+      "name": "youtube_production_stage_draft",
+      "description": "Stage a Telugu script, sources, storyboard, thumbnail prompt, and metadata as one review package. This never publishes.",
+      "adapter": "youtube_production.stage_draft",
+      "parameters_json_schema": {
+        "type": "object",
+        "properties": {
+          "episode_id": {"type": "string"}, "script": {"type": "string"},
+          "title": {"type": "string"}, "description": {"type": "string"},
+          "sources": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          "storyboard": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          "thumbnail_prompt": {"type": "string"}
+        },
+        "required": ["episode_id", "script", "title", "description", "sources", "storyboard"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "youtube_production_status",
+      "description": "Read the current durable state of one YouTube production episode.",
+      "adapter": "youtube_production.status",
+      "parameters_json_schema": {"type": "object", "properties": {"episode_id": {"type": "string"}}, "required": ["episode_id"], "additionalProperties": false}
+    },
+    {
+      "name": "youtube_production_review_package",
+      "description": "Read the complete staged review package for one episode, including its exact approval hash.",
+      "adapter": "youtube_production.review_package",
+      "parameters_json_schema": {"type": "object", "properties": {"episode_id": {"type": "string"}}, "required": ["episode_id"], "additionalProperties": false}
+    },
+    {
+      "name": "youtube_production_pending_reviews",
+      "description": "List YouTube production episodes awaiting review or requested revisions.",
+      "adapter": "youtube_production.pending_reviews",
+      "parameters_json_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": false}
+    },
+    {
+      "name": "youtube_production_request_changes",
+      "description": "Record revision feedback for a staged YouTube review package and invalidate any approval.",
+      "adapter": "youtube_production.request_changes",
+      "parameters_json_schema": {"type": "object", "properties": {"episode_id": {"type": "string"}, "feedback": {"type": "string"}}, "required": ["episode_id", "feedback"], "additionalProperties": false}
+    },
+    {
+      "name": "youtube_production_approve",
+      "description": "Approve the exact current YouTube draft package by its review hash. Draft-only mode records approval but cannot publish or schedule.",
+      "adapter": "youtube_production.approve",
+      "parameters_json_schema": {"type": "object", "properties": {"episode_id": {"type": "string"}, "review_hash": {"type": "string"}}, "required": ["episode_id", "review_hash"], "additionalProperties": false}
+    }
+  ]
+}

@@ -71,6 +71,7 @@ SciFiPanel {
             Text {
                 width: parent.width
                 text: assistantPanel.greetingText
+                textFormat: Text.PlainText
                 color: "#d8f6ff"
                 font.family: "Inter, sans-serif"
                 font.pixelSize: 11

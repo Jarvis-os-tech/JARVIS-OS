@@ -8,10 +8,14 @@ import QtMultimedia
 Rectangle {
     id: card
     property var widget: ({id: "", title: "", kind: "text", data: {text: ""}})
+    property var savedState: ({})
     property bool inCanvas: true
     property bool activeMedia: true
     property bool requestBusy: false
     property string requestError: ""
+    property string requestFeedback: ""
+    property bool framed: true
+    property bool plainText: false
     readonly property var widgetData: widget.data || {}
     readonly property bool interacting: hover.hovered || containsFocus(Window.window ? Window.window.activeFocusItem : null)
     function containsFocus(item) {
@@ -31,7 +35,7 @@ Rectangle {
         : ["chart", "table", "image", "pip", "3d"].includes(widget.kind) ? 460
         : widget.kind === "text" && textLength > 250 ? 420
         : 340
-    implicitHeight: (widget.kind === "view" ? Math.min(660, (widgetData.layout ? generatedHeight : 280) + 72)
+    implicitHeight: (widget.kind === "view" ? Math.min(660, (widgetData.layout ? generatedHeight : 280) + (framed ? 72 : 32))
         : ["image", "pip", "3d"].includes(widget.kind) ? 340
         : widget.kind === "qr" ? 340
         : ["chart", "table"].includes(widget.kind) ? 320
@@ -40,9 +44,13 @@ Rectangle {
         : widget.kind === "text" ? (textLength > 300 ? 360 : textLength > 100 ? 200 : 110)
         : 140) + (hasActions ? 44 : 0)
     property real generatedHeight: 300
-    radius: 20
-    color: "#EF14202D"
-    border.color: (card.widget && card.widget.pinned) ? "#55DDEA" : "#4A6075"
+    property var generatedView: null
+    function selectChoice(index) { return generatedView ? generatedView.selectChoice(index) : false; }
+    Keys.onPressed: event => { if (generatedView) generatedView.handleKeyEvent(event); }
+    radius: 14
+    color: framed ? "#F00B1420" : "transparent"
+    border.width: framed ? 1 : 0
+    border.color: (card.widget && card.widget.pinned) ? "#55DDEA" : "#40596B"
     HoverHandler { id: hover }
     clip: true
 
@@ -54,6 +62,7 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             spacing: 6
+            visible: card.framed
             Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 30
@@ -124,10 +133,10 @@ Rectangle {
         }
         Text {
             Layout.fillWidth: true
-            text: card.requestError
+            text: card.requestError || card.requestFeedback
             visible: text.length > 0
             textFormat: Text.PlainText; wrapMode: Text.WordWrap
-            color: "#F193A0"; font.pixelSize: 12
+            color: card.requestError ? "#F193A0" : "#90BDB8"; font.pixelSize: 12
         }
     }
 
@@ -175,16 +184,23 @@ Rectangle {
                 policy: ScrollBar.AsNeeded
                 width: 6
                 background: Rectangle { color: "transparent" }
-                contentItem: Rectangle { implicitWidth: 6; radius: 3; color: "#4A6075"; opacity: 0.85 }
+                contentItem: Rectangle { implicitWidth: 6; radius: 3; color: "#40596B"; opacity: 0.85 }
             }
             GeneratedView {
+                id: generated
                 width: generatedScroll.availableWidth
                 specification: card.widgetData
+                savedState: card.savedState
                 busy: card.requestBusy
                 onImplicitHeightChanged: card.generatedHeight = implicitHeight
-                Component.onCompleted: card.generatedHeight = implicitHeight
+                Component.onCompleted: {
+                    card.generatedView = generated;
+                    card.generatedHeight = implicitHeight;
+                }
+                Component.onDestruction: if (card.generatedView === generated) card.generatedView = null
                 onStateEdited: values => card.stateEdited(values)
                 onSubmitted: (prompt, values) => card.submitted(prompt, values)
+                onDismissRequested: card.dismissRequested()
             }
         }
     }
@@ -204,7 +220,7 @@ Rectangle {
                 contentItem: Rectangle {
                     implicitWidth: 6
                     radius: 3
-                    color: vbar.pressed ? "#55DDEA" : vbar.hovered ? "#7BE7F1" : "#4A6075"
+                    color: vbar.pressed ? "#55DDEA" : vbar.hovered ? "#7BE7F1" : "#40596B"
                     opacity: 0.85
                 }
             }
@@ -212,7 +228,7 @@ Rectangle {
                 id: textArea
                 width: textScroll.availableWidth
                 text: String(card.widgetData.text || "")
-                textFormat: TextEdit.MarkdownText
+                textFormat: card.plainText ? TextEdit.PlainText : TextEdit.MarkdownText
                 color: "#F2F5FA"
                 font.pixelSize: 14
                 wrapMode: TextEdit.Wrap
@@ -277,6 +293,7 @@ Rectangle {
                         var d = card.widgetData.dimensions || {width: 0, height: 0, depth: 0, unit: "m"}
                         return d.width + " × " + d.height + " × " + d.depth + " " + (d.unit || "m") + "  •  " + (card.widgetData.triangles || 0) + " tris"
                     }
+                    textFormat: Text.PlainText
                     color: "#8DA0B5"
                     font.pixelSize: 11
                     elide: Text.ElideRight
@@ -386,13 +403,13 @@ Rectangle {
                 policy: ScrollBar.AsNeeded
                 width: 6
                 background: Rectangle { color: "transparent" }
-                contentItem: Rectangle { implicitWidth: 6; radius: 3; color: "#4A6075"; opacity: 0.85 }
+                contentItem: Rectangle { implicitWidth: 6; radius: 3; color: "#40596B"; opacity: 0.85 }
             }
             ScrollBar.horizontal: ScrollBar {
                 policy: ScrollBar.AsNeeded
                 height: 6
                 background: Rectangle { color: "transparent" }
-                contentItem: Rectangle { implicitHeight: 6; radius: 3; color: "#4A6075"; opacity: 0.85 }
+                contentItem: Rectangle { implicitHeight: 6; radius: 3; color: "#40596B"; opacity: 0.85 }
             }
             Column {
                 width: Math.max(320, card.widgetData.columns.length * 140)
@@ -450,7 +467,7 @@ Rectangle {
                 policy: ScrollBar.AsNeeded
                 width: 6
                 background: Rectangle { color: "transparent" }
-                contentItem: Rectangle { implicitWidth: 6; radius: 3; color: "#4A6075"; opacity: 0.85 }
+                contentItem: Rectangle { implicitWidth: 6; radius: 3; color: "#40596B"; opacity: 0.85 }
             }
             Column {
                 width: parent.width
@@ -497,6 +514,7 @@ Rectangle {
             Text {
                 visible: card.widgetData.value !== undefined
                 text: String(card.widgetData.value || 0) + " / " + String(card.widgetData.maximum || 100)
+                textFormat: Text.PlainText
                 color: "#B4BFCE"; font.pixelSize: 14
             }
             Item { Layout.fillHeight: true }

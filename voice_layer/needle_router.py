@@ -26,6 +26,21 @@ def schemas(apps):
         tool('increase_brightness', 'Make the screen brighter.', {}),
         tool('decrease_brightness', 'Make the screen dimmer.', {}),
         tool('switch_workspace', 'Switch to a numbered desktop workspace.', {'workspace': bounded(1, 10)}),
+        tool('workspace_back', 'Switch back to the previous desktop workspace.', {}),
+        tool('move_window_to_workspace', 'Move the active window to a numbered desktop workspace.', {'workspace': bounded(1, 10)}),
+        tool('close_window', 'Close the active desktop window.', {}),
+        tool('fullscreen_window', 'Toggle fullscreen on the active desktop window.', {}),
+        tool('minimize_window', 'Minimize the active desktop window.', {}),
+        tool('focus_window', 'Focus an open window or application by name.', {'target': {'type': 'string'}}),
+        tool('take_screenshot', 'Capture a screenshot of the full screen or active window.',
+             {'region': {'type': 'string', 'enum': ['full', 'active']}}),
+        tool('lock_screen', 'Request locking the desktop screen session.', {}),
+        tool('media_play', 'Start or resume media playback.', {}),
+        tool('media_pause', 'Pause media playback.', {}),
+        tool('media_next', 'Skip to the next media track.', {}),
+        tool('media_previous', 'Return to the previous media track.', {}),
+        tool('switch_audio_device', 'Switch the default audio output or input device.',
+             {'device': {'type': 'string'}, 'kind': {'type': 'string', 'enum': ['output', 'input']}}),
     ]
     if apps:
         tools.append(tool('open_application', 'Open an installed app explicitly named by the user.',
@@ -60,15 +75,25 @@ def _numbers(text):
 
 
 def eligible_text(text):
+    from jarvis_control.command_values import protected_ranges
+    if not isinstance(text, str) or protected_ranges(text):
+        return False
     text = normalize(text.replace("'", ''))
     if (not text or len(text) > 240 or re.search(
-            r'\b(dont|do not|not|never|avoid|except|unless|if|why|explain|what|how|whether|and|then|or)\b', text)):
+            r'\b(dont|do not|not|never|avoid|except|unless|if|why|explain|what|how|whether|and|then|or|phone|mobile|android|smartphone)\b',
+            text)):
         return False
     text = re.sub(r'^(?:hey )?jarvis ', '', text)
     text = re.sub(r'^(?:can|could|would|will) you (?:please )?', '', text)
     text = re.sub(r'^i (?:want|need|would like) (?:you )?to ', '', text)
     text = re.sub(r'^please ', '', text)
-    return bool(re.match(r'^(open|launch|start|make|turn|set|put|switch|go|move|increase|decrease|raise|lower|brighten|dim|volume|brightness|workspace)\b', text))
+    return bool(re.match(
+        r'^(open|launch|start|close|focus|bring|activate|minimize|minimise|fullscreen|full|maximize|'
+        r'make|turn|set|put|switch|change|use|go|move|send|increase|decrease|raise|lower|brighten|dim|'
+        r'volume|brightness|workspace|take|capture|screenshot|lock|play|pause|resume|skip|next|previous|prev|'
+        r'media|music|audio|sound|window|screen)\b',
+        text,
+    ))
 
 
 def validate_prediction(result, text, apps, minimum_confidence=.8):
@@ -121,6 +146,68 @@ def validate_prediction(result, text, apps, minimum_confidence=.8):
         if (set(args) == {'workspace'} and type(value) is int and 1 <= value <= 10
                 and value in _numbers(text) and 'workspace' in text):
             return 'system_control', {'action': 'workspace_switch', 'workspace': str(value)}
+    if name == 'workspace_back' and not args:
+        if 'workspace' in text and re.search(r'\b(back|previous|prev|last)\b', text):
+            return 'system_control', {'action': 'workspace_back'}
+    if name == 'move_window_to_workspace':
+        value = args.get('workspace')
+        if (set(args) == {'workspace'} and type(value) is int and 1 <= value <= 10
+                and value in _numbers(text) and 'workspace' in text
+                and re.search(r'\b(move|send|put)\b', text)):
+            return 'move_window_to_workspace', {'workspace': value}
+    if name == 'close_window' and not args:
+        if (re.search(r'\bclose\b', text)
+                and re.search(r'\b(window|this|that|it|active|current)\b', text)
+                and 'drone' not in text):
+            return 'system_control', {'action': 'window_close'}
+    if name == 'fullscreen_window' and not args:
+        if re.search(r'\b(fullscreen|full screen|maximize)\b', text):
+            return 'system_control', {'action': 'window_fullscreen'}
+    if name == 'minimize_window' and not args:
+        if re.search(r'\b(minimize|minimise)\b', text):
+            return 'system_control', {'action': 'window_minimize'}
+    if name == 'focus_window' and set(args) == {'target'} and isinstance(args['target'], str):
+        target = normalize(args['target'])
+        if (target and target not in ('this', 'that', 'it', 'workspace', 'standby', 'audio', 'speakers')
+                and re.search(r'\b(focus|switch|bring|activate|window)\b', text)
+                and re.search(r'\b' + re.escape(target) + r'\b', text)):
+            return 'system_control', {'action': 'window_focus', 'target': args['target'].strip()}
+    if name == 'take_screenshot' and set(args) == {'region'} and args['region'] in ('full', 'active'):
+        if re.search(r'\b(screenshot|capture)\b', text):
+            if args['region'] == 'active' and re.search(r'\b(window|active|this|current)\b', text):
+                return 'take_screenshot', {'region': 'active'}
+            if args['region'] == 'full' and (not re.search(r'\b(window|active)\b', text) or 'full' in text):
+                return 'take_screenshot', {'region': 'full'}
+    if name == 'lock_screen' and not args:
+        if re.search(r'\block\b', text) and re.search(r'\b(screen|pc|computer|session)\b', text):
+            return 'lock_screen', {}
+    if name == 'media_play' and not args and not _numbers(text):
+        stripped = re.sub(r'^(?:hey )?jarvis |^(?:can|could|would|will) you |^please | please$', '', text).strip()
+        allowed_words = {'play', 'resume', 'the', 'my', 'music', 'media', 'playback', 'audio', 'song', 'track', 'video'}
+        tokens = stripped.split()
+        if tokens and re.search(r'\b(play|resume)\b', stripped) and set(tokens) <= allowed_words:
+            return 'system_control', {'action': 'media_play'}
+    if name == 'media_pause' and not args:
+        if re.search(r'\bpause\b', text):
+            return 'system_control', {'action': 'media_pause'}
+    if name == 'media_next' and not args:
+        if re.search(r'\b(next|skip)\b', text) and (
+            re.search(r'\b(track|song|music|media|audio|video|this)\b', text) or text in ('next', 'skip')
+        ):
+            return 'system_control', {'action': 'media_next'}
+    if name == 'media_previous' and not args:
+        if re.search(r'\b(previous|prev|last|back)\b', text) and re.search(
+            r'\b(track|song|music|media|audio|video)\b', text
+        ):
+            return 'system_control', {'action': 'media_previous'}
+    if (name == 'switch_audio_device' and set(args) == {'device', 'kind'}
+            and args['kind'] in ('output', 'input') and isinstance(args['device'], str)):
+        dev = normalize(args['device'])
+        if (dev and re.search(r'\b' + re.escape(dev) + r'\b', text)
+                and re.search(r'\b(switch|change|set|use)\b', text)
+                and re.search(r'\b(audio|sound|output|input|speaker|speakers|headphone|headphones|headset|earbuds|mic|microphone|device|sink|source|bluetooth|hdmi)\b', text)
+                and (args['kind'] != 'input' or re.search(r'\b(mic|microphone|input|source)\b', text))):
+            return 'audio_set_device', {'device': args['device'].strip(), 'kind': args['kind'], 'move_streams': True}
     if name == 'open_application' and set(args) == {'app'} and isinstance(args['app'], str):
         if not re.search(r'\b(open|launch|start)\b', text):
             return None

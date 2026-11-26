@@ -75,13 +75,21 @@ def prepare(destination):
     body = replace_once(body, 'case "$cmd" in', 'case "$cmd" in\n    widgets)\n        shift || true\n        exec "${SCRIPT_DIR}/bin/jarvis-widgets" "$@"\n        ;;')
     write(relative, body)
     (target / relative).chmod(0o755)
-    for relative in ("skills/domains/widgets.py", "skill_manifests/widgets.json", "ui/jarvis_widgets/backend.py", "ui/jarvis_widgets/view_schema.py", "bin/jarvis-widgets"):
+    for relative in (
+        "skills/domains/widgets.py", "skill_manifests/widgets.json", "bin/jarvis-widgets",
+        "ui/jarvis_widgets/backend.py", "ui/jarvis_widgets/native_cards.py",
+        "ui/jarvis_widgets/three_compiler.py", "ui/jarvis_widgets/view_schema.py",
+        "ui/jarvis_widgets/workspace.py",
+    ):
         write(relative, (SOURCE / relative).read_text())
     (target / "bin/jarvis-widgets").chmod(0o755)
     env = dict(os.environ, PYTHONPATH=str(target), PYTHONDONTWRITEBYTECODE="1")
     check = (
         "from pathlib import Path; from skills.skills import DesktopSkills; "
         "from orchestration.tool_tiers import CORE_TOOLS; "
+        "from ui.jarvis_widgets.backend import make_widget; "
+        "from ui.jarvis_widgets.three_compiler import compile_3d; "
+        "assert make_widget('workspace', 'Check', {'brief':'Ready'})['data']['panels']; "
         "r=DesktopSkills.__new__(DesktopSkills); r.manifest_dirs=[Path('skill_manifests')]; "
         "s=r._load_manifests(); assert {'show_widget','manage_canvas','manage_widget'}<=set(s); "
         "assert {'show_widget','manage_canvas'}<=CORE_TOOLS; print('Widget adapters validated')"

@@ -63,7 +63,7 @@
     },
     {
       "name": "delegate_agent",
-      "description": "Delegate a task to a local coding agent running in an isolated tmux terminal session or background supervisor. Check the job ID for results. Task type selects preset routing; model overrides it.",
+      "description": "Delegate a task to a local coding agent. For a CLI Agent department request to connect to or run a task in Antigravity, select antigravity to use the native agy CLI. A connection check should be a read-only prompt and must finish successfully before reporting it connected. Check the job ID for results.",
       "adapter": "agents.delegate",
       "parameters_json_schema": {
         "type": "object",
@@ -75,10 +75,12 @@
               "claude",
               "opencode",
               "gemini",
+              "antigravity",
               "hermes",
               "omp",
               "pi",
-              "crush"
+              "crush",
+              "api_agent"
             ]
           },
           "prompt": {
@@ -134,7 +136,7 @@
             "items": {
               "type": "object",
               "properties": {
-                "agent": {"type": "string", "enum": ["codex", "claude", "opencode", "gemini", "hermes", "omp", "pi", "crush"]},
+                "agent": {"type": "string", "enum": ["codex", "claude", "opencode", "gemini", "hermes", "omp", "pi", "crush", "antigravity"]},
                 "prompt": {"type": "string"},
                 "task_type": {"type": "string", "enum": ["coding", "reasoning", "fast"]},
                 "model": {"type": "string"},

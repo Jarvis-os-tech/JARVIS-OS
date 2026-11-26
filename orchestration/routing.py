@@ -70,6 +70,14 @@ HERMES AND JARVIS ORCHESTRATION:
     requests an image attachment. Wait for the department's publishing receipt.
   * Route LinkedIn work to the department across all supported operations, including read-only work.
   * Human-in-the-loop review airlock is strictly enforced: generated posts are staged in the review queue for user review and approval before publishing.
+- YOUTUBE PRODUCTION DEPARTMENT ROUTING:
+  * Route Telugu channel strategy, scripts, storyboards, metadata, review packages,
+    revisions and approvals through youtube_production_* tools.
+  * Create a brief and gather evidence, then use youtube_production_prepare_draft
+    with source excerpts or verified notes. Report that preparation is running,
+    and use youtube_production_status to check before retrieving the review package.
+  * YouTube Brain remains the route for watched-video notes, transcripts and topic retrieval.
+  * Draft approval never authorizes publishing. The first release cannot schedule or upload.
 - Discover get_hermes_status if readiness is uncertain. If Hermes is unavailable,
   report that honestly and use an appropriate Jarvis tool when authorized;
   never silently replace a specifically requested agent.

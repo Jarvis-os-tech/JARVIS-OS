@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# omarchy:group=voice
+# omarchy:summary=Toggle JARVIS voice listening or unified dictation mode
+# omarchy:args=[toggle|start|stop|cancel|confirm|standby|dictation [toggle|start|stop|cancel|status]|status]
+# omarchy:examples=jarvis-voice-toggle | jarvis-voice-toggle dictation | jarvis-voice-toggle dictation stop
+set -euo pipefail
+
+SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+SOUND_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/jarvis/sounds"
+
+if [[ -x "${SCRIPT_DIR}/jarvis" ]]; then
+    JARVIS_BIN="${SCRIPT_DIR}/jarvis"
+elif command -v jarvis >/dev/null 2>&1; then
+    JARVIS_BIN="jarvis"
+else
+    echo '{"error":"jarvis CLI not found"}' >&2
+    exit 1
+fi
+
+play_earcon() {
+    local file="$1"
+    if [[ -f "$file" ]] && command -v pw-play >/dev/null 2>&1; then
+        pw-play "$file" >/dev/null 2>&1 &
+    fi
+}
+
+notify_island() {
+    local state="$1"
+    if command -v omarchy-shell >/dev/null 2>&1; then
+        omarchy-shell -q dynamic-island voice "$state" >/dev/null 2>&1 || true
+    fi
+}
+
+mode="${1:-toggle}"
+case "$mode" in
+    dictate|dictation|--dictate|--dictation)
+        sub="${2:-toggle}"
+        STATUS="$("$JARVIS_BIN" listen dictation "$sub" 2>/dev/null || true)"
+        if [[ "$STATUS" == *'"active": true'* || "$STATUS" == *'"active":true'* ]]; then
+            play_earcon "$SOUND_DIR/wake.wav"
+            notify_island "listening"
+        elif [[ "$STATUS" == *'"active": false'* || "$STATUS" == *'"active":false'* ]]; then
+            play_earcon "$SOUND_DIR/standby.wav"
+            notify_island "off"
+        fi
+        printf '%s\n' "$STATUS"
+        ;;
+    start|stop|cancel|confirm|standby)
+        STATUS="$("$JARVIS_BIN" listen "$mode" 2>/dev/null || true)"
+        if [[ "$STATUS" == *'"muted": true'* || "$STATUS" == *'"muted":true'* || "$STATUS" == *'"standby": true'* || "$STATUS" == *'"standby":true'* ]]; then
+            play_earcon "$SOUND_DIR/standby.wav"
+            notify_island "off"
+        elif [[ "$STATUS" == *'"muted": false'* || "$STATUS" == *'"muted":false'* || "$STATUS" == *'"standby": false'* || "$STATUS" == *'"standby":false'* ]]; then
+            play_earcon "$SOUND_DIR/wake.wav"
+            notify_island "listening"
+        fi
+        printf '%s\n' "$STATUS"
+        ;;
+    status)
+        exec "$JARVIS_BIN" status
+        ;;
+    toggle|"")
+        STATUS="$("$JARVIS_BIN" listen toggle 2>/dev/null || true)"
+        if [[ "$STATUS" == *'"muted": true'* || "$STATUS" == *'"muted":true'* ]]; then
+            play_earcon "$SOUND_DIR/standby.wav"
+            notify_island "off"
+        elif [[ "$STATUS" == *'"muted": false'* || "$STATUS" == *'"muted":false'* ]]; then
+            play_earcon "$SOUND_DIR/wake.wav"
+            notify_island "listening"
+        fi
+        printf '%s\n' "$STATUS"
+        ;;
+    *)
+        echo "Usage: jarvis-voice-toggle [toggle|start|stop|cancel|confirm|standby|dictation [toggle|start|stop|cancel|status]|status]" >&2
+        exit 2
+        ;;
+esac

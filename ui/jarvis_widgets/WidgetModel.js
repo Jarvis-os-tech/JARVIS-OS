@@ -76,3 +76,48 @@ function manage(items, id, action) {
 function prune(items, now, interactingIds) {
     return items.filter(item => item.pinned || !item.expiresAt || item.expiresAt > now || interactingIds.indexOf(item.id) !== -1);
 }
+
+// Keep local edits for fields that still exist with the same value type.
+function retainedState(defaults, previous) {
+    var result = Object.assign({}, defaults || {});
+    Object.keys(result).forEach(function(key) {
+        if (previous && Object.prototype.hasOwnProperty.call(previous, key) && typeof previous[key] === typeof result[key])
+            result[key] = previous[key];
+    });
+    return result;
+}
+
+function findChoice(node, index) {
+    if (!node || typeof node !== "object") return null;
+    if (node.type === "choice" && node.index === index) return node;
+    if (Array.isArray(node.children)) {
+        for (var i = 0; i < node.children.length; i++) {
+            var found = findChoice(node.children[i], index);
+            if (found) return found;
+        }
+    }
+    return null;
+}
+
+function choiceSelectionState(currentState, choiceNode) {
+    return Object.assign({}, currentState || {}, {
+        selected_index: choiceNode.index,
+        selected_id: choiceNode.id || ("choice_" + choiceNode.index),
+        selected_value: choiceNode.value !== undefined ? choiceNode.value : choiceNode.label,
+        selected_label: choiceNode.label
+    });
+}
+
+function compatibleDraft(spec, previous) {
+    const kept = {}, state = Object.assign({}, spec.state || {});
+    Object.keys(state).forEach(key => {
+        if (!previous || !Object.prototype.hasOwnProperty.call(previous, key) || typeof previous[key] !== typeof state[key]) return;
+        const candidate = Object.assign({}, state, {[key]: previous[key]});
+        try {
+            Views.validate(Object.assign({}, spec, {state: candidate}));
+            state[key] = previous[key];
+            if (previous[key] !== spec.state[key]) kept[key] = previous[key];
+        } catch (error) { /* A changed control range must not restore an invalid old value. */ }
+    });
+    return kept;
+}

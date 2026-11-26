@@ -59,6 +59,35 @@ MAX_SCREEN_FRAME_BYTES = 4 * 1024 * 1024
 # Optional video shares the Live-session websocket writer with microphone
 # audio. Keep serialization and bound the time video may occupy that lock.
 VISION_SEND_BUDGET_SECONDS = 0.1
+UPDATE_AGENT_TASK_MARKERS = ('update agent', 'update-agent', 'apply_updates', 'pending system update', 'pending package update')
+
+
+def _is_update_agent_task(item) -> bool:
+    """True when a task result belongs to the (now disabled) update agent."""
+    if not isinstance(item, dict):
+        return False
+    stack = [item]
+    seen: set[int] = set()
+    while stack:
+        curr = stack.pop()
+        if isinstance(curr, str):
+            folded = curr.casefold()
+            if any(marker in folded for marker in UPDATE_AGENT_TASK_MARKERS):
+                return True
+        elif isinstance(curr, dict):
+            obj_id = id(curr)
+            if obj_id in seen:
+                continue
+            seen.add(obj_id)
+            stack.extend(curr.keys())
+            stack.extend(curr.values())
+        elif isinstance(curr, (list, tuple)):
+            obj_id = id(curr)
+            if obj_id in seen:
+                continue
+            seen.add(obj_id)
+            stack.extend(curr)
+    return False
 
 
 def _read_visual_frame(path):
@@ -1024,8 +1053,9 @@ class LiveVoice:
                     key='calendar:' + hashlib.sha256(identity.encode()).hexdigest(),
                     expires_at=event['start'], calendar_event=event)
         noteworthy = [item for item in result.get('results', [])
-                      if item.get('status') in ('delegated', 'approval_required') or
-                      (item.get('status') == 'suggested' and (cfg is None or cfg.daily_focus))]
+                      if (item.get('status') in ('delegated', 'approval_required') or
+                          (item.get('status') == 'suggested' and (cfg is None or cfg.daily_focus))) and
+                      not _is_update_agent_task(item)]
         if noteworthy:
             self._queue_notice('Briefly report these newly observed task results. Delegated means running. '
                 'Ask one clear question for approval_required. Do not execute suggested tasks or claim '

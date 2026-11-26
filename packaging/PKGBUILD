@@ -1,50 +1,23 @@
 # Maintainer: g0pi <jarvis-os@archlinux.local>
 pkgname=jarvis-desktop-environment
 pkgver=1.0.0
-pkgrel=1
-pkgdesc="Full holographic AI Desktop Environment for Arch Linux powered by Gemini"
+pkgrel=10
+pkgdesc="JARVIS voice-first desktop session for Hyprland"
 arch=('x86_64')
-url="https://github.com/g0pi/jarvis-os"
-license=('MIT')
-depends=(
-    'hyprland'
-    'quickshell'
-    'pipewire'
-    'wireplumber'
-    'upower'
-    'grim'
-    'python'
-    'ttf-jetbrains-mono-nerd'
-)
-optdepends=(
-    'code: VS Code launcher integration'
-    'google-chrome: Web browser integration'
-    'foot: Default terminal HUD'
-    'nautilus: File manager integration'
-)
-source=(
-    'jarvis-de'
-    'jarvis-de.desktop'
-)
-sha256sums=(
-    'SKIP'
-    'SKIP'
-)
+license=('MIT' 'Apache-2.0' 'CC-BY-4.0')
+depends=('omarchy' 'hyprland' 'hyprlock' 'quickshell' 'python' 'pipewire' 'pipewire-pulse' 'wireplumber'
+         'brightnessctl' 'networkmanager' 'xdg-terminal-exec' 'foot'
+         'xdg-desktop-portal-hyprland' 'xorg-xwayland' 'polkit')
+source=('jarvis-de-session.tar.gz' 'jarvis-de' 'jarvis-de.desktop')
+sha256sums=('SKIP' 'SKIP' 'SKIP')
 
 package() {
-    # 1. Install Session Launcher
-    install -Dm755 "${srcdir}/jarvis-de" "${pkgdir}/usr/bin/jarvis-de"
+    install -Dm755 "$srcdir/jarvis-de" "$pkgdir/usr/bin/jarvis-de"
+    install -Dm644 "$srcdir/jarvis-de.desktop"         "$pkgdir/usr/share/wayland-sessions/jarvis-de.desktop"
 
-    # 2. Install Wayland Session Entry (for SDDM / GDM / greetd)
-    install -Dm644 "${srcdir}/jarvis-de.desktop" "${pkgdir}/usr/share/wayland-sessions/jarvis-de.desktop"
-
-    # 3. Install QML Desktop Shell
-    install -d "${pkgdir}/usr/share/jarvis-de/shell"
-    cp -r "${srcdir}/../ui/jarvis_shell"/* "${pkgdir}/usr/share/jarvis-de/shell/"
-
-    # 4. Install Systemd Services
-    install -d "${pkgdir}/usr/lib/systemd/user"
-    if [ -f "${srcdir}/../systemd/jarvis-voice.service" ]; then
-        install -m644 "${srcdir}/../systemd/jarvis-voice.service" "${pkgdir}/usr/lib/systemd/user/"
-    fi
+    local root="$pkgdir/usr/lib/jarvis-de"
+    install -Dm644 "$srcdir/session/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -d "$root"
+    cp -R --preserve=mode,timestamps "$srcdir/session/." "$root/"
+    install -Dm644 "$root/ATTRIBUTION.md"         "$pkgdir/usr/share/licenses/$pkgname/ATTRIBUTION.md"
 }

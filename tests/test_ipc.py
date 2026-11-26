@@ -322,3 +322,210 @@ async def test_standby_toggle_uses_controller_atomically():
     second=json.loads(await server._dispatch('standby toggle'))
     assert first['standby'] is True and second['standby'] is False
     assert not controller.engaged
+
+
+@pytest.mark.asyncio
+async def test_ipc_multimodal_send_input(socket_path, tmp_path):
+    from voice_layer.ipc import ControlServer
+    received_items = []
+    def on_input(item):
+        received_items.append(item)
+
+    server = ControlServer(socket_path=socket_path, send_input_cb=on_input)
+    await server.start()
+    try:
+        sample_img = tmp_path / "screenshot.png"
+        sample_img.write_bytes(b"\x89PNG\r\n\x1a\nfakeimagebytes")
+
+        reader, writer = await asyncio.open_unix_connection(str(socket_path))
+        # 1. Test JSON send_input with file_path
+        payload = {
+            "command": "send_input",
+            "text": "Analyze this screenshot",
+            "file_path": str(sample_img)
+        }
+        writer.write(json.dumps(payload).encode() + b'\n')
+        await writer.drain()
+        data = await asyncio.wait_for(reader.read(4096), 2)
+        res = json.loads(data.decode())
+        assert res["status"] == "ok"
+        assert res["queued"] is True
+        assert res["name"] == "screenshot.png"
+        assert len(received_items) == 1
+        assert received_items[0]["text"] == "Analyze this screenshot"
+        assert received_items[0]["data"] == b"\x89PNG\r\n\x1a\nfakeimagebytes"
+
+        writer.close()
+        await writer.wait_closed()
+
+        # 2. Test line dispatch with --file
+        reader2, writer2 = await asyncio.open_unix_connection(str(socket_path))
+        writer2.write(f'send --file {sample_img} What is this?\n'.encode())
+        await writer2.drain()
+        data2 = await asyncio.wait_for(reader2.read(4096), 2)
+        writer2.close()
+        await writer2.wait_closed()
+        res2 = json.loads(data2.decode())
+        assert res2["status"] == "sent"
+        assert res2["text"] == "What is this?"
+        assert len(received_items) == 2
+        assert received_items[1]["data"] == b"\x89PNG\r\n\x1a\nfakeimagebytes"
+    finally:
+        await server.close()
+
+
+@pytest.mark.asyncio
+async def test_ipc_send_input_returns_error_when_cannot_queue(tmp_path):
+    from voice_layer.ipc import ControlServer
+
+    text_calls = []
+    server = ControlServer(send_text_cb=lambda t: text_calls.append(t))
+
+    sample_file = tmp_path / "note.txt"
+    sample_file.write_text("hello")
+
+    # File input with send_input_cb=None must return an error, not {'status': 'ok', 'queued': False}
+    for cmd in ('send_input', 'submit_input', 'attach', 'send_file'):
+        res = json.loads(await server._handle_json_command({
+            'command': cmd,
+            'text': 'check this',
+            'file_path': str(sample_file),
+        }))
+        assert res['status'] == 'error'
+        assert 'error' in res
+        assert res['queued'] is False
+    assert text_calls == []
+
+    # Line dispatch --file without send_input_cb must return an error instead of dropping the file
+    line_res = json.loads(server._dispatch(f'send --file {sample_file} check this'))
+    assert 'error' in line_res
+    assert text_calls == []
+
+    # Text-only send_input with both callbacks None must also return an error
+    no_cb_server = ControlServer()
+    res_no_cb = json.loads(await no_cb_server._handle_json_command({
+        'command': 'send_input',
+        'text': 'hello',
+    }))
+    assert res_no_cb['status'] == 'error'
+    assert 'error' in res_no_cb
+    assert res_no_cb['queued'] is False
+
+
+@pytest.mark.asyncio
+async def test_dictation_ipc_text_and_json_commands(socket_path):
+    from voice_layer.ipc import ControlServer
+
+    state = {'active': False}
+    calls = []
+
+    async def on_dictation(action):
+        calls.append(action)
+        if action == 'start':
+            state['active'] = True
+        elif action in ('stop', 'cancel'):
+            state['active'] = False
+        elif action == 'toggle':
+            state['active'] = not state['active']
+        return {'active': state['active'], 'mode': 'dictation' if state['active'] else 'conversation'}
+
+    server = ControlServer(
+        socket_path=socket_path,
+        status_provider=lambda: {
+            'state': 'listening',
+            'model': 'gemini-3.8-live',
+            'mode': 'dictation' if state['active'] else 'conversation',
+            'dictation': {'active': state['active']},
+        },
+        dictation_cb=on_dictation,
+    )
+    await server.start()
+    try:
+        for payload, expected_active in [
+            (b'listen dictation start\n', True),
+            (b'listen dictation status\n', True),
+            ((json.dumps({'command': 'dictation', 'action': 'stop'}) + '\n').encode(), False),
+            (b'dictate toggle\n', True),
+            ((json.dumps({'command': 'dictation_cancel'}) + '\n').encode(), False),
+        ]:
+            reader, writer = await asyncio.open_unix_connection(str(socket_path))
+            writer.write(payload)
+            await writer.drain()
+            res = json.loads((await asyncio.wait_for(reader.readline(), 2)).decode())
+            writer.close()
+            await writer.wait_closed()
+            assert res['status'] == 'ok'
+            assert res['active'] is expected_active
+
+        # Human-readable status reports mode=dictation while active
+        await on_dictation('start')
+        assert 'mode=dictation' in server._dispatch('status')
+        assert calls == ['start', 'status', 'stop', 'toggle', 'cancel', 'start']
+    finally:
+        await server.close()
+
+
+def test_cli_listen_dictation_and_toggle_script(tmp_path, monkeypatch):
+    import os
+    import socket as pysocket
+    import subprocess
+    from voice_layer import __main__ as cli, config as voice_config
+
+    sent_cmds = []
+    sock_file = tmp_path / 'control.sock'
+    sock_file.touch()
+    monkeypatch.setattr(voice_config, 'SOCKET_PATH', sock_file)
+
+    class FakeSocket:
+        def __init__(self, *a, **kw):
+            pass
+
+        def settimeout(self, t):
+            pass
+
+        def connect(self, path):
+            pass
+
+        def sendall(self, data):
+            sent_cmds.append(data.decode().strip())
+
+        def recv(self, n):
+            return b'{"status":"ok","active":true}'
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(pysocket, 'socket', FakeSocket)
+    assert cli.main(['listen', 'dictation', 'start']) == 0
+    assert cli.main(['dictate', 'stop']) == 0
+    assert sent_cmds == ['listen dictation start', 'dictation stop']
+
+    # Verify bin/jarvis-voice-toggle handles dictation toggle against a stub jarvis binary
+    fake_bin = tmp_path / 'bin'
+    fake_bin.mkdir()
+    stub = fake_bin / 'jarvis'
+    stub.write_text('#!/usr/bin/env bash\necho "{\\"status\\":\\"ok\\",\\"active\\":true}" "$@"\n')
+    stub.chmod(0o755)
+    toggle_copy = fake_bin / 'jarvis-voice-toggle'
+    toggle_src = Path(__file__).resolve().parents[1] / 'bin' / 'jarvis-voice-toggle'
+    toggle_copy.write_text(toggle_src.read_text())
+    toggle_copy.chmod(0o755)
+    proc = subprocess.run([str(toggle_copy), 'dictation', 'start'], capture_output=True, text=True, check=True)
+    assert 'listen dictation start' in proc.stdout
+
+    # Daemon down / empty status must not emit listening earcon or notify omarchy-shell listening
+    events = fake_bin / 'events.log'
+    shell_stub = fake_bin / 'omarchy-shell'
+    shell_stub.write_text(f'#!/usr/bin/env bash\necho "shell:$*" >> "{events}"\n')
+    shell_stub.chmod(0o755)
+    stub.write_text('#!/usr/bin/env bash\nexit 1\n')
+    env = dict(os.environ, PATH=f'{fake_bin}:{os.environ["PATH"]}')
+    proc_down = subprocess.run([str(toggle_copy), 'toggle'], capture_output=True, text=True, env=env, check=True)
+    assert proc_down.stdout.strip() == ''
+    assert not events.exists()
+
+    stub.write_text('#!/usr/bin/env bash\necho \'{"status": "ok", "muted": false}\'\n')
+    proc_up = subprocess.run([str(toggle_copy), 'toggle'], capture_output=True, text=True, env=env, check=True)
+    assert '"muted": false' in proc_up.stdout
+    assert 'shell:-q dynamic-island voice listening' in events.read_text()
+

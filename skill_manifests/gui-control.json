@@ -193,6 +193,22 @@
       }
     },
     {
+      "name": "gui_browser_run",
+      "description": "Run a bounded Gemini Decision browser task in one exactly bound tab. It uses one action per fresh semantic snapshot and requests handoff when the snapshot contains sensitive terms. Supply an expected heading to verify completion.",
+      "adapter": "gui.browser_run",
+      "parameters_json_schema": {
+        "type": "object",
+        "properties": {
+          "target_id": {"type": "string"}, "tab_id": {"type": "string"},
+          "goal": {"type": "string"},
+          "text": {"type": "string", "description": "Optional caller-approved text payload; Gemini never writes this value."},
+          "max_steps": {"type": "integer", "minimum": 1, "maximum": 20},
+          "expected_heading": {"type": "string", "description": "Optional exact page heading that verifies the requested outcome."}
+        },
+        "required": ["target_id", "tab_id", "goal"], "additionalProperties": false
+      }
+    },
+    {
       "name": "gui_verify_window",
       "description": "Verify that an exact window exists, or that it contains a labeled accessible control. Unknown or unsatisfied is not success.",
       "adapter": "gui.verify_window",

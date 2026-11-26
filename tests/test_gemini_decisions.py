@@ -92,6 +92,7 @@ def test_execution_policy_safety_gate():
     assert requires_confirmation('rm -rf /') is True
     assert requires_confirmation('system_control', {'action': 'shutdown'}) is True
     assert requires_confirmation('uninstall_app') is True
+    assert requires_confirmation('shutdown_system', {'confirm': True}) is True
     assert requires_confirmation('execute_system_command', {'command': 'mkfs /dev/sda1'}) is True
 
     # Benign commands that do not require confirmation

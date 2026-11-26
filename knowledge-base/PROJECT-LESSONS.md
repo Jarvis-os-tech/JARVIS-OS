@@ -418,3 +418,279 @@ Verified that Claude's dynamic skill selector hook (`~/.claude/hooks/dynamic_ski
 
 Sources: `~/.agents/skills/jarvis-prompt-style/SKILL.md`, `knowledge-base/OMARCHY-PROMPT-STYLE-GUIDE.md`.
 
+## 2026-11-22 — Reuse semantic browser bindings for ultrafast decisions
+
+JARVIS now exposes a bounded Gemini Decision browser loop through its existing CUA semantic tab binding. Each fresh observation produces one locally validated click, caller-owned text entry, or stop decision; sign-in, CAPTCHA, payment, generation, and publishing surfaces require a handoff. The external Jev browser runtime was not installed because JARVIS already owns the safer visible browser transport.
+
+A live CLI fixture test verified the requested URL, selected and clicked one link, re-observed the changed page, and confirmed the final heading. The focused GUI, CLI, workflow, and Gemini suites passed 125 tests and seven subtests.
+
+Lesson: reuse decision-space indexing and single-use actions, but keep browser identity, payloads, safety policy, and execution inside the host system.
+
+Sources: `skills/browser_decision.py`, `skills/gui_control.py`, `jarvis_control/__main__.py`, and `tests/fixtures/browser_decision/`.
+
+## 2026-11-22 — Resolve browser targets within their operation
+
+The browser runner now executes the same candidate it validated for the selected operation. A regression test places a button before a text field, then verifies text entry followed by a click on a newly observed page. Each decision also receives recent action history. A model stop is reported as unverified because the model's choice alone cannot establish completion.
+
+Sources: `skills/browser_decision.py` and `tests/test_skills/test_browser_decision.py`.
+
+## 2026-11-22 — Validate multi-step plans against the live skill registry
+
+The background task runner previously hard-coded ten file and LinkedIn tools, so valid department and desktop steps were rejected before execution. It now accepts any enabled skill whose arguments match its manifest, while rejecting recursive task controls and confirmation-gated system actions. Sequential failure and ground-truth checks remain in force.
+
+A live three-step run completed application discovery, assistant status, and memory status in order. The focused validation, safety-policy, and browser tests passed six checks.
+
+Sources: `filesystem/task_runner.py`, `skill_manifests/task-runner.json`, `jarvis_control/execution_policy.py`, and `tests/test_filesystem_and_task_runner.py`.
+
+
+## 2026-11-22 — Verify release summaries at the action boundary
+
+Describe browser completion and safety by what the runtime checks. The decision loop returns an unverified model stop, and its sensitive-page handoff scans exposed element labels. Report those limits and distinguish environment-blocked tests from product failures when reviewing commit readiness.
+
+Sources: `skills/browser_decision.py` and the focused `tests/test_self_healer.py` run, where Unix socket creation was denied by the execution environment.
+
+## 2026-11-22 — Flush Gemini input when the local speech gate closes
+
+The local speech gate stops sending frames after its closing frame. With automatic voice activity detection, the sender now flushes that stream after the last frame. Explicit detection retains its activity-end signal. The voice daemon also keeps microphone mute and gain under user control and forwards local content through attachments instead of path mentions in typed input.
+
+The focused suite passed 24 tests. After restarting the workspace service, the journal recorded a typed diagnostic reply and a microphone turn with provider audio. A separate prerecorded probe timed out in both detection modes, so intermittent provider or input failures remain possible.
+
+Browser handoff remains a heuristic over the available snapshot. The browser can verify a supplied heading independently of the model's stop decision. The StateGraph routes through ordered stages with bounded retries, and temporal fact history remains subject to an explicit store clear.
+
+Sources: `voice_layer/daemon.py`, `skills/browser_decision.py`, `orchestration/state_graph.py`, `jarvis_memory/store.py`, focused regression tests, and the `jarvis-voice.service` journal.
+
+## 2026-11-22 — Verify widget support at the shell entry point
+
+Python can prepare a 3D widget and the card has a 3D renderer, but the shell model rejects the kind before the renderer is reached. The focused Python run passed 34 tests and 10 subtests with a writable temporary runtime directory. Add presentation-boundary coverage when fixing the mismatch.
+
+Sources: `ui/jarvis_widgets/backend.py`, `ui/jarvis_widgets/WidgetModel.js`, `ui/jarvis_widgets/WidgetCard.qml`, and `tests/test_e2e_3d_widget.py`.
+
+## 2026-11-22 — Test Quickshell imports and sockets on the real launch path
+
+The JARVIS HUD preview shares the existing card renderer. Quickshell rejected sibling imports when launched from inside `ui/jarvis_shell/`. A thin entry point under `ui/` made both component directories available. The live Omarchy smoke test exercised socket acknowledgments, the five-card cap, pinning, overflow restoration, palette toggling, and dismissal. Add direct click-through and keyboard focus checks before switching login sessions.
+
+Sources: `ui/JarvisHudPreview.qml`, `ui/jarvis_shell/HudPreview.qml`, `ui/jarvis_shell/WidgetCanvas.qml`, and live Omarchy preview verification.
+
+## 2026-11-22 — Match the Omarchy fallback to the shell canvas
+
+Omarchy applies the wallpaper before running its theme-set hooks. On a JARVIS theme switch that exposes the wallpaper while the theme-aware shell maps its window. Both JARVIS fallback backgrounds now match the shell color, with the original images backed up. Verified that the running service was active and that the applied background matches the replacement.
+
+Sources: `/usr/share/omarchy/bin/omarchy-theme-set`, the installed JARVIS theme hook, and `ui/jarvis_shell/Shell.qml`.
+
+## 2026-11-22 — Route the installed theme to the shared HUD
+
+The JARVIS theme service used its own launcher and was still rendering the original shell. Its launcher now loads the shared HUD in theme-aware mode. A real Wayland test in an isolated instance verified hiding and showing with theme changes, reading live-style voice state, and mounting a widget using the same event sender as the standalone HUD.
+
+Sources: `ui/JarvisTheme.qml`, `ui/jarvis_shell/launch.sh`, and `ui/jarvis_shell/HudPreview.qml`.
+
+## 2026-11-22 — Verify real-time widgets through the controller and shell together
+
+A live Wayland test sent a generated form through the Python controller, updated the same ID, and read the new state back. Two ordered events from the real task store updated one progress card. Test the managed voice service separately because it imports its own installed controller.
+
+Sources: `ui/jarvis_widgets/backend.py`, `ui/jarvis_shell/HudPreview.qml`, `ui/jarvis_shell/WidgetCanvas.qml`, and the isolated Wayland test.
+
+## 2026-11-22 — Sample HUD telemetry only while the card is mounted
+
+The System load card reuses the existing CPU counter and available-memory parsers, with a two-second timer inside the loaded component. The running Wayland HUD returned measured CPU and memory percentages for the mounted card. Keep telemetry collection in the presentation lifecycle when the readings serve only that card.
+
+Sources: `ui/jarvis_shell/SystemTelemetry.qml`, `ui/jarvis_shell/HologramCard.qml`, `ui/omarchy-jarvis-island/ReactiveModel.js`, and the live HUD status check.
+
+## 2026-11-22 — Verify app staging against compositor state
+
+The app stage launches a selected desktop entry and dispatches window actions against a selected live window address. A temporary terminal test confirmed creation, parking in the vault, and restoring onto a regular workspace. The command receipt reports dispatch requested. The live window list verifies the result.
+
+Sources: `ui/jarvis_shell/ApplicationStage.qml`, `ui/jarvis_shell/CommandPalette.qml`, and the live Wayland terminal test.
+
+## 2026-11-22 — Keep palette selection tied to a stable target
+
+App search and window results can change while the palette is open. The highlighted row now follows a desktop entry ID or window address, never a mutable list index. Enter opens the selected app or focuses the selected window. Parking and restoring remain separate controls.
+
+Source: `ui/jarvis_shell/CommandPalette.qml`.
+
+## 2026-11-22 — Keep native controls synchronized with their owning services
+
+The JARVIS HUD audio and media cards read PipeWire and MPRIS state directly. Live HUD status confirmed mounted cards, default audio endpoint levels and mute state, and media player capabilities. Volume sliders preserve mute, and media controls gate actions by capability.
+
+Sources: `ui/jarvis_shell/AudioControls.qml`, `ui/jarvis_shell/MediaControls.qml`, and the live JARVIS HUD status check.
+
+## 2026-11-22 — Verify device controls from live service state
+
+The mounted Device controls card read Wi-Fi and Bluetooth state through Quickshell and the default backlight level through brightnessctl. The live HUD confirmed all three readings without changing device settings. The brightness reader runs only while the card is mounted, and the slider coalesces updates before writing.
+
+Sources: `ui/jarvis_shell/DeviceControls.qml` and the live JARVIS HUD status check.
+
+## 2026-11-22 — Package the standalone session around its real launch path
+
+The Arch package includes the login entry, compositor config, HUD root and imported components, and lock helper. The extracted package's launcher passed the installed Hyprland config verifier. A separate Wayland test registered notifications on a private D-Bus session and verified that a replacement retained one history entry. Verify full login and authentication on a separate session before changing the primary login configuration.
+
+Sources: `packaging/PKGBUILD`, `packaging/build-jarvis-de`, `ui/jarvis_shell/NotificationCenter.qml`, the extracted package check, and the private D-Bus test.
+
+## 2026-11-23 — Separate provider synthesis from deployed conversation playback
+
+An Antigravity experiment showed Fish Audio synthesis and added a speech-queue route in the JARVIS workspace. Six focused tests passed. The installed voice release did not contain the new client, and the fallback test exercised cooldown and cue stripping without calling the daemon playback path. A provider audio file or helper test is insufficient evidence of a microphone-to-speaker conversation.
+
+Sources: `voice_layer/fish_speaker.py`, `voice_layer/daemon.py`, `tests/test_fish_speaker.py`, and the installed release inventory.
+
+## 2026-11-23 — Verify Fish key failover and announcement playback at the queue
+
+The Fish client accepts numbered credentials, deduplicates them, and skips credentials rejected by authentication. Provider rate limits use the Gemini fallback and cooldown. The announcement worker tests now exercise Fish playback, stripped-cue fallback, and rejection of stale audio after a new speech turn. Eleven focused tests passed without contacting either provider.
+
+Sources: `voice_layer/fish_speaker.py`, `voice_layer/daemon.py`, and `tests/test_fish_speaker.py`.
+
+## 2026-11-23 — Keep the Fish trial voice available for sound effects
+
+The user liked the Fish trial voice and preferred Gemini for regular conversation latency. The trial used Fish `s2.1-pro` with the provider's default voice and no configured `FISH_AUDIO_REFERENCE_ID`. Preserve that setup for explicit laugh, cry, sad, and sigh requests. No specific reference ID was available to record.
+
+Sources: Workspace voice configuration check, active service restart, and 16 focused Fish tests.
+
+## 2026-11-23 — Verify connection plans against the requested application surface
+
+The configured NVIDIA NIM primary model returned a connection plan for a synthetic Antigravity desktop request. Keep model plans advisory and require local evidence for the requested surface before advertising a connection. A successful headless CLI reply does not establish desktop control.
+
+Sources: `departments/cli_agent/planning.py`, `orchestration/evolution.py`, and the synthetic NIM check.
+
+## 2026-11-23 — Keep one owner for JARVIS speech
+
+Outcome: JARVIS conversation and spoken alerts use Gemini Live. The old Fish trial setting can no longer suppress Gemini audio. Fish Audio is reserved for a future separate voice agent.
+
+Lesson: route background announcements through the same guarded idle-turn path as task updates so mute, standby, active speech, and pending actions are checked before sending. Background speech should carry no tool authority.
+
+Sources: `voice_layer/daemon.py`, `tests/test_background.py`.
+
+## 2026-11-23 — Release cancelled speech turns
+
+Outcome: cancelling the alert worker during Gemini send now finishes the queue item and releases its turn authorization. The focused voice suite passed 26 checks.
+
+Lesson: finalize dequeued alerts on every exit and clear only the cancelled turn's authorization. Give startup tests a temporary device ledger and a mocked audio setup so they exercise startup without the running desktop.
+
+Sources: `voice_layer/daemon.py`, `tests/test_background.py`, `tests/test_daemon.py`.
+
+## 2026-11-23 — Verify voice tests with local process access and temporary state
+
+Outcome: all 108 tests from the stalled run and 58 adjacent tests passed with temporary state and normal local process access. The service status reported Gemini connected and listening. Its process started before the workspace fixes.
+
+Lesson: distinguish test-runner restrictions from voice failures by rerunning with isolated state and the required local process access. Check the service start time before using live status as evidence for a workspace change.
+
+Sources: voice and control pytest results, `scripts/jarvisctl.py status`, and `jarvis-voice.service` process metadata.
+
+## 2026-11-23 — Verify deployed Gemini playback
+
+Outcome: restarted `jarvis-voice.service` at 09:14 IST. Gemini connected with an unmuted microphone and active echo cancellation. A local test alert produced 96,002 bytes of new Gemini audio, reached the playback stream, and returned the service to listening without a reported error.
+
+Lesson: use a spoken alert to check Gemini output and playback after a restart. Verify physical microphone-to-reply behavior with a spoken turn.
+
+Sources: systemd service metadata and the local voice status and announcement commands.
+
+## 2026-11-23 — Show stale voice state as offline in the shell
+
+Outcome: the JARVIS HUD distinguishes connecting, standby, and microphone states and shows offline when the voice status file stops updating. The offscreen QML suite passed 25 checks, including state expiry and recovery.
+
+Lesson: a readable state file can outlive its writer. Use the daemon heartbeat timestamp to decide whether the shell can present its state as live.
+
+Sources: `ui/jarvis_shell/HudPreview.qml`, `ui/jarvis_shell/HudModel.js`, and `tests/widget_canvas/tst_hud_model.qml`.
+
+## 2026-11-23 — Verify shell outcomes at the compositor
+
+Outcome: seven fresh-context Goldfish reviewers evaluated the Ada-inspired JARVIS shell. They identified that a launcher dispatch receipt does not prove an app window appeared and that HUD instances may contend for the same runtime socket.
+
+Lesson: verify a mapped or focused window in the compositor, exercise a reproducible result card, and verify the voice link independently before requiring voice-generated results in the first desktop walkthrough.
+
+Sources: EGM JARVIS desktop shell concepts brief, `ui/jarvis_shell/ApplicationStage.qml`, and `ui/jarvis_shell/HudPreview.qml`.
+
+## 2026-11-23 — Restyle the shared desktop home in place
+
+Outcome: the native JARVIS home gained a dark teal field, original voice-reactive contours, a legible status label, and a matching command palette. Twenty-five QML checks passed and the reactor rendered in standby and listening.
+
+Lesson: keep visual state on the shared shell components and verify passive and active states with the real QML renderer. Test window and keyboard behavior separately on the compositor.
+
+Sources: `ui/jarvis_shell/CoreCanvas.qml`, `ui/jarvis_shell/ArcReactorCore.qml`, `ui/jarvis_shell/CommandPalette.qml`, and offscreen QML render checks.
+
+## 2026-11-23 — Apply the GUI guide to the existing desktop paths
+
+Outcome: the standalone session validates with Hyprland 0.56.2, and the QML suite passed after the cyan spatial HUD restyle. The standalone launcher now defaults to its own config and resolves through symlinks. A six-card fixture checks the display cap and overflow without requiring Gemini.
+
+Lesson: reuse the existing typed HUD protocol and local launcher. Keep desktop staging rules confined to the standalone compositor so a guide-driven shell change does not take over the active Omarchy session.
+
+Sources: `guide-gui.txt`, `config/hypr/jarvis-minimal.conf`, `bin/jarvis-de`, and `widget_engine/test_emit.py`.
+
+## 2026-11-23 — Package the native session and bind approvals to a request
+
+Outcome: the Arch package registers JARVIS Desktop as a dedicated Wayland session. Extracted-package launcher and desktop entry checks passed, as did 204 Python tests and 25 QML checks.
+
+Lesson: a managed daemon may start without the desktop's environment. Discover only the dedicated standalone shell entry for widget delivery. Match GUI and spoken approval to the held request ID under the executor lock so an expired or replaced request cannot act on a newer one.
+
+Sources: `packaging/PKGBUILD`, `ui/JarvisDesktop.qml`, `ui/jarvis_widgets/backend.py`, and `tests/test_background.py`.
+
+## 2026-11-23 — Dock the reactor around occupied desktop space
+
+Outcome: the standalone shell now shrinks its circular reactor into a free corner when windows or cards occupy the desktop. It stays docked until its corner is occupied or the desktop clears. The Lua session configuration validated on Hyprland 0.56.2 after removing an unsupported idle-rendering key.
+
+Lesson: use the same card bounds that drive click-through masking, and keep placement deterministic. Test the fullscreen case so the reactor does not cover a full-screen task.
+
+Sources: `ui/jarvis_shell/CoreCanvas.qml`, `ui/jarvis_shell/HudModel.js`, `config/hypr/jarvis-minimal.lua`, and `tests/widget_canvas/tst_hud_model.qml`.
+
+### 2026-11-23 — Boot the packaged shell in a clean guest
+
+A passing placement-model test missed an unsupported JavaScript array method in the live QML window binding. The guest log identified the binding, and an in-guest screen capture also exposed compositor blur applied to the entire transparent HUD layer. Check the packaged session with its actual compositor, inspect runtime logs, and compare captures of the home screen and launcher.
+
+Sources: `ui/jarvis_shell/CoreCanvas.qml`, `config/hypr/jarvis-minimal.lua`, `packaging/vm/install-init`, and the local KVM guest screenshots.
+
+### 2026-11-23 — Use the live JARVIS theme as the desktop shell
+
+The live compositor reported jarvis-core, jarvis-hud, omarchy-bar and omarchy-dynamic-island. The shell launcher now reuses these layers. A live IPC check found Foot in the application registry, opened the command palette and restored its previous visibility. The login hook uses the existing Omarchy post-boot event.
+
+Sources: `bin/jarvis-de`, `config/omarchy/shell.json`, `config/omarchy/hooks/post-boot.d/20-jarvis-shell`.
+
+## 2026-11-23 — Multimodal media ingestion for video, audio, image, and text
+
+Outcome: Expanded JARVIS multimodal capabilities to full-spectrum media analysis. Video files (`.mp4`, `.mkv`, `.webm`, `.mov`, `.avi`, `.flv`) now automatically yield stream metadata (resolution, frame rate, container, codecs, duration), embedded subtitle transcripts via `ffmpeg`, and sampled keyframe scene inspection with OCR text via `tesseract`. In live Gemini sessions, keyframe images are extracted and forwarded as native JPEG image parts alongside video summaries. Audio files (`.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.opus`) yield duration, sample rate, channels, codec, and ID3 tag metadata. Image analysis upgraded with Pillow (PIL) EXIF metadata extraction alongside OCR text. IPC and CLI (`jarvis send --file <path>`) now support direct file attachment ingestion by path or base64.
+
+Lesson: Raw media attachments must not be cast to unicode strings without modality detection; binary fallback corrupts model token streams. Extracting representative visual keyframes as JPEG image parts allows multimodal LLMs to visually perceive video content across timestamps without hitting multi-megabyte video container upload barriers.
+
+Sources: `filesystem/filesystem.py`, `filesystem/__init__.py`, `voice_layer/daemon.py`, `voice_layer/ipc.py`, `voice_layer/__main__.py`, `skills/input_bar.py`, `skill_manifests/filesystem.json`, `tests/test_multimodal_filesystem.py`, `tests/test_multimodal_daemon.py`, and `tests/test_ipc.py`.
+
+## 2026-11-24 — Live desktop startup
+
+A firmware boot reaching login did not prove that the JARVIS shell started. After changing the live profile to start JARVIS from the Hyprland startup event, a fresh diskless UEFI boot registered jarvis-core, jarvis-hud, omarchy-bar and omarchy-dynamic-island. Source: packaging/iso/build and the KVM serial probe in /tmp/jarvis-final-boot.log.
+
+## 2026-11-24 — Welcome-only ISO preview
+
+Outcome: Built jarvis-welcome-x86_64.iso and verified its reactor welcome screen in KVM on workspace 1. The live startup opens the HTML intro directly, with two local recorded prompts and no setup controls. Browser checks confirmed both audio files decode and no inputs or buttons remain; audible guest playback was not independently verified.
+
+Lesson: For an intro-only review, reuse the supplied visual sample and local audio without starting the onboarding terminal or requiring cloud credentials. Verify the actual guest screen after building, not only the source page. The capture-learning skill was not available in the searched skill locations; this entry records the outcome directly.
+
+Sources: packaging/iso/voice/welcome.html, packaging/iso/voice/hyprland.lua, packaging/dist/welcome-build.log, /tmp/jarvis-welcome-final.png.
+
+
+## 2026-11-24 — Ryoku and Omarchy adoption assessment
+
+Outcome: compared the local Ryoku source, current Omarchy manual, and JARVIS shell, packaging and release-manager sources. JARVIS already depends on Omarchy and has app/window search, device controls, widget integration, diagnostics and application-release rollback. Prioritize integration and discoverability over installing a second complete shell. Ryoku Nomarchy documents an Omarchy plugin compatibility path, but JARVIS compatibility has not been executed or verified.
+
+Lesson: distinguish application rollback, system snapshot restore, and personal-data backup. Omarchy documents that root snapshots exclude /home and leave user configuration and migration records intact. Preserve independent backups for JARVIS user state. Treat unified settings, shared theme values and plugin capability declarations as adoption candidates, not implemented features. The capture-learning skill was not found in the searched local skill directories, so this sourced entry was appended directly.
+
+Sources: upstream/ryoku/docs/nomarchy.md; upstream/ryoku/docs/plugins.md; upstream/ryoku/ryoku/hub/README.md; ui/jarvis_shell/README.md; packaging/PKGBUILD; orchestration/release_manager.py; https://github.com/omacom/omarchy/blob/quattro/manual/47-system-snapshots.md; https://github.com/omacom/omarchy/blob/quattro/manual/06-themes.md. This was source analysis, not a live hardware or performance test.
+
+
+## 2026-11-25 — Adapt native card inputs to the existing JARVIS shell
+
+Outcome: added metric, checklist, action and required-form inputs plus signed line charts to the existing widget controller and agent manifest. They compile to validated generated QML views and reuse existing widget identity, state, delivery and interaction handling. Focused verification passed 53 Python tests with 22 subtests, 27 QML suite checks and a separate offscreen rendering check of all five converted examples. The adapter unit test uses inline dispatch and mocked shell delivery; live service delivery was not tested.
+
+Lesson: translate card data into the existing renderer before introducing another window or transport. Test required form fields through actual QML keyboard interaction. ADA workspace.js uses project-specific panels; its behavior was reference material, with no upstream source copied.
+
+Sources: ui/jarvis_widgets/native_cards.py; tests/test_native_widget_cards.py; tests/widget_canvas/tst_widgets.qml; supplied /home/g0pi/Downloads/PROTOCOL.md; https://github.com/nazirlouis/ada-jarvis-public/blob/7697c32b929e762836291c83b070f51385ad793b/frontend/workspace.js. ISO rebuild and Ryoku deployment remain separate pending work.
+
+## 2026-11-25 — Replace Caelestia with an Omarchy shell snapshot on the separate Arch root
+
+Outcome: removed caelestia-cli, caelestia-shell-git and its debug package from /dev/nvme0n1p1 mounted at /mnt/jarvis (hostname jarvis-os). Copied the host's Omarchy 4.5.0 desktop files to the target, installed shell support dependencies, replaced Caelestia startup and launcher bindings, and supplied a limited desktop menu. The target remains Arch: this is a manually maintained shell snapshot, not an Omarchy system/package installation. Existing Hyprland and Quickshell remain. Previous Hyprland/Caelestia configuration is backed up under target /root/before-omarchy-shell-*.
+
+Validation: target Hyprland reported "config ok". Offscreen Quickshell could not load PanelWindow without a Wayland backend; no successful graphical-session test is claimed. Hardware boot, authentication, audio and network panel behavior require target-session verification. No host desktop or EFI bootloader changes were made. The capture-learning skill was unavailable; recorded directly.
+
+Sources: target /var/log/pacman.log; target /home/jarvis/.config/hypr/hyprland.lua; target /tmp/omarchy-load-check.log; host /usr/share/omarchy/shell and package metadata; https://github.com/omacom/omarchy/tree/quattro. Retain upstream MIT attribution when copying desktop files.
+
+## 2026-11-26 — Clear widgets through the deployed native HUD controller
+
+The active release still used an old backend that sent clear requests to omarchy-shell jarvis-canvas, while the visible cards belonged to jarvis-hud-preview. Transplanted the existing source routing helpers into that release's backend after backing it up, and restarted jarvis-voice to load the fix. The deployed controller's clearAll returned retained=0 and native status confirmed zero widgets. Regression checks: 22 Python tests and 10 subtests passed. Normal clear still intentionally retains pinned widgets; clearAll removes them. Sources: ui/jarvis_widgets/backend.py; tests/test_widget_canvas.py; deployed backend.py.before-routing-1795658589. No voice configuration changed.
+
+## 2026-11-26 — Native widget styling and removal consistency
+
+Updated shared native controls with ADA-inspired cyan surfaces, compact typography, task checkboxes and a subtle panel edge. Kept title bars and overflow menus removed. The voice domain now accepts clear/clear_all/status through manage_widget as well as manage_canvas; clear_all removes pins. Clearing the HUD also discards capacity-deferred task events so older queued cards cannot immediately refill the cleared space. Verified 23 Python tests (13 subtests), 32 QML checks, live rendering, and live clear_all including a pinned test widget. Spoken end-to-end removal remains unverified; shell reported voice offline and logs showed the pre-existing missing wake model. Sources: ui/ada/frontend/constellation.css; ui/jarvis_widgets/ViewNode.qml; ui/jarvis_shell/HudPreview.qml; skills/domains/widgets.py; tests/test_widget_canvas.py. capture-learning skill unavailable; recorded directly.

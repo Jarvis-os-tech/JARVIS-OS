@@ -115,6 +115,60 @@ JARVIS OS provides five tightly coupled, sovereign subsystems:
 * **Secret Redaction Airlock**: Ingest filter redacting sensitive credentials and keys (`AIza...`, `ghp_...`, `sk-...`) before storage.
 * **Bidirectional Obsidian Sync**: Automatic structured sync with markdown vaults across daily notes and semantic category hierarchies.
 
+### 9. Interactive 3D Micro-Drone Desktop Companion (`ui/jarvis_drone/`, `bin/jarvis-drone`)
+* **3D Animated Mesh & Emotive States**: Three.js/WebGL micro-drone displaying 7 operational states (`idle`, `listening`, `thinking`, `speaking`, `searching`, `alert`, `sleep`) with audio-reactive pulsing.
+* **Compact Floating Window Runner**: 220×220 transparent floating window architecture in Electron with 25 FPS global cursor eye-tracking, dynamic click-through, and Wayland/Hyprland window rules (`float`, `pin`, `noborder`, app_id `jarvis-drone`).
+* **Fling Physics & Edge Damping**: Realistic touch drag-and-fling mechanics with velocity damping and screen boundary bounce.
+* **Bidirectional WebSocket Bridge**: Real-time IPC on port 8765 forwarding choreographic gestures (`nod` on wake, `gyroRoll` barrel roll on tool completion, `recoil` on alerts) and physical tap-to-wake.
+* **Voice & CLI Cloaking**: Full appear/disappear cloaking controls via CLI (`jarvis drone appear|disappear|toggle`) and natural speech (*"cloak drone"*, *"bring back the drone"*).
+
+### 10. Fish Audio Hybrid Speech Synthesis (`voice_layer/fish_speaker.py`)
+* **Dual-Engine Speech Routing**: Ultra-low latency Gemini Live duplex streaming for live conversational turns paired with Fish Audio (`s2.1-pro`) for high-fidelity announcements, rich narrative reading, and emotional sound effects (`laugh`, `cry`, `sad`, `sigh`).
+* **Multi-Key Credential Failover**: Seamless rotation across multiple numbered API keys (`FISH_API_KEY_1`, `FISH_API_KEY_2`) with automatic deduplication, rate limit cooldown, and Gemini fallback.
+* **Stale Audio Prevention**: Announcement queue protection rejecting out-of-order audio chunks if a newer speech turn has begun.
+
+### 11. Autonomous Self-Healing Subsystem (`core/self_healer.py`)
+* **Zero-Model-Call Hardware Repair**: Background reflex engine monitoring audio streams and automatically unmuting inputs, restoring volume, or reloading PipeWire in <100ms without cloud latency.
+* **Systemd User Unit Auto-Recovery**: Detects failed systemd user units, issues `systemctl --user reset-failed`, clears stale socket/PID locks, and performs bounded restarts.
+* **Proactive Resource Pruning**: Intercepts disk pressure and high memory watermarks to selectively prune temporary audio cache buffers.
+
+### 12. Bitemporal Cognitive Memory & Staleness Detection (`jarvis_memory/staleness_detector.py`)
+* **Bitemporal Fact Modeling**: Models memories across two independent timelines—Valid Time (real-world applicability) and Transaction Time (recording timestamp).
+* **4 Zero-Model Deterministic Detectors**:
+  * `TtlDetector`: Scans explicit temporal boundaries (`until 4pm`, `today only`).
+  * `KeyCollisionDetector`: Detects singleton entity collisions and contradictions.
+  * `OsRealityDetector`: Grounds memory against the host OS (checking if referenced directories or binaries exist on disk).
+  * `TemporalDecayDetector`: Category-aware half-life confidence decay.
+* **Human-in-the-Loop Escalation**: Ambiguous contradictions trigger conversational clarification rather than silent destruction.
+
+### 13. Cyclic Multi-Agent StateGraph Orchestration (`orchestration/state_graph.py`)
+* **Stateful Cyclic Graphs**: Replaces rigid linear DAGs with stateful graphs supporting retry loops, critique gates, and self-healing.
+* **Shared Checkpointed State**: Typed working state checkpointed across all participating specialist nodes.
+* **Dynamic Supervisor Routing**: Runtime supervisor agent determining conditional edge transitions based on intermediate tool and code outputs.
+
+### 14. Safe Semantic Browser Decision Loop (`skills/browser_decision.py`)
+* **Ultrafast Micro-Decisions (~150-250ms)**: Bounded Gemini Decision 1 browser loop over JARVIS's existing CUA semantic tab bindings.
+* **Strict Safety Boundaries**: Automatically halts and requests human handoff on authentication (`sign in`, `password`), bot challenges (`captcha`), financial fields (`payment`, `card number`), or irreversible publishing actions.
+* **Ground-Truth Validation**: Model stop decisions are cross-checked against actual observed DOM headings before marking tasks complete.
+
+### 15. Native Generative Cards & View Schema (`ui/jarvis_widgets/native_cards.py`, `ui/jarvis_widgets/GeneratedView.qml`)
+* **Generative UI Architecture**: Dynamic QML view engine compiling structured JSON payloads from AI agents into native desktop widgets.
+* **Supported Card Archetypes**: High-impact KPI `metric` cards, interactive `checklist` tasks, one-click `action` buttons, validated `required-form` inputs, and signed historical line charts.
+
+### 16. Autonomous YouTube Production & API Departments
+* **YouTube Production Department (`departments/youtube_production/`)**: Autonomous scriptwriting, title ideation, thumbnail prompt scoring, SEO tagging, and description generation.
+* **API Agent Department (`departments/api_agent/`, `systemd/jarvis-api-agent.service`)**: Autonomous API integration, OpenAPI/JSON schema validation, safe HTTP payload generation, and endpoint monitoring.
+* **CLI Agent Department (`departments/cli_agent/`, `systemd/jarvis-cli-agent.service`)**: Sandboxed terminal execution, command generation, exit-code validation, and error remediation.
+
+### 17. Bootable Arch Linux Live ISO & KVM Packaging (`packaging/iso/`, `packaging/vm/`)
+* **Standalone Bootable ISO**: Complete Arch Linux diskless UEFI boot profile (`jarvis-welcome-x86_64.iso`) verified in KVM virtual machine environments.
+* **Hyprland Auto-Launch**: Direct launch into Hyprland mounting `jarvis-core`, `jarvis-hud`, `omarchy-bar`, and `omarchy-dynamic-island` with an animated Arc Reactor welcome screen.
+
+### 18. Multimodal Media Keyframing & Ingestion
+* **Intelligent Video Keyframing**: Automatically extracts 3 representative JPEG frames (at 10%, 50%, and 90% timeline points) via `ffmpeg` for video files (`.mp4`, `.mkv`, `.avi`, `.webm`, `.mov`), allowing Gemini Live to visually analyze video scenes without massive container uploads.
+* **Audio & Document Metadata**: Parses audio files for duration, codec, bitrate, and ID3 tags; extracts text and metadata from Office documents (`.docx`, `.pptx`, `.xlsx`), archives (`.zip`, `.tar`, `.gz`), and scanned PDFs.
+* **CLI File Ingestion**: Direct attachment forwarding via `jarvis send --file <path>`.
+
 ---
 
 ## 📁 Repository Layout
@@ -165,25 +219,37 @@ JARVIS OS/
 │   │   ├── content_sprint.py  # Sprint planning and schedule manager
 │   │   ├── profile_audit.py   # Profile extraction, analysis, and recommendations
 │   │   └── airlock.py         # Human-in-the-loop review queue and publishing gate
-│   └── memory/                # Multi-Agent Cognitive Memory Department
-│       ├── agents/            # Extractor, Consolidation, Reflection, Retrieval, Rollover
-│       ├── db.py              # Zero-RAM SQLite driver & recursive CTE graph engine
-│       ├── schema.sql         # SQLite schema (nodes, edges, FTS5, traces)
-│       └── department.py      # Department Lead & public API
+│   ├── memory/                # Multi-Agent Cognitive Memory Department
+│   │   ├── agents/            # Extractor, Consolidation, Reflection, Retrieval, Rollover
+│   │   ├── db.py              # Zero-RAM SQLite driver & recursive CTE graph engine
+│   │   ├── schema.sql         # SQLite schema (nodes, edges, FTS5, traces)
+│   │   └── department.py      # Department Lead & public API
+│   ├── youtube_production/    # Autonomous YouTube Production Department
+│   ├── api_agent/             # Autonomous API Integration & Testing Agent
+│   └── cli_agent/             # Autonomous Terminal Execution & Triage Agent
 │
 ├── ui/                        # User Interface & Desktop Shells
 │   ├── jarvis_shell/          # Quickshell Sci-Fi Desktop Environment
 │   │   ├── Shell.qml          # Root Quickshell desktop wrapper
 │   │   ├── CyberDock.qml      # Dynamic application dock & workspace switcher
 │   │   ├── TopBar.qml         # System status, telemetry & media controls
-│   │   └── ArcReactorCore.qml # Animated core telemetry & acoustic visualization
+│   │   ├── ArcReactorCore.qml # Animated core telemetry & acoustic visualization
+│   │   ├── ApplicationStage.qml # App staging & virtual workspace vault
+│   │   ├── CommandPalette.qml # Stable window & application spotlight launcher
+│   │   └── ExecutionAirlock.qml # Destructive command quarantine overlay
+│   ├── jarvis_drone/          # Visual 3D Micro-Drone Desktop Companion
+│   │   ├── index.html         # Three.js WebGL/Canvas micro-drone frontend
+│   │   ├── bridge.py          # WebSocket bidirectional IPC bridge (port 8765)
+│   │   ├── main.js            # Compact 220x220 Electron floating window runner
+│   │   └── launch.sh          # Hyprland window rule injector and launcher
 │   ├── hud/                   # Orbit HUD overlay widgets
-│   ├── jarvis_widgets/        # Interactive desktop widgets & pairing QR
+│   ├── jarvis_widgets/        # Dynamic generative QML cards & widgets
 │   └── omarchy-ai.orbit/      # System tray aura field orbit
 │
 ├── orchestration/             # Fleet Orchestration & Multi-Agent Bridge
 │   ├── hermes_api.py          # FastAPI REST endpoint for agent delegation
 │   ├── durable_hermes.py      # Durable Hermes gateway worker
+│   ├── state_graph.py         # Typed StateGraph & cyclic retry orchestration
 │   ├── task_events.py         # Task event lifecycle contracts
 │   ├── task_presentation.py   # Desktop notification presentation cards
 │   ├── model_routes.py        # Model routing & fallback cascades
@@ -192,6 +258,9 @@ JARVIS OS/
 ├── bin/                       # Executable CLI Wrappers
 │   ├── jarvis                 # Unified system CLI
 │   ├── jarvis-de              # Desktop Environment launcher
+│   ├── jarvis-drone           # Visual 3D Micro-Drone controller
+│   ├── jarvis-hud-preview     # Quickshell HUD previewer
+│   ├── jarvis-lock            # Session screen locker
 │   ├── jarvis-shell           # Quickshell desktop interface
 │   ├── jarvis-voice           # Voice daemon CLI wrapper
 │   ├── jarvis-memory          # Memory vault CLI wrapper
@@ -199,7 +268,10 @@ JARVIS OS/
 │
 ├── packaging/                 # Arch Linux & Distribution Packaging
 │   ├── PKGBUILD               # Arch package specification
-│   └── jarvis-de.desktop      # Wayland session desktop entry
+│   ├── jarvis-de.desktop      # Wayland session desktop entry
+│   ├── build-jarvis-de        # Package build utility
+│   ├── iso/                   # Bootable Arch Linux Live ISO build scripts
+│   └── vm/                    # KVM / QEMU virtual machine test harness
 │
 ├── scripts/                   # System Maintenance & Verification Scripts
 │   ├── install.sh             # System package installer
@@ -295,6 +367,41 @@ jarvis task "audit my LinkedIn profile positioning"
 
 # Review staged posts in the review queue
 jarvis task "show pending LinkedIn reviews"
+```
+
+### 3D Micro-Drone Companion CLI (`jarvis drone` / `jarvis-drone`)
+```bash
+# Start the 3D micro-drone companion overlay
+jarvis drone start
+
+# Check running bridge and window status
+jarvis drone status
+
+# Cloak (disappear) or bring back (appear) the drone overlay
+jarvis drone disappear
+jarvis drone appear
+jarvis drone toggle
+
+# Trigger physical gestures
+jarvis drone gesture nod
+jarvis drone gesture roll
+jarvis drone gesture recoil
+
+# Stop drone companion
+jarvis drone stop
+```
+
+### Multimodal Attachment & File Dispatch
+```bash
+# Ingest local file, PDF, or video with automatic keyframe/metadata extraction
+jarvis send --file ~/Videos/demo.mp4 "Please analyze the visual scenes in this clip"
+jarvis send --file ~/Documents/architecture.pdf "Summarize the key architectural decisions"
+```
+
+### Autonomous YouTube Production Department
+```bash
+# Generate complete YouTube production sprint (script, hooks, thumbnails, SEO tags)
+jarvis task "produce a 10-minute YouTube video script on Local Autonomous AI Agents"
 ```
 
 ### Multi-Platform Agent Reach

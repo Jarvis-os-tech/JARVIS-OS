@@ -126,22 +126,42 @@ def _cross_process_lock(lock_path: Path) -> Iterator[None]:
 
 @dataclass(slots=True)
 class Fact:
-    """A single durable memory entry."""
+    """A single durable memory entry with bitemporal validity and cognitive audit tracking."""
 
     text: str
     source: str = ""
     created_at: float = 0.0
     # Provenance tier: one of the TRUST_* constants above ("" for legacy rows).
     trust: str = ""
+    # Bitemporal & Cognitive Self-Healing fields:
+    # 1. Valid Time: The real-world time interval during which this fact is believed to be true.
+    valid_from: float = 0.0
+    valid_to: float | None = None
+    # 2. Lifecycle Status: "active", "superseded", "expired", "closed", "invalidated"
+    status: str = "active"
+    superseded_by: str | None = None
+    entity_key: str = ""
+    confidence: float = 1.0
+    last_verified_at: float = 0.0
+
+    @property
+    def is_active(self) -> bool:
+        """Whether this fact is currently active and within its valid time window."""
+        if self.status != "active":
+            return False
+        if self.valid_to is not None and self.valid_to <= time.time():
+            return False
+        return True
 
     @property
     def trusted_for_recall(self) -> bool:
         """Whether this fact may be placed in model-facing context.
 
-        Only ``untrusted`` — the tier the memory service assigns when the
-        injection scanner flags a fact's own text — is withheld. Unknown
-        future tiers fail closed rather than silently becoming prompt input.
+        Only active facts in recallable trust tiers are eligible for recall.
+        Expired, superseded, or quarantined facts fail closed.
         """
+        if not self.is_active:
+            return False
         return (self.trust or "").strip().lower() in _RECALLABLE_TIERS
 
 
@@ -203,6 +223,45 @@ class FactStore(ABC):
     @abstractmethod
     def list(self) -> List[Fact]:
         """Return all stored facts, oldest first."""
+
+    def active_facts(self) -> List[Fact]:
+        """Return only active, unexpired facts."""
+        return [fact for fact in self.list() if fact.is_active]
+
+    def close_fact(
+        self,
+        index: int,
+        reason: str = "closed",
+        superseded_by: str | None = None,
+        valid_to: float | None = None,
+    ) -> bool:
+        """Close an active fact, ending its valid time without deleting it."""
+        raise NotImplementedError
+
+    def supersede(
+        self,
+        old_index: int,
+        new_text: str,
+        source: str = "",
+        trust: str = "",
+        *,
+        entity_key: str = "",
+        confidence: float = 1.0,
+    ) -> bool:
+        """Supersede an existing fact with a new active fact in an atomic operation."""
+        raise NotImplementedError
+
+    def update_confidence(self, index: int, confidence: float) -> bool:
+        """Update confidence of an existing fact."""
+        raise NotImplementedError
+
+    def history(self, entity_key: str | None = None) -> List[Fact]:
+        """Return audit trail history for an entity_key or all facts."""
+        facts = self.list()
+        if not entity_key:
+            return facts
+        target = entity_key.strip().lower()
+        return [f for f in facts if f.entity_key.strip().lower() == target]
 
     @abstractmethod
     def clear(self) -> int:
@@ -269,12 +328,54 @@ class LocalFactStore(FactStore):
             fact_text = str(obj.get("text", "")).strip()
             if not fact_text:
                 continue
+
+            valid_from = timestamp
+            if "valid_from" in obj and obj["valid_from"] is not None:
+                try:
+                    valid_from = float(obj["valid_from"])
+                except (ValueError, TypeError):
+                    valid_from = timestamp
+
+            valid_to = None
+            if "valid_to" in obj and obj["valid_to"] is not None:
+                try:
+                    valid_to = float(obj["valid_to"])
+                except (ValueError, TypeError):
+                    valid_to = None
+
+            status = str(obj.get("status", "active") or "active")
+            superseded_by = obj.get("superseded_by")
+            if superseded_by is not None:
+                superseded_by = str(superseded_by)
+            entity_key = str(obj.get("entity_key", "") or "")
+
+            confidence = 1.0
+            if "confidence" in obj and obj["confidence"] is not None:
+                try:
+                    confidence = float(obj["confidence"])
+                except (ValueError, TypeError):
+                    confidence = 1.0
+
+            last_verified_at = timestamp
+            if "last_verified_at" in obj and obj["last_verified_at"] is not None:
+                try:
+                    last_verified_at = float(obj["last_verified_at"])
+                except (ValueError, TypeError):
+                    last_verified_at = timestamp
+
             facts.append(
                 Fact(
                     text=fact_text,
                     source=str(obj.get("source", "")),
                     created_at=timestamp,
                     trust=str(obj.get("trust", "")),
+                    valid_from=valid_from,
+                    valid_to=valid_to,
+                    status=status,
+                    superseded_by=superseded_by,
+                    entity_key=entity_key,
+                    confidence=confidence,
+                    last_verified_at=last_verified_at,
                 )
             )
         return facts
@@ -313,11 +414,23 @@ class LocalFactStore(FactStore):
 
     # -- FactStore API ------------------------------------------------------
 
-    def add(self, text: str, source: str = "", trust: str = "") -> bool:
+    def add(
+        self,
+        text: str,
+        source: str = "",
+        trust: str = "",
+        *,
+        valid_from: float | None = None,
+        valid_to: float | None = None,
+        entity_key: str = "",
+        confidence: float = 1.0,
+    ) -> bool:
         text = (text or "").strip()
         if not text:
             return False
         trust = (trust or "").strip().lower()
+        now = time.time()
+        vf = valid_from if valid_from is not None else now
         with self._lock, _cross_process_lock(self._lock_path()):
             self._sync_from_disk_locked()
             lowered = text.lower()
@@ -333,8 +446,21 @@ class LocalFactStore(FactStore):
                     duplicate.trust = trust or TRUST_UNTRUSTED
                     self._flush()
                 return False  # dedupe
+
             self._facts.append(
-                Fact(text=text, source=source, created_at=time.time(), trust=trust)
+                Fact(
+                    text=text,
+                    source=source,
+                    created_at=now,
+                    trust=trust,
+                    valid_from=vf,
+                    valid_to=valid_to,
+                    status="active",
+                    superseded_by=None,
+                    entity_key=entity_key,
+                    confidence=confidence,
+                    last_verified_at=now,
+                )
             )
             # Enforce the cap by evicting the oldest entries. max_facts is
             # always positive (validated in __init__), so this slice can't
@@ -344,6 +470,100 @@ class LocalFactStore(FactStore):
                 self._facts = self._facts[-self._max_facts :]
             self._flush()
         return True
+
+    def close_fact(
+        self,
+        index: int,
+        reason: str = "closed",
+        superseded_by: str | None = None,
+        valid_to: float | None = None,
+    ) -> bool:
+        """Close an active fact, ending its valid time without deleting it."""
+        with self._lock, _cross_process_lock(self._lock_path()):
+            self._sync_from_disk_locked()
+            if not (0 <= index < len(self._facts)):
+                return False
+            fact = self._facts[index]
+            fact.status = reason
+            fact.valid_to = valid_to if valid_to is not None else time.time()
+            if superseded_by is not None:
+                fact.superseded_by = superseded_by
+            self._flush()
+            return True
+
+    def supersede(
+        self,
+        old_index: int,
+        new_text: str,
+        source: str = "",
+        trust: str = "",
+        *,
+        entity_key: str = "",
+        confidence: float = 1.0,
+    ) -> bool:
+        """Supersede an existing fact with a new active fact in an atomic operation."""
+        new_text = (new_text or "").strip()
+        if not new_text:
+            return False
+        trust = (trust or "").strip().lower()
+        now = time.time()
+        with self._lock, _cross_process_lock(self._lock_path()):
+            self._sync_from_disk_locked()
+            if not (0 <= old_index < len(self._facts)):
+                return False
+            old_fact = self._facts[old_index]
+            key = entity_key or old_fact.entity_key
+
+            # Close old fact
+            old_fact.status = "superseded"
+            old_fact.valid_to = now
+            old_fact.superseded_by = new_text
+
+            # Append new fact
+            new_fact = Fact(
+                text=new_text,
+                source=source or old_fact.source,
+                created_at=now,
+                trust=trust or old_fact.trust,
+                valid_from=now,
+                valid_to=None,
+                status="active",
+                superseded_by=None,
+                entity_key=key,
+                confidence=confidence,
+                last_verified_at=now,
+            )
+            self._facts.append(new_fact)
+            if len(self._facts) > self._max_facts:
+                self._facts = self._facts[-self._max_facts :]
+            self._flush()
+            return True
+
+    def update_confidence(self, index: int, confidence: float) -> bool:
+        """Update confidence and verification timestamp of a fact."""
+        with self._lock, _cross_process_lock(self._lock_path()):
+            self._sync_from_disk_locked()
+            if not (0 <= index < len(self._facts)):
+                return False
+            fact = self._facts[index]
+            fact.confidence = max(0.0, min(1.0, float(confidence)))
+            self._flush()
+            return True
+
+    def active_facts(self) -> List[Fact]:
+        """Return all active, valid facts."""
+        with self._lock:
+            self._sync_from_disk_locked()
+            return [f for f in self._facts if f.is_active]
+
+    def history(self, entity_key: str | None = None) -> List[Fact]:
+        """Return the complete audit trail (including closed/superseded facts)."""
+        with self._lock:
+            self._sync_from_disk_locked()
+            if not entity_key:
+                return list(self._facts)
+            target = entity_key.strip().lower()
+            return [f for f in self._facts if f.entity_key.strip().lower() == target]
 
     def add_with_trust(self, text: str, source: str = "", trust: str = "") -> bool:
         return self.add(text, source=source, trust=trust)

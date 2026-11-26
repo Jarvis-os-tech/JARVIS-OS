@@ -12,6 +12,8 @@ def test_voice_layer_exports():
         ControlServer,
         ConnectionRecovery,
         OpenWakeWordDetector,
+        HyprlandMonitor,
+        SessionContext,
     )
 
     assert LiveVoice is not None
@@ -21,6 +23,8 @@ def test_voice_layer_exports():
     assert ControlServer is not None
     assert ConnectionRecovery is not None
     assert OpenWakeWordDetector is not None
+    assert HyprlandMonitor is not None
+    assert SessionContext is not None
 
 
 def test_voice_layer_recovery():

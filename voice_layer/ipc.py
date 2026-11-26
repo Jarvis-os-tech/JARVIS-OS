@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import stat
 import time
 from pathlib import Path
@@ -37,6 +38,9 @@ class ControlServer:
         record_memory_cb: Optional[Callable] = None,
         sync_companion_cb: Optional[Callable] = None,
         speak_cb: Optional[Callable] = None,
+        approval_cb: Optional[Callable] = None,
+        send_input_cb: Optional[Callable] = None,
+        dictation_cb: Optional[Callable] = None,
     ):
         self.socket_path = Path(socket_path) if socket_path else SOCKET_PATH
         self.status_provider = status_provider or (lambda: {})
@@ -46,8 +50,10 @@ class ControlServer:
         self.standby_cb = standby_cb
         self.standby_toggle_cb = standby_toggle_cb
         self.confirm_cb = confirm_cb
+        self.approval_cb = approval_cb
         self.cancel_cb = cancel_cb
         self.send_text_cb = send_text_cb
+        self.send_input_cb = send_input_cb
         self.wake_cb = wake_cb
         self.get_vision_mode_cb = get_vision_mode_cb
         self.set_vision_mode_cb = set_vision_mode_cb
@@ -56,6 +62,7 @@ class ControlServer:
         self.record_memory_cb = record_memory_cb
         self.sync_companion_cb = sync_companion_cb
         self.speak_cb = speak_cb
+        self.dictation_cb = dictation_cb
         self._server = None
         self._speak_server = None
         self._owns_speak_socket = False
@@ -156,6 +163,15 @@ class ControlServer:
 
     async def _handle_json_command(self, req: dict) -> str:
         cmd = req.get('command') or req.get('action')
+        if cmd == 'resolve_approval':
+            request_id = req.get('id')
+            approve = req.get('approve')
+            if (not isinstance(request_id, str) or not re.fullmatch(r'[0-9a-f]{32}', request_id)
+                    or type(approve) is not bool):
+                return json.dumps({'ok': False, 'message': 'Invalid approval request'}) + '\n'
+            if not self.approval_cb:
+                return json.dumps({'ok': False, 'message': 'Approval unavailable'}) + '\n'
+            return json.dumps(await self.approval_cb(request_id, approve)) + '\n'
         if cmd == 'companion_memory':
             if not self.sync_companion_cb:
                 return json.dumps({'error': 'Continuous memory unavailable'}) + '\n'
@@ -271,6 +287,31 @@ class ControlServer:
                 if asyncio.iscoroutine(muted):
                     await muted
             return json.dumps(result) + '\n'
+        if cmd in (
+            'dictation', 'dictate', 'set_dictation_mode',
+            'dictation_start', 'dictation_stop', 'dictation_toggle',
+            'dictation_cancel', 'dictation_status',
+        ):
+            if cmd == 'set_dictation_mode':
+                action = 'start' if req.get('enabled', True) else 'stop'
+            elif cmd.startswith('dictation_'):
+                action = cmd.split('_', 1)[1]
+            else:
+                action = str(req.get('action', 'toggle')).strip().lower() or 'toggle'
+            action = {'on': 'start', 'off': 'stop'}.get(action, action)
+            if action not in ('start', 'stop', 'toggle', 'cancel', 'status'):
+                return json.dumps({'status': 'error', 'error': f'invalid dictation action: {action}'}) + '\n'
+            if action == 'status' and not self.dictation_cb:
+                info = self.status_provider().get('dictation', {'active': False})
+                return json.dumps({'status': 'ok', **info}) + '\n'
+            if not self.dictation_cb:
+                return json.dumps({'error': 'dictation not available'}) + '\n'
+            res = self.dictation_cb(action)
+            if asyncio.iscoroutine(res):
+                res = await res
+            if not isinstance(res, dict):
+                res = {'active': bool(res)}
+            return json.dumps({'status': 'ok', **res}) + '\n'
         if cmd == 'standby':
             if self.standby_cb:
                 res = self.standby_cb()
@@ -289,6 +330,62 @@ class ControlServer:
                     asyncio.create_task(res)
                 return json.dumps({'status': 'ok', 'standby': False}) + '\n'
             return json.dumps({'error': 'wake not available'}) + '\n'
+        if cmd in ('send_input', 'submit_input', 'attach', 'send_file'):
+            text = str(req.get('text', '')).strip()
+            name = str(req.get('name', '')).strip()
+            mime = str(req.get('mime', '')).strip()
+            file_path = req.get('file_path') or req.get('path')
+            raw_data = req.get('data') or req.get('file')
+
+            file_bytes = b''
+            import base64
+            if isinstance(raw_data, str) and raw_data:
+                try:
+                    file_bytes = base64.b64decode(raw_data, validate=True)
+                except Exception:
+                    file_bytes = raw_data.encode('utf-8')
+            elif isinstance(raw_data, bytes):
+                file_bytes = raw_data
+
+            if not file_bytes and file_path:
+                p = Path(file_path).expanduser().resolve()
+                if p.exists():
+                    name = name or p.name
+                    if p.is_file() and p.stat().st_size <= 40 * 1024 * 1024:
+                        try:
+                            file_bytes = p.read_bytes()
+                        except Exception:
+                            pass
+                    elif p.is_dir() or not file_bytes:
+                        name = str(p)
+
+            if not text and not file_bytes and not name:
+                return json.dumps({'error': 'empty input: text, file, or name is required'}) + '\n'
+
+            if not self.send_input_cb and (file_bytes or name or not self.send_text_cb):
+                err = 'multimodal input not available' if (file_bytes or name) else 'text input not available'
+                return json.dumps({'status': 'error', 'error': err, 'queued': False}) + '\n'
+
+            if self.wake_cb:
+                self.wake_cb()
+
+            item = {
+                'text': text,
+                'data': file_bytes,
+                'mime': mime,
+                'name': name
+            }
+
+            if self.send_input_cb:
+                res = self.send_input_cb(item)
+                if asyncio.iscoroutine(res):
+                    asyncio.create_task(res)
+            elif self.send_text_cb:
+                res = self.send_text_cb(text)
+                if asyncio.iscoroutine(res):
+                    asyncio.create_task(res)
+
+            return json.dumps({'status': 'ok', 'queued': True, 'text': text, 'name': name, 'bytes': len(file_bytes)}) + '\n'
         if cmd == 'speak' or ('text' in req and 'command' not in req):
             if not self.speak_cb:
                 return json.dumps({'error': 'Speech announcement unavailable'}) + '\n'
@@ -326,9 +423,21 @@ class ControlServer:
             status = self.status_provider()
             state = status.get('state') or ('listening' if status.get('listening') else 'idle')
             model = status.get('model', 'unknown')
+            mode = status.get('mode')
+            mode_tag = f', mode={mode}' if mode and mode != 'conversation' else ''
             issue = status.get('microphone', {}).get('issue')
             detail = f' — {issue}' if issue else ''
-            return f'jarvis-voice: {state} (model={model}){detail}\n'
+            return f'jarvis-voice: {state} (model={model}{mode_tag}){detail}\n'
+        if command in ('dictation', 'dictate', 'listen dictation', 'listen dictate') or command.startswith((
+            'listen dictation ', 'listen dictate ', 'dictation ', 'dictate ',
+        )):
+            if command.startswith('listen '):
+                _, _, rest = command.partition(' ')
+            else:
+                rest = command
+            _, _, sub = rest.partition(' ')
+            action = sub.strip().lower() or 'toggle'
+            return self._handle_json_command({'command': 'dictation', 'action': action})
         if command == 'standby toggle':
             return self._handle_json_command({'command': 'standby_toggle'})
         if command in ('standby', 'standby on', 'standby enter', 'listen standby'):
@@ -402,10 +511,46 @@ class ControlServer:
                 return json.dumps({'error': 'empty text'}) + '\n'
             if self.wake_cb:
                 self.wake_cb()
-            if self.send_text_cb:
-                res = self.send_text_cb(text)
+
+            file_arg = None
+            clean_text = text
+            if '--file' in text or '-f' in text:
+                import shlex
+                try:
+                    tokens = shlex.split(text)
+                    remaining = []
+                    idx = 0
+                    while idx < len(tokens):
+                        if tokens[idx] in ('--file', '-f') and idx + 1 < len(tokens):
+                            file_arg = tokens[idx + 1]
+                            idx += 2
+                        else:
+                            remaining.append(tokens[idx])
+                            idx += 1
+                    clean_text = ' '.join(remaining).strip()
+                except Exception:
+                    pass
+
+            if file_arg:
+                if not self.send_input_cb:
+                    return json.dumps({'error': 'multimodal input not available'}) + '\n'
+                p = Path(file_arg).expanduser().resolve()
+                p_bytes = b''
+                p_name = p.name if p.exists() else file_arg
+                if p.is_file() and p.stat().st_size <= 40 * 1024 * 1024:
+                    try:
+                        p_bytes = p.read_bytes()
+                    except Exception:
+                        pass
+                res = self.send_input_cb({'text': clean_text, 'data': p_bytes, 'mime': '', 'name': p_name})
                 if asyncio.iscoroutine(res):
                     asyncio.create_task(res)
-                return json.dumps({'status': 'sent', 'text': text}) + '\n'
+                return json.dumps({'status': 'sent', 'text': clean_text, 'file': file_arg}) + '\n'
+
+            if self.send_text_cb:
+                res = self.send_text_cb(clean_text)
+                if asyncio.iscoroutine(res):
+                    asyncio.create_task(res)
+                return json.dumps({'status': 'sent', 'text': clean_text}) + '\n'
             return json.dumps({'error': 'text input not available'}) + '\n'
         return json.dumps({'error': f'unknown command: {command}'}) + '\n'

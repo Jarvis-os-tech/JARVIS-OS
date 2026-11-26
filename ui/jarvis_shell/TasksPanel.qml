@@ -49,6 +49,7 @@ SciFiPanel {
 
                     Text {
                         text: modelData.title
+                        textFormat: Text.PlainText
                         color: modelData.done ? "#d8f6ff" : "#8aa2b3"
                         font.family: "Inter, sans-serif"
                         font.pixelSize: 11

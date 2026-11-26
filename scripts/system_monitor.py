@@ -358,7 +358,8 @@ def main() -> int:
         results = run_checks(config)
         actions = state_manager.process_results(results)
 
-        # Dispatch alerts to JARVIS voice, notifications, and audio
+        # Dispatch alerts to JARVIS voice, notifications, and audio (with auto-healing enabled)
+        auto_heal = config.get("auto_heal", True)
         state_manager.dispatch_actions(
             actions,
             audio_engine=audio_engine,
@@ -368,6 +369,7 @@ def main() -> int:
             sound_alert=enable_sound,
             desktop_notify=enable_notify,
             voice_battery_only=voice_battery_only,
+            auto_heal=auto_heal,
         )
 
         if args.json:

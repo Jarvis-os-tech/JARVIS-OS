@@ -28,11 +28,36 @@ CORE_TOOLS = frozenset({
     'yt_brain_search', 'yt_brain_get', 'yt_brain_topics', 'yt_brain_status',
     'run_shell', 'run_in_terminal', 'read_terminal', 'watch_terminal',
     'hypr_dispatch', 'hypr_query', 'read_screen', 'click_text', 'file_operation', 'system_control',
+    'audio_list_devices', 'audio_set_device', 'control_display', 'screen_record', 'recent_files',
     'omarchy_cli', 'omarchy_help',
 })
 META_TOOLS = frozenset({'discover_domain_tools', 'execute_domain_tool', 'parse_command_values'})
+# Canonical deduplicated live schema set (<=50) exposed to the low-latency voice turn.
+# All 320+ domain & alias tools stay executable via UnifiedSkills.execute() and execute_domain_tool().
+CANONICAL_VOICE_TOOLS = frozenset({
+    # Meta, standby, companion & confirmation
+    'discover_domain_tools', 'execute_domain_tool', 'parse_command_values',
+    'enter_standby', 'drone_control', 'confirm_system_action', 'cancel_system_action',
+    # System control, hardware, audio, display, power & capture
+    'system_control', 'audio_list_devices', 'audio_set_device', 'control_display',
+    'control_wifi', 'control_bluetooth', 'control_notifications', 'control_night_light',
+    'control_power', 'lock_screen', 'take_screenshot', 'screen_record',
+    'get_system_information', 'control_vision_mode',
+    # Apps, windows & workspaces
+    'open_application', 'close_app', 'manage_app_stage', 'manage_window',
+    'switch_workspace', 'move_window_to_workspace',
+    # Input, clipboard & screen awareness
+    'type_text', 'press_key', 'clipboard', 'inspect_screen', 'open_input_bar',
+    # Filesystem
+    'list_files', 'read_file', 'search_files', 'recent_files', 'move_path', 'trash_path',
+    # Web, memory, orchestration & widgets
+    'internet_search', 'open_website', 'read_url', 'remember_memory', 'recall_memory',
+    'start_task', 'show_widget', 'manage_widget',
+    # Knowledge domains
+    'yt_brain_search', 'yt_brain_get', 'yt_brain_topics', 'yt_brain_status',
+})
 DOMAINS = ('core', 'desktop', 'filesystem', 'memory', 'workspace', 'github',
-           'gui', 'cli_anything', 'api_anything', 'integrations', 'orchestration', 'learning', 'phone', 'vision', 'composio', 'linkedin', 'agent_reach', 'yt_brain')
+           'gui', 'cli_anything', 'api_anything', 'integrations', 'orchestration', 'learning', 'phone', 'vision', 'composio', 'linkedin', 'agent_reach', 'yt_brain', 'youtube_production')
 
 _ORCHESTRATION = frozenset({
     'get_hermes_events',
@@ -61,7 +86,8 @@ def domain_for_tool(name):
     for prefix, domain in (('github_', 'github'), ('gui_', 'gui'), ('cli_hub_', 'cli_anything'),
                            ('api_anything_', 'api_anything'), ('integration_', 'integrations'),
                            ('phone_', 'phone'), ('composio_', 'composio'), ('disconnect_platform', 'composio'),
-                           ('linkedin_', 'linkedin'), ('reach_', 'agent_reach'), ('agent_reach_', 'agent_reach'),
+                           ('linkedin_', 'linkedin'), ('youtube_production_', 'youtube_production'),
+                           ('reach_', 'agent_reach'), ('agent_reach_', 'agent_reach'),
                            ('yt_brain_', 'yt_brain'), ('yt_', 'yt_brain')):
         if name.startswith(prefix):
             return domain

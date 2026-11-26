@@ -299,17 +299,18 @@ async def test_desktop_skills_list_system_agents():
     )
     res = await desktop.execute('list_system_agents', {})
     assert res['status'] == 'success'
-    assert len({agent['name'] for agent in res['agents']}) == len(res['agents']) == 38
+    assert len({agent['name'] for agent in res['agents']}) == len(res['agents']) == 62
     assert {agent['name'] for agent in res['agents'] if 'department' not in agent} == set(AGENTS)
-    for department, count in [('Automation', 1), ('LinkedIn', 12), ('Memory', 6), ('YouTube Brain', 5), ('Google Workspace', 6)]:
+    for department, count in [('Automation', 1), ('LinkedIn', 12), ('Memory', 6), ('YouTube Brain', 5), ('YouTube Production', 14), ('Google Workspace', 6), ('API Agent', 4), ('CLI Agent', 4)]:
         members = [agent for agent in res['agents'] if agent.get('department') == department]
         assert len(members) == count
-    for department in ('LinkedIn', 'Memory', 'YouTube Brain', 'Google Workspace'):
+    for department in ('LinkedIn', 'Memory', 'YouTube Brain', 'YouTube Production', 'Google Workspace', 'API Agent', 'CLI Agent'):
         members = [agent for agent in res['agents'] if agent.get('department') == department]
         assert all(agent['available'] is None for agent in members)
         assert all(agent['registered'] is True for agent in members)
     assert res['department_counts']['Google Workspace'] == 6
-    assert res['summary'].startswith('JARVIS has 38 registered agents.')
+    assert res['department_counts']['API Agent'] == 4
+    assert res['summary'].startswith('JARVIS has 62 registered agents.')
     assert {'name': 'Update Agent', 'department': 'Automation', 'available': True, 'kind': 'automation', 'capabilities': ['apply_updates'], 'description': 'Checks system and developer packages and requests approval before applying updates.'} in res['agents']
     assert {'name': 'VaultPruner', 'department': 'Memory', 'registered': True, 'available': None} in res['agents']
     await desktop.close_agent_jobs()
@@ -400,7 +401,10 @@ async def test_evolution_proposals_have_distinct_cards_and_bounded_shell_calls(m
 
     calls = []
 
-    def blocked_shell(command, *, capture_output, text, timeout):
+    def blocked_shell(command, *args, **kwargs):
+        if command and len(command) > 1 and command[1] == "list":
+            return subprocess.CompletedProcess(command, 0, stdout="[]", stderr="")
+        timeout = kwargs.get("timeout", 2)
         calls.append((json.loads(command[-1]), timeout))
         raise subprocess.TimeoutExpired(command[0], timeout)
 

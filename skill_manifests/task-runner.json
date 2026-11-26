@@ -3,13 +3,13 @@
   "skills": [
     {
       "name": "start_task",
-      "description": "Start a background task with 1-30 supported steps. Inspect relevant paths before file changes. Supported tools: make_directory, write_file, append_file, edit_file, copy_path, move_path, trash_path, linkedin_draft_post, linkedin_plan_sprint, linkedin_audit_profile. The response contains a task id for progress and cancellation.",
+      "description": "Start a background task with 1-30 sequential steps using enabled JARVIS tools. Steps stop on failure or an unverified result. Task-control recursion and actions requiring interactive confirmation are rejected. The response contains a task id for progress and cancellation.",
       "adapter": "task.start",
       "parameters_json_schema": {
         "type": "object",
         "properties": {
           "description": {"type": "string", "description": "Short description of the user's requested task."},
-          "plan_json": {"type": "string", "description": "JSON array of objects with tool and args. Each step must use the exact schema of its supported tool."}
+          "plan_json": {"type": "string", "description": "JSON array of objects with tool and args. Each step must use an enabled tool and its exact schema."}
         },
         "required": ["description", "plan_json"],
         "additionalProperties": false

@@ -164,6 +164,7 @@ class Config:
     tasks_enabled: bool = True
     vision_enabled: bool = False
     auto_vad: bool = True
+    auto_heal: bool = True
     control: dict = field(default_factory=dict)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     standby: StandbyConfig = field(default_factory=StandbyConfig)
@@ -173,7 +174,7 @@ class Config:
 
     def validate(self):
         for name in ('barge_in', 'autostart_listening', 'greet_on_start', 'enable_tools',
-                     'allow_shell', 'dry_run', 'tasks_enabled', 'vision_enabled', 'auto_vad'):
+                     'allow_shell', 'dry_run', 'tasks_enabled', 'vision_enabled', 'auto_vad', 'auto_heal'):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f'{name} must be a boolean')
         for name in ('model', 'voice', 'device', 'output_device', 'api_key_env', 'language'):

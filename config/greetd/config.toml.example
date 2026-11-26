@@ -1,0 +1,13 @@
+[terminal]
+vt = 1
+
+# Replace jarvis-user with an existing non-root account after validating a
+# standalone login and logout. This starts one automatically logged-in session.
+[initial_session]
+command = "/usr/bin/jarvis-de"
+user = "jarvis-user"
+
+# Keep an authenticated terminal greeter available after logout.
+[default_session]
+command = "agreety --cmd /usr/bin/jarvis-de"
+user = "greeter"

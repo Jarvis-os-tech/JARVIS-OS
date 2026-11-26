@@ -3,48 +3,33 @@
   "skills": [
     {
       "name": "lock_screen",
-      "description": "Lock the screen or computer session. Requires confirmation before locking.",
+      "description": "Lock the screen or computer session. Requires prior confirmation via confirm_system_action before locking.",
       "adapter": "system.lock",
       "parameters_json_schema": {
         "type": "object",
-        "properties": {
-          "confirm": {
-            "type": "boolean",
-            "description": "Set to true only after the user explicitly confirms locking the screen."
-          }
-        },
+        "properties": {},
         "required": [],
         "additionalProperties": false
       }
     },
     {
       "name": "shutdown_system",
-      "description": "Shut down / power off the computer. Requires spoken confirmation before executing.",
+      "description": "Shut down / power off the computer. Requires prior spoken confirmation via confirm_system_action before executing.",
       "adapter": "system.shutdown",
       "parameters_json_schema": {
         "type": "object",
-        "properties": {
-          "confirm": {
-            "type": "boolean",
-            "description": "Set to true only after the user explicitly confirms shutting down the system."
-          }
-        },
+        "properties": {},
         "required": [],
         "additionalProperties": false
       }
     },
     {
       "name": "restart_system",
-      "description": "Restart / reboot the computer. Requires spoken confirmation before executing.",
+      "description": "Restart / reboot the computer. Requires prior spoken confirmation via confirm_system_action before executing.",
       "adapter": "system.restart",
       "parameters_json_schema": {
         "type": "object",
-        "properties": {
-          "confirm": {
-            "type": "boolean",
-            "description": "Set to true only after the user explicitly confirms restarting the system."
-          }
-        },
+        "properties": {},
         "required": [],
         "additionalProperties": false
       }
@@ -98,7 +83,7 @@
     },
     {
       "name": "manage_window",
-      "description": "Manage the active window: fullscreen, close, minimize, float, center, or maximize.",
+      "description": "Manage the active window: fullscreen, close, minimize, float, center, maximize, move_monitor, move_direction, swap, split, or resize.",
       "adapter": "window.manage",
       "parameters_json_schema": {
         "type": "object",
@@ -111,9 +96,182 @@
               "minimize",
               "float",
               "center",
-              "maximize"
+              "maximize",
+              "move_monitor",
+              "move_direction",
+              "swap",
+              "split",
+              "resize"
             ],
             "description": "Window management action."
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right",
+              "up",
+              "down",
+              "l",
+              "r",
+              "u",
+              "d"
+            ],
+            "description": "Direction for move_direction, swap, resize, or move_monitor."
+          },
+          "monitor": {
+            "type": "string",
+            "description": "Target monitor name, index, or next/prev for move_monitor."
+          },
+          "width": {
+            "type": "integer",
+            "minimum": -2000,
+            "maximum": 2000,
+            "description": "Horizontal pixel delta for resize."
+          },
+          "height": {
+            "type": "integer",
+            "minimum": -2000,
+            "maximum": 2000,
+            "description": "Vertical pixel delta for resize."
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "audio_list_devices",
+      "description": "List PipeWire/PulseAudio output sinks, input microphones, default devices, and active audio streams.",
+      "adapter": "audio.list_devices",
+      "parameters_json_schema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "all",
+              "output",
+              "input"
+            ],
+            "description": "Device kind to inspect: all, output, or input (default all)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "audio_set_device",
+      "description": "Switch the default PipeWire/PulseAudio output sink or input microphone, optionally moving active audio streams.",
+      "adapter": "audio.set_device",
+      "parameters_json_schema": {
+        "type": "object",
+        "properties": {
+          "device": {
+            "type": "string",
+            "description": "Target device name, numeric ID, or friendly match (e.g. headphones, hdmi, bluetooth, speakers)."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "output",
+              "input"
+            ],
+            "description": "Device kind: output or input (default output)."
+          },
+          "move_streams": {
+            "type": "boolean",
+            "description": "Move active audio streams to the new default device (default true)."
+          }
+        },
+        "required": [
+          "device"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "control_display",
+      "description": "List monitors or configure Hyprland/wlr-randr multi-monitor extend, mirror, or scale settings.",
+      "adapter": "display.control",
+      "parameters_json_schema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "list",
+              "extend",
+              "mirror",
+              "scale"
+            ],
+            "description": "Display action: list, extend, mirror, or scale."
+          },
+          "monitor": {
+            "type": "string",
+            "description": "Target monitor connector name or id (e.g. DP-1, HDMI-A-1, eDP-1)."
+          },
+          "source_monitor": {
+            "type": "string",
+            "description": "Reference or source monitor connector for extend/mirror."
+          },
+          "position": {
+            "type": "string",
+            "enum": [
+              "right",
+              "left",
+              "above",
+              "below",
+              "auto"
+            ],
+            "description": "Relative monitor placement for extend (default right)."
+          },
+          "scale": {
+            "type": "string",
+            "description": "Scale factor between 0.5 and 4.0 (e.g. '1', '1.25', '1.5', '2') for action=scale."
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "screen_record",
+      "description": "Start, stop, or inspect Wayland screen recording via gpu-screen-recorder or wf-recorder.",
+      "adapter": "system.screen_record",
+      "parameters_json_schema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "start",
+              "stop",
+              "status"
+            ],
+            "description": "Screen recording action: start, stop, or status."
+          },
+          "region": {
+            "type": "string",
+            "enum": [
+              "full",
+              "active",
+              "portal"
+            ],
+            "description": "Capture region for start: full monitor, active window, or portal."
+          },
+          "with_audio": {
+            "type": "boolean",
+            "description": "Include system audio capture when starting recording (default false)."
+          },
+          "output_path": {
+            "type": "string",
+            "description": "Optional explicit output video path (.mp4, .mkv, or .webm)."
           }
         },
         "required": [
@@ -218,11 +376,35 @@
     },
     {
       "name": "read_clipboard",
-      "description": "Read text content currently in the system clipboard.",
+      "description": "Read current clipboard text, list cliphist clipboard history, or decode and paste a history item.",
       "adapter": "clipboard.read",
       "parameters_json_schema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "read",
+              "history",
+              "paste_item"
+            ],
+            "description": "Clipboard operation: read current clipboard (default), list cliphist history, or paste_item."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Maximum history items to return (default 10)."
+          },
+          "item_id": {
+            "type": "string",
+            "description": "Cliphist entry ID or #index to decode and paste (for paste_item)."
+          },
+          "paste": {
+            "type": "boolean",
+            "description": "Dispatch verified paste shortcut after copying item (default true)."
+          }
+        },
         "required": [],
         "additionalProperties": false
       }

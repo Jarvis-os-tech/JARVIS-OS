@@ -14,11 +14,12 @@ Item {
     implicitHeight: 96
 
     readonly property color colorA: {
+        if (orbitState === "complete") return "#34d399"
         if (orbitState === "speaking") return "#ff4da6"
         if (orbitState === "thinking") return "#a855f7"
         if (orbitState === "connecting") return "#818cf8"
         if (orbitState === "standby" || orbitState === "disabled") return "#64748b"
-        if (orbitState === "error" || orbitState === "offline") return "#fb7185"
+        if (orbitState === "error" || orbitState === "alert" || orbitState === "offline") return "#fb7185"
         return "#21d4fd"
     }
     readonly property color colorB: {
@@ -26,7 +27,7 @@ Item {
         if (orbitState === "thinking") return "#22d3ee"
         if (orbitState === "connecting") return "#38bdf8"
         if (orbitState === "standby" || orbitState === "disabled") return "#334155"
-        if (orbitState === "error" || orbitState === "offline") return "#ef4444"
+        if (orbitState === "error" || orbitState === "alert" || orbitState === "offline") return "#ef4444"
         return "#34d399"
     }
 
@@ -63,7 +64,7 @@ Item {
                     procedural = 0.14
                 else if (root.orbitState === "standby" || root.orbitState === "disabled")
                     procedural = 0.015
-                else if (root.orbitState === "error" || root.orbitState === "offline")
+                else if (root.orbitState === "error" || root.orbitState === "alert" || root.orbitState === "offline")
                     procedural = 0.08 + 0.08 * (0.5 + 0.5 * Math.sin(field.clock * 2.2))
 
                 var target = Math.max(root.level, procedural)

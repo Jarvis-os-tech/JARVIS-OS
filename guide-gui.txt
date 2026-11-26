@@ -1,0 +1,1333 @@
+**JARVIS OS** replaces the traditional Linux desktop (bars, docks, icons, overlapping windows) with a **standalone Arch Linux Wayland display session** powered by **Minimal Hyprland 0.57+ (`hyprland.lua`)** as the display server, **Quickshell 0.3.x (Qt6/QML)** as the dynamic widget HUD, and your existing Python voice/agent stack (**Cactus-Needle** offline router + **Gemini Live API** + **Hermes** orchestrator), tuned strictly for **8 GB RAM**.
+
+---
+
+## 1. System Architecture & Spatial Model
+
+Every visual element and OS process maps onto **four vertical layers** and **three Wayland depth planes**:
+
+| Layer / Plane | Component | Responsibility |
+| --- | --- | --- |
+| **Hardware & Kernel** | Arch Linux + `linux-cachyos` | Low-latency BORE/sched-ext scheduling for PipeWire echo cancellation, Silero VAD, and sub-200 ms local voice routing.
+
+ |
+| **Display Server** | Minimal Hyprland 0.57+ (`jarvis-minimal.lua`) | Owns GPU (DRM/KMS), `libinput` mouse/keyboard, rootless XWayland, GPU frosted-glass blur, and floating app rules with `misc.vfr = true`. |
+| **Plane 1 (Background)** | `CoreCanvas.qml` (`WlrLayer.Background`) | Fullscreen `#05080F` dark canvas + central Arc Reactor voice core (35%–65% width) driven by PipeWire audio peaks, with **0% active timers in standby**.
+
+ |
+| **Plane 2 (Widget HUD)** | `WidgetCanvas.qml` (`WlrLayer.Top` / `Overlay`) | Click-through holographic cards on **Left Rail** (2%–32%, max 3) and **Right Stage** (68%–98%, max 2), 5-widget cap, `TopBar.qml` overflow pills, and `Loader`/`LazyLoader` RAM unloading.
+
+ |
+| **Plane 3 (App Stage)** | Hyprland Floating Panels + `special:vault` | Real Linux GUI apps (browser, terminal, video, IDE) spawn borderless at `53% 12%` (`44% 76%`) beside the core and park invisibly in `special:vault` on `"Clear HUD"`.
+
+ |
+| **Voice & Agent Plane** | `voice_layer/` + `widget_engine/` + `orchestration/` | Offline Cactus-Needle (<200 ms) controls HUD/Hyprland directly; Gemini Live + Hermes stream structured NDJSON widget events over a Unix socket.
+
+ |
+
+---
+
+## 2. Phase 1 — Arch Linux Packages & System Permissions
+
+Install the exact runtime stack needed for a standalone Wayland DE without GNOME, KDE, or local LLM bloat.
+
+### 2.1 Core Packages
+
+```bash
+# Display server, portals, clipboard, terminal, audio, networking, auth, login
+sudo pacman -S --needed \
+  hyprland xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
+  xorg-xwayland qt6-wayland polkit pipewire pipewire-pulse wireplumber \
+  networkmanager bluez bluez-utils brightnessctl \
+  wl-clipboard cliphist kitty greetd python python-pydantic python-fastapi
+
+# Install Quickshell 0.3.x from AUR (use yay or paru)
+paru -S --needed quickshell
+
+```
+
+### 2.2 Enable System Services & `uinput` Permissions
+
+Your `jarvis_control` module uses Wayland `uinput` for automated keyboard/pointer actions. Configure persistent module loading and non-root group access:
+
+```bash
+# Load uinput automatically on boot
+echo "uinput" | sudo tee /etc/modules-load.d/jarvis-uinput.conf
+
+# Allow members of the input group to access /dev/uinput
+echo 'KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"' \
+  | sudo tee /etc/udev/rules.d/99-jarvis-uinput.rules
+
+sudo usermod -aG input,video "$USER"
+sudo systemctl enable --now NetworkManager bluetooth
+
+```
+
+Reboot or re-login once so group memberships take effect.
+
+---
+
+## 3. Phase 2 — Complete Repository Layout
+
+Integrate the DE cleanly inside `Jarvis-os-tech/JARVIS-OS` alongside your existing backend folders:
+
+```text
+JARVIS-OS/
+├── bin/
+│   └── jarvis-de                         # Standalone Hyprland Lua session launcher
+├── config/
+│   ├── hypr/
+│   │   └── jarvis-minimal.lua            # Hyprland 0.57+ zero-chrome display server config
+│   └── greetd/
+│       └── config.toml.example           # Zero-click auto-login template
+├── packaging/
+│   └── jarvis-os.desktop                 # /usr/share/wayland-sessions entry
+├── widget_engine/
+│   ├── __init__.py
+│   ├── protocol.py                       # Canonical NDJSON schemas (Backend <-> HUD)
+│   ├── hud_bridge.py                     # Async Unix socket client + event dispatcher
+│   ├── registry.py                       # Intent/Hermes -> Widget payload mapper
+│   └── test_emit.py                      # CLI stress tester for all 10 widgets
+├── ui/
+│   └── jarvis_shell/
+│       ├── qmldir                        # Registers Theme & StateStore singletons
+│       ├── Shell.qml                     # Root entry (Core, Canvas, Notifs, Polkit, Modals)
+│       ├── Theme.qml                     # Colors, spacing, radii, typography singleton
+│       ├── StateStore.qml                # State machine, 5-card cap, IpcHandler, SocketServer
+│       ├── CoreCanvas.qml                # Plane 1: Arc Reactor + PipeWire peak ring
+│       ├── WidgetCanvas.qml              # Plane 2: Docks + click-through Region mask + Loaders
+│       ├── TopBar.qml                    # Auto-hiding overflow pill strip
+│       ├── components/
+│       │   └── HologramCard.qml          # Reusable frame (TTL bar, hover pause, pin/expand/close)
+│       └── widgets/
+│           ├── TelemetryWidget.qml       # CPU / RAM / Thermal / Net / API gauges
+│           ├── QuickControlsWidget.qml   # PipeWire, Wi-Fi, Bluetooth, Brightness
+│           ├── MediaCardWidget.qml       # MPRIS player controls
+│           ├── NotificationToast.qml     # Native NotificationServer toasts
+│           ├── ExecutionAirlockModal.qml # Sudo / Polkit / ExecutionPolicy amber gate
+│           ├── WebIntelWidget.qml        # Agent Reach briefing + Expand to browser
+│           ├── FileCardsWidget.qml       # Voice-indexed (#1, #2, #3) file cards
+│           ├── MemoryNodeWidget.qml      # SQLite memory graph & task checklist
+│           ├── SwarmStripWidget.qml      # Live Hermes sub-agent job progress
+│           └── CommandPaletteModal.qml   # Super+Space silent text fallback
+├── voice_layer/                          # Existing: PipeWire AEC, Silero VAD, needle_router.py
+├── orchestration/                        # Existing: task_events.py, task_presentation.py, hermes_api.py
+├── jarvis_control/                       # Existing: Hyprland/uinput actuators, execution_policy.py
+└── jarvis_memory/                        # Existing: SQLite BM25 + vector memory
+
+```
+
+---
+
+## 4. Phase 3 — Minimal Hyprland 0.57+ Display Server
+
+Hyprland 0.57 dropped legacy `.conf` files completely in favor of Lua (`hyprland.lua`). Always check `/usr/share/hypr/stubs/` on your Arch machine if any field name changes across minor updates.
+
+### 4.1 `config/hypr/jarvis-minimal.lua`
+
+```lua
+-- JARVIS OS Standalone Wayland Display Server (Hyprland 0.57+ Lua)
+local home = os.getenv("HOME")
+local repo = os.getenv("JARVIS_OS_DIR") or (home .. "/JARVIS-OS")
+local mainMod = "SUPER"
+
+-- 1. Display Outputs
+hl.monitor({
+    output = "",
+    mode = "preferred",
+    position = "auto",
+    scale = "1",
+})
+
+-- 2. Visuals, Input & 8 GB RAM Performance Tuning
+hl.config({
+    xwayland = { enabled = true },
+    input = {
+        kb_layout = "us",
+        follow_mouse = 1,
+        sensitivity = 0,
+    },
+    general = {
+        gaps_in = 10,
+        gaps_out = 18,
+        border_size = 1,
+        col = {
+            active_border = "rgba(00e5ffee) rgba(ffb300aa) 45deg",
+            inactive_border = "rgba(00e5ff33)",
+        },
+        layout = "dwindle",
+    },
+    decoration = {
+        rounding = 16,
+        active_opacity = 0.92,
+        inactive_opacity = 0.86,
+        blur = {
+            enabled = true,
+            size = 5,
+            passes = 2, -- Keeps integrated GPU cool & responsive on 8 GB RAM
+            new_optimizations = true,
+            ignore_opacity = true,
+        },
+        shadow = {
+            enabled = true,
+            range = 20,
+            render_power = 3,
+            color = "rgba(00e5ff28)",
+        },
+    },
+    misc = {
+        vfr = true, -- Halt frame redraws when idle
+        disable_hyprland_logo = true,
+        disable_splash_rendering = true,
+    },
+})
+
+-- 3. Startup Sequence (Zero Traditional DE Chrome)
+hl.on("hyprland.start", function()
+    hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP")
+    hl.exec_cmd("wl-paste --type text --watch cliphist store")
+    hl.exec_cmd("wl-paste --type image --watch cliphist store")
+    hl.exec_cmd(string.format('quickshell -p "%s/ui/jarvis_shell/Shell.qml"', repo))
+    -- Start your background voice/orchestration user services
+    hl.exec_cmd("systemctl --user start jarvis-voice.service jarvis-hermes.service")
+end)
+
+-- 4. Offload Frosted-Glass Blur to Hyprland for Quickshell HUD Layers
+hl.layer_rule({
+    name = "jarvis-hud-blur",
+    match = { namespace = "jarvis-hud" },
+    blur = true,
+    ignore_alpha = 0,
+})
+
+-- 5. Plane 3: Force All External Linux Apps Into Holographic Right-Stage Panels
+hl.window_rule({
+    name = "jarvis-floating-panels",
+    match = { class = ".*" },
+    float = true,
+    rounding = 16,
+    opacity = "0.92 0.86",
+    size = "44% 76%",
+    move = "53% 12%", -- Leaves Center Arc Reactor (35%-65%) unobstructed
+})
+
+-- 6. Hardware Safety Escape Hatches & Full Mouse/Keyboard Parity
+hl.bind(mainMod .. " + SHIFT + T", hl.dsp.exec_cmd("kitty"), { description = "Emergency Terminal" })
+hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("qs ipc call jarvis togglePalette"), { description = "Silent Command Palette" })
+hl.bind(mainMod .. " + H", hl.dsp.workspace.toggle_special("vault"), { description = "Toggle Hidden App Vault" })
+hl.bind(mainMod .. " + Q", hl.dsp.window.close(), { description = "Close Active Panel" })
+hl.bind(mainMod .. " + SHIFT + C", hl.dsp.exec_cmd("qs ipc call jarvis clearHud"), { description = "Clear Unpinned HUD" })
+
+```
+
+(Verify mouse drag/resize bind syntax in `/usr/share/hypr/stubs/` on your system and add `SUPER + mouse:272` move / `SUPER + mouse:273` resize so floating panels can also be dragged manually.)
+
+### 4.2 Standalone Session Launcher (`bin/jarvis-de`)
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=JARVIS
+export QT_QPA_PLATFORM=wayland
+export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+export MOZ_ENABLE_WAYLAND=1
+export ELECTRON_OZONE_PLATFORM_HINT=wayland
+
+export JARVIS_OS_DIR="${JARVIS_OS_DIR:-$HOME/JARVIS-OS}"
+exec start-hyprland -- --config "$JARVIS_OS_DIR/config/hypr/jarvis-minimal.lua"
+
+```
+
+```bash
+chmod +x bin/jarvis-de
+
+```
+
+### 4.3 Wayland Display Manager Entry (`packaging/jarvis-os.desktop`)
+
+```ini
+[Desktop Entry]
+Name=JARVIS OS
+Comment=Voice-First Dynamic Widget Wayland Desktop Environment
+Exec=/usr/local/bin/jarvis-de
+Type=Application
+DesktopNames=JARVIS;Hyprland
+
+```
+
+---
+
+## 5. Phase 4 — Bidirectional NDJSON Protocol & Python HUD Bridge
+
+Use **two complementary IPC channels**:
+
+1. **`qs ipc call jarvis ...`** — zero-setup CLI triggers for instant offline Cactus-Needle commands (`setState`, `clearHud`, `pinLast`, `expandLast`, `togglePalette`).
+2. **Unix Domain Socket (`/run/user/$UID/jarvis-hud.sock`)** — full-duplex newline-delimited JSON (NDJSON) streaming rich widget payloads from Python to Quickshell, and returning button clicks/approvals/text commands from Quickshell back to Python.
+
+### 5.1 `widget_engine/protocol.py`
+
+```python
+from __future__ import annotations
+import json
+from typing import Any, Literal
+from pydantic import BaseModel, Field
+
+HudAction = Literal[
+    "spawn_widget",
+    "update_widget",
+    "pin_widget",
+    "dismiss_widget",
+    "expand_widget",
+    "set_voice_state",
+    "set_transcript",
+]
+
+WidgetZone = Literal["left", "right", "modal"]
+VoiceState = Literal["standby", "listening", "thinking", "executing", "speaking"]
+
+
+class HudCommand(BaseModel):
+    action: HudAction
+    id: str = ""
+    type: str = ""
+    zone: WidgetZone = "right"
+    ttl: int = 25  # -1 = pinned (never auto-dismiss)
+    title: str = ""
+    expand_cmd: str = ""
+    state: VoiceState | None = None
+    text: str = ""
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+    def to_ndjson(self) -> bytes:
+        return (self.model_dump_json(exclude_none=True) + "\n").encode("utf-8")
+
+
+class WidgetReturnEvent(BaseModel):
+    event: Literal["widget_action"] = "widget_action"
+    id: str
+    action_name: str  # approve | reject | select_item | toggle_task | submit_command | expand | dismiss
+    data: dict[str, Any] = Field(default_factory=dict)
+
+    @classmethod
+    def from_line(cls, raw: bytes) -> "WidgetReturnEvent":
+        return cls.model_validate(json.loads(raw.decode("utf-8")))
+
+```
+
+### 5.2 `widget_engine/hud_bridge.py`
+
+```python
+from __future__ import annotations
+import asyncio
+import os
+from collections.abc import Awaitable, Callable
+from pathlib import Path
+from .protocol import HudCommand, WidgetReturnEvent
+
+ActionCallback = Callable[[WidgetReturnEvent], Awaitable[None]]
+
+
+def default_socket_path() -> str:
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    return str(Path(runtime_dir) / "jarvis-hud.sock")
+
+
+class HudBridge:
+    def __init__(self, socket_path: str | None = None) -> None:
+        self.socket_path = socket_path or default_socket_path()
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
+        self._callbacks: list[ActionCallback] = []
+        self._listen_task: asyncio.Task[None] | None = None
+        self._lock = asyncio.Lock()
+
+    def on_action(self, cb: ActionCallback) -> None:
+        self._callbacks.append(cb)
+
+    async def connect(self) -> None:
+        async with self._lock:
+            if self._writer and not self._writer.is_closing():
+                return
+            self._reader, self._writer = await asyncio.open_unix_connection(self.socket_path)
+            self._listen_task = asyncio.create_task(self._read_loop())
+
+    async def send(self, cmd: HudCommand) -> None:
+        for attempt in range(3):
+            try:
+                await self.connect()
+                assert self._writer is not None
+                self._writer.write(cmd.to_ndjson())
+                await self._writer.drain()
+                return
+            except (ConnectionError, FileNotFoundError):
+                await self.close()
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(0.25 * (attempt + 1))
+
+    async def _read_loop(self) -> None:
+        assert self._reader is not None
+        try:
+            while line := await self._reader.readline():
+                event = WidgetReturnEvent.from_line(line)
+                for cb in self._callbacks:
+                    asyncio.create_task(cb(event))
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await self.close()
+
+    async def close(self) -> None:
+        if self._listen_task:
+            self._listen_task.cancel()
+            self._listen_task = None
+        if self._writer:
+            self._writer.close()
+            try:
+                await self._writer.wait_closed()
+            except Exception:
+                pass
+        self._reader = None
+        self._writer = None
+
+```
+
+---
+
+## 6. Phase 5 — Quickshell 0.3 Core Desktop Shell (`ui/jarvis_shell/`)
+
+### 6.1 `ui/jarvis_shell/qmldir` (Required for Singletons)
+
+```text
+singleton Theme 1.0 Theme.qml
+singleton StateStore 1.0 StateStore.qml
+
+```
+
+### 6.2 `ui/jarvis_shell/Theme.qml`
+
+```qml
+pragma Singleton
+import QtQuick
+import Quickshell
+
+Singleton {
+    readonly property color bgCanvas: "#05080F"
+    readonly property color cardGlass: Qt.rgba(8 / 255, 16 / 255, 28 / 255, 0.78)
+    readonly property color cyan: "#00E5FF"
+    readonly property color cyanDim: Qt.rgba(0, 229 / 255, 1, 0.28)
+    readonly property color blue: "#0A84FF"
+    readonly property color textPrimary: "#F5F9FF"
+    readonly property color textMuted: "#8AA4C2"
+    readonly property color amber: "#FFB300"
+    readonly property color danger: "#FF3B5C"
+
+    readonly property int cardRadius: 14
+    readonly property int borderSize: 1
+    readonly property int animMs: 220
+    readonly property string fontMain: "Inter"
+    readonly property string fontMono: "JetBrainsMono Nerd Font"
+}
+
+```
+
+### 6.3 `ui/jarvis_shell/StateStore.qml`
+
+Manages the **5-widget cap** (max 3 left, max 2 right), **overflow pill collapsing**, **IPC handler** (with explicit Quickshell 0.3 types), and the **bidirectional Unix `SocketServer**`:
+
+```qml
+pragma Singleton
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import Quickshell.Hyprland
+
+Singleton {
+    id: root
+
+    property string voiceState: "standby" // standby | listening | thinking | executing | speaking
+    property string transcript: ""
+    property var activeWidgets: []        // [{id, type, zone, ttl, title, expand_cmd, payload, pinned}]
+    property var minimizedPills: []       // Overflow or collapsed widgets
+    property var activeModal: null        // {id, type, title, payload}
+    property bool paletteOpen: false
+
+    readonly property int maxTotal: 5
+    readonly property int maxLeft: 3
+    readonly property int maxRight: 2
+    readonly property string socketPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/jarvis-hud.sock"
+
+    // Connected client socket reference for returning UI actions to Python
+    property var _clientSocket: null
+
+    function handleCommand(msg) {
+        switch (msg.action) {
+        case "set_voice_state":
+            voiceState = msg.state || "standby";
+            if (voiceState === "standby") transcript = "";
+            break;
+        case "set_transcript":
+            transcript = msg.text || "";
+            break;
+        case "spawn_widget":
+            spawnWidget(msg);
+            break;
+        case "update_widget":
+            updateWidget(msg);
+            break;
+        case "pin_widget":
+            setPinned(msg.id, true);
+            break;
+        case "dismiss_widget":
+            if (msg.id === "all") clearUnpinned();
+            else dismissWidget(msg.id);
+            break;
+        case "expand_widget":
+            expandWidget(msg.id);
+            break;
+        }
+    }
+
+    function spawnWidget(w) {
+        if (w.zone === "modal") {
+            activeModal = w;
+            return;
+        }
+        const zone = (w.zone === "left") ? "left" : "right";
+        const item = {
+            id: w.id || ("w_" + Date.now()),
+            type: w.type || "web_intel",
+            zone: zone,
+            ttl: (w.ttl !== undefined) ? w.ttl : 25,
+            title: w.title || w.type,
+            expand_cmd: w.expand_cmd || "",
+            payload: w.payload || {},
+            pinned: (w.ttl === -1)
+        };
+
+        let list = activeWidgets.filter(x => x.id !== item.id);
+        let pills = minimizedPills.filter(x => x.id !== item.id);
+
+        // Enforce per-zone and global 5-widget cap by collapsing oldest unpinned card
+        const zoneCap = (zone === "left") ? maxLeft : maxRight;
+        const zoneCount = () => list.filter(x => x.zone === zone).length;
+
+        while (zoneCount() >= zoneCap || list.length >= maxTotal) {
+            let victimIdx = list.findIndex(x => x.zone === zone && !x.pinned);
+            if (victimIdx < 0) victimIdx = list.findIndex(x => !x.pinned);
+            if (victimIdx < 0) break;
+            pills.push(list[victimIdx]);
+            list.splice(victimIdx, 1);
+        }
+
+        list.push(item);
+        minimizedPills = pills;
+        activeWidgets = list;
+    }
+
+    function updateWidget(w) {
+        activeWidgets = activeWidgets.map(x =>
+            x.id === w.id ? Object.assign({}, x, {
+                title: w.title || x.title,
+                payload: Object.assign({}, x.payload, w.payload || {})
+            }) : x
+        );
+    }
+
+    function setPinned(id, pinned) {
+        activeWidgets = activeWidgets.map(x =>
+            x.id === id ? Object.assign({}, x, { pinned: pinned, ttl: pinned ? -1 : 25 }) : x
+        );
+    }
+
+    function dismissWidget(id) {
+        if (activeModal && activeModal.id === id) {
+            activeModal = null;
+            return;
+        }
+        activeWidgets = activeWidgets.filter(x => x.id !== id);
+        minimizedPills = minimizedPills.filter(x => x.id !== id);
+    }
+
+    function minimizeWidget(id) {
+        const target = activeWidgets.find(x => x.id === id);
+        if (!target) return;
+        activeWidgets = activeWidgets.filter(x => x.id !== id);
+        minimizedPills = minimizedPills.concat([target]);
+    }
+
+    function restorePill(id) {
+        const target = minimizedPills.find(x => x.id === id);
+        if (!target) return;
+        spawnWidget(target);
+    }
+
+    function clearUnpinned() {
+        activeWidgets = activeWidgets.filter(x => x.pinned);
+        minimizedPills = [];
+    }
+
+    function expandWidget(id) {
+        const target = activeWidgets.find(x => x.id === id) || activeWidgets[activeWidgets.length - 1];
+        if (!target || !target.expand_cmd) return;
+        Hyprland.dispatch("exec " + target.expand_cmd);
+        minimizeWidget(target.id);
+        sendAction(target.id, "expand", { cmd: target.expand_cmd });
+    }
+
+    function sendAction(id, actionName, data) {
+        if (!_clientSocket || !_clientSocket.connected) return;
+        const line = JSON.stringify({
+            event: "widget_action",
+            id: id,
+            action_name: actionName,
+            data: data || {}
+        }) + "\n";
+        _clientSocket.write(line);
+        _clientSocket.flush();
+    }
+
+    // Channel 1: Fast CLI IPC for Cactus-Needle (<200ms offline commands)
+    IpcHandler {
+        target: "jarvis"
+        function setState(state: string): void { root.voiceState = state; }
+        function clearHud(): void { root.clearUnpinned(); }
+        function pinLast(): void {
+            if (root.activeWidgets.length > 0) {
+                root.setPinned(root.activeWidgets[root.activeWidgets.length - 1].id, true);
+            }
+        }
+        function expandLast(): void {
+            if (root.activeWidgets.length > 0) {
+                root.expandWidget(root.activeWidgets[root.activeWidgets.length - 1].id);
+            }
+        }
+        function togglePalette(): void { root.paletteOpen = !root.paletteOpen; }
+        function dismissId(id: string): void { root.dismissWidget(id); }
+    }
+
+    // Channel 2: Full-Duplex Unix SocketServer for Python Backend
+    SocketServer {
+        path: root.socketPath
+        active: true
+        handler: Socket {
+            id: clientSock
+            onConnectedChanged: {
+                if (connected) root._clientSocket = clientSock;
+            }
+            parser: SplitParser {
+                onRead: msg => {
+                    try { root.handleCommand(JSON.parse(msg)); }
+                    catch (e) { console.warn("Invalid HUD JSON:", e); }
+                }
+            }
+        }
+    }
+}
+
+```
+
+### 6.4 `ui/jarvis_shell/CoreCanvas.qml` (Plane 1 — Background Arc Reactor)
+
+Stays mounted permanently on `WlrLayer.Background` and drives its live ring from `PwNodePeakMonitor` while keeping **zero timers/animations running in `standby**`:
+
+```qml
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+import Quickshell.Services.Pipewire
+
+PanelWindow {
+    id: coreWin
+    anchors { top: true; bottom: true; left: true; right: true }
+    exclusionMode: ExclusionMode.Ignore
+    color: Theme.bgCanvas
+
+    WlrLayershell.layer: WlrLayer.Background
+    WlrLayershell.namespace: "jarvis-core"
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+    readonly property bool isActive: StateStore.voiceState !== "standby"
+    readonly property color coreColor:
+        StateStore.voiceState === "executing" ? Theme.amber :
+        StateStore.voiceState === "thinking"  ? Theme.blue  : Theme.cyan
+
+    PwObjectTracker { objects: [Pipewire.defaultAudioSource, Pipewire.defaultAudioSink] }
+
+    PwNodePeakMonitor {
+        id: audioPeak
+        node: StateStore.voiceState === "speaking"
+            ? Pipewire.defaultAudioSink
+            : Pipewire.defaultAudioSource
+        enabled: coreWin.isActive
+    }
+
+    // Centered Arc Reactor Core (35% - 65% stage)
+    Item {
+        id: reactor
+        width: 240; height: 240
+        anchors.centerIn: parent
+
+        Rectangle {
+            id: outerRing
+            anchors.centerIn: parent
+            width: 210 + (coreWin.isActive ? audioPeak.peak * 36 : 0)
+            height: width
+            radius: width / 2
+            color: "transparent"
+            border.width: 2
+            border.color: coreWin.coreColor
+            opacity: coreWin.isActive ? 0.92 : 0.28
+
+            Behavior on width { enabled: coreWin.isActive; NumberAnimation { duration: 70 } }
+            Behavior on opacity { NumberAnimation { duration: Theme.animMs } }
+        }
+
+        Rectangle {
+            id: innerRing
+            anchors.centerIn: parent
+            width: 132; height: 132; radius: 66
+            color: Qt.rgba(0, 229 / 255, 1, coreWin.isActive ? 0.14 : 0.04)
+            border.width: 1
+            border.color: coreWin.coreColor
+
+            RotationAnimator on rotation {
+                from: 0; to: 360; duration: 4200
+                loops: Animation.Infinite
+                running: StateStore.voiceState === "thinking" || StateStore.voiceState === "executing"
+            }
+        }
+
+        Text {
+            anchors.centerIn: parent
+            text: StateStore.voiceState.toUpperCase()
+            color: coreWin.coreColor
+            font.family: Theme.fontMono
+            font.pixelSize: 13
+            font.letterSpacing: 3
+        }
+    }
+
+    // Live Voice Transcript Subtitle
+    Text {
+        visible: StateStore.transcript.length > 0
+        anchors.top: reactor.bottom
+        anchors.topMargin: 28
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(parent.width * 0.42, 680)
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        text: StateStore.transcript
+        color: Theme.textPrimary
+        font.family: Theme.fontMain
+        font.pixelSize: 16
+    }
+}
+
+```
+
+### 6.5 `ui/jarvis_shell/components/HologramCard.qml`
+
+Handles the translucent card shell, hover-paused TTL progress bar, Pin/Expand/Close controls, and smooth 220 ms unmount:
+
+```qml
+import QtQuick
+import QtQuick.Layouts
+
+Rectangle {
+    id: card
+    required property var widgetData
+    default property alias content: bodySlot.data
+
+    property bool closing: false
+    property real remainingSec: widgetData.ttl
+
+    width: parent ? parent.width : 380
+    implicitHeight: mainCol.implicitHeight + 24
+    radius: Theme.cardRadius
+    color: Theme.cardGlass
+    border.width: Theme.borderSize
+    border.color: widgetData.pinned ? Theme.amber : Theme.cyanDim
+    opacity: closing ? 0.0 : 1.0
+
+    Behavior on opacity { NumberAnimation { duration: Theme.animMs } }
+
+    HoverHandler { id: cardHover }
+
+    Timer {
+        interval: 1000
+        repeat: true
+        running: !card.closing && !widgetData.pinned && widgetData.ttl > 0 && !cardHover.hovered
+        onTriggered: {
+            card.remainingSec -= 1;
+            if (card.remainingSec <= 0) card.requestClose();
+        }
+    }
+
+    Timer {
+        id: exitTimer
+        interval: Theme.animMs
+        onTriggered: StateStore.dismissWidget(widgetData.id)
+    }
+
+    function requestClose() {
+        if (closing) return;
+        closing = true;
+        exitTimer.start();
+    }
+
+    ColumnLayout {
+        id: mainCol
+        anchors { fill: parent; margins: 12 }
+        spacing: 8
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Text {
+                text: widgetData.title
+                color: Theme.cyan
+                font.family: Theme.fontMono
+                font.pixelSize: 12
+                font.bold: true
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+            }
+
+            // Pin Button
+            Text {
+                text: widgetData.pinned ? "PINNED" : "PIN"
+                color: widgetData.pinned ? Theme.amber : Theme.textMuted
+                font.family: Theme.fontMono; font.pixelSize: 10
+                MouseArea { anchors.fill: parent; onClicked: StateStore.setPinned(widgetData.id, !widgetData.pinned) }
+            }
+
+            // Expand-to-App Button (only when expand_cmd exists)
+            Text {
+                visible: widgetData.expand_cmd.length > 0
+                text: "EXPAND"
+                color: Theme.blue
+                font.family: Theme.fontMono; font.pixelSize: 10
+                MouseArea { anchors.fill: parent; onClicked: StateStore.expandWidget(widgetData.id) }
+            }
+
+            // Close Button
+            Text {
+                text: "✕"
+                color: Theme.textMuted
+                font.pixelSize: 12
+                MouseArea { anchors.fill: parent; onClicked: card.requestClose() }
+            }
+        }
+
+        ColumnLayout {
+            id: bodySlot
+            Layout.fillWidth: true
+            spacing: 6
+        }
+
+        // TTL Countdown Bar
+        Rectangle {
+            visible: !widgetData.pinned && widgetData.ttl > 0
+            Layout.fillWidth: true
+            height: 2
+            color: Qt.rgba(1, 1, 1, 0.08)
+            Rectangle {
+                height: parent.height
+                width: parent.width * Math.max(0, card.remainingSec / Math.max(1, widgetData.ttl))
+                color: Theme.cyan
+                Behavior on width { NumberAnimation { duration: 950 } }
+            }
+        }
+    }
+}
+
+```
+
+### 6.6 `ui/jarvis_shell/TopBar.qml` & `WidgetCanvas.qml` (Plane 2 — Click-Through Mask + `Loader`)
+
+```qml
+// TopBar.qml — Auto-hiding overflow strip for collapsed/minimized pills
+import QtQuick
+import QtQuick.Layouts
+
+Rectangle {
+    id: bar
+    visible: StateStore.minimizedPills.length > 0
+    height: visible ? 34 : 0
+    width: pillRow.implicitWidth + 24
+    radius: 17
+    color: Theme.cardGlass
+    border.width: 1
+    border.color: Theme.cyanDim
+
+    RowLayout {
+        id: pillRow
+        anchors.centerIn: parent
+        spacing: 8
+        Repeater {
+            model: StateStore.minimizedPills
+            delegate: Rectangle {
+                required property var modelData
+                height: 24
+                width: pillTxt.implicitWidth + 16
+                radius: 12
+                color: Qt.rgba(0, 229 / 255, 1, 0.14)
+                Text {
+                    id: pillTxt
+                    anchors.centerIn: parent
+                    text: modelData.title
+                    color: Theme.textPrimary
+                    font.family: Theme.fontMono; font.pixelSize: 11
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: StateStore.restorePill(modelData.id)
+                }
+            }
+        }
+    }
+}
+
+```
+
+```qml
+// WidgetCanvas.qml — Plane 2 Dynamic Docks + Click-Through Region Mask
+import QtQuick
+import QtQuick.Layouts
+import Quickshell
+import Quickshell.Wayland
+
+PanelWindow {
+    id: hudWin
+    anchors { top: true; bottom: true; left: true; right: true }
+    exclusionMode: ExclusionMode.Ignore
+    color: "transparent"
+
+    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.namespace: "jarvis-hud"
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+    // CRITICAL: Only active dock containers + TopBar capture mouse input.
+    // All empty space passes 100% of clicks/scrolls straight to Plane 3 apps.
+    mask: Region {
+        regions: [
+            Region { item: topBar },
+            Region { item: leftRail },
+            Region { item: rightStage }
+        ]
+    }
+
+    function resolveWidgetUrl(type) {
+        const map = {
+            telemetry: "widgets/TelemetryWidget.qml",
+            quick_controls: "widgets/QuickControlsWidget.qml",
+            media_card: "widgets/MediaCardWidget.qml",
+            web_intel: "widgets/WebIntelWidget.qml",
+            file_cards: "widgets/FileCardsWidget.qml",
+            memory_node: "widgets/MemoryNodeWidget.qml",
+            swarm_strip: "widgets/SwarmStripWidget.qml"
+        };
+        return map[type] || "widgets/WebIntelWidget.qml";
+    }
+
+    TopBar {
+        id: topBar
+        anchors.top: parent.top
+        anchors.topMargin: 12
+        anchors.horizontalCenter: parent.horizontalCenter
+    }
+
+    // Left Rail (2% - 32% screen width, max 3 cards)
+    Column {
+        id: leftRail
+        x: Math.round(parent.width * 0.02)
+        y: 60
+        width: Math.round(parent.width * 0.30)
+        spacing: 12
+
+        Repeater {
+            model: StateStore.activeWidgets.filter(w => w.zone === "left")
+            delegate: Loader {
+                required property var modelData
+                width: leftRail.width
+                active: true
+                source: hudWin.resolveWidgetUrl(modelData.type)
+                onLoaded: { item.widgetData = modelData; }
+            }
+        }
+    }
+
+    // Right Stage (68% - 98% screen width, max 2 cards)
+    Column {
+        id: rightStage
+        x: Math.round(parent.width * 0.68)
+        y: 60
+        width: Math.round(parent.width * 0.30)
+        spacing: 12
+
+        Repeater {
+            model: StateStore.activeWidgets.filter(w => w.zone === "right")
+            delegate: Loader {
+                required property var modelData
+                width: rightStage.width
+                active: true
+                source: hudWin.resolveWidgetUrl(modelData.type)
+                onLoaded: { item.widgetData = modelData; }
+            }
+        }
+    }
+}
+
+```
+
+### 6.7 `ui/jarvis_shell/Shell.qml` (Root Entry + Lazy-Loaded Overlays)
+
+```qml
+import QtQuick
+import Quickshell
+import Quickshell.Services.Notifications
+import Quickshell.Services.Polkit
+
+ShellRoot {
+    CoreCanvas {}
+    WidgetCanvas {}
+
+    // Native Notification Server -> Top-Right Toasts
+    NotificationServer {
+        id: notifServer
+        bodySupported: true
+        actionsSupported: true
+        onNotification: notif => { notif.tracked = true; }
+    }
+
+    LazyLoader {
+        active: notifServer.trackedNotifications.values.length > 0
+        source: "widgets/NotificationToast.qml"
+        onLoaded: { item.server = notifServer; }
+    }
+
+    // Native Polkit Agent -> Spawns Amber Airlock Modal on sudo/privilege prompts
+    PolkitAgent { id: polkitAgent }
+
+    LazyLoader {
+        active: StateStore.activeModal !== null || polkitAgent.flow !== null
+        source: "widgets/ExecutionAirlockModal.qml"
+        onLoaded: {
+            item.modalData = StateStore.activeModal;
+            item.polkitFlow = polkitAgent.flow;
+        }
+    }
+
+    // Super+Space Silent Command Palette (destroyed completely when closed)
+    LazyLoader {
+        active: StateStore.paletteOpen
+        source: "widgets/CommandPaletteModal.qml"
+    }
+}
+
+```
+
+---
+
+## 7. Phase 6 — Complete Dynamic Widget Suite (Replacing Every DE App)
+
+Wrap every card in `HologramCard { widgetData: root.widgetData }` so every widget inherits hover-paused TTL, Pin, Expand, and Close automatically.
+
+### System Layer (5 Widgets)
+
+* **`TelemetryWidget.qml` (`type: "telemetry"`, Left Rail):** Replaces `htop`/System Monitor. Reads `/proc/stat`, `/proc/meminfo`, and `/sys/class/thermal/` via a lightweight `FileView` + 2-second `Timer` that runs **only while mounted** and stops automatically when unloaded. Displays compact radial Canvas arcs for CPU, RAM, Temp, Net, and API quota status.
+
+
+* **`QuickControlsWidget.qml` (`type: "quick_controls"`, Left Rail):** Replaces Settings & System Tray. Binds directly to `Quickshell.Services.Pipewire` (`defaultAudioSink.audio.volume`, `muted`, `defaultAudioSource`), `Quickshell.Networking` (`WifiDevice` toggle + SSID list), `Quickshell.Bluetooth`, and a `Process` call to `brightnessctl set <n>%`.
+* **`MediaCardWidget.qml` (`type: "media_card"`, Left Rail):** Replaces media applets. Binds to `Quickshell.Services.Mpris` (`Mpris.players.values[0]`) for cover art, title/artist, seek bar, and Play/Pause/Next/Prev controls.
+* **`NotificationToast.qml` (`NotificationServer`, Top-Right Overlay):** Renders live notifications on `WlrLayer.Overlay` with clickable action buttons and auto-dismiss; unloaded completely via `LazyLoader` when zero notifications are tracked.
+* **`ExecutionAirlockModal.qml` (`WlrLayer.Overlay`, `WlrKeyboardFocus.OnDemand`):** High-visibility amber `#FFB300` centered gate serving two duties:
+1. **Python `jarvis_control/execution_policy.py` approvals:** Displays exact shell command, risk tier, and reasoning; clicking **Approve** or **Cancel** (or speaking `"Approve"` / `"Cancel"`) calls `StateStore.sendAction(modalData.id, "approve" | "reject", {})`.
+
+
+2. **Native Polkit auth:** When `polkitAgent.flow` is active, renders a secure `TextInput` (`echoMode: TextInput.Password`) that submits directly to `polkitFlow.submit(password)`.
+
+
+
+### Intelligence & Agent Layer (5 Widgets)
+
+* **`WebIntelWidget.qml` (`type: "web_intel"`, Right Stage):** Replaces casual browsing. Renders Agent Reach / Gemini briefings (`payload.summary`, `payload.bullets[]`, clickable `payload.sources[]` chips). Clicking **EXPAND** or saying `"Expand this"` launches the URL in Firefox/Chromium docked on the Right Stage and collapses the card into `TopBar.qml`.
+
+
+* **`FileCardsWidget.qml` (`type: "file_cards"`, Right Stage):** Replaces Dolphin/Nautilus. Displays matched files with prominent cyan index pills (`#1`, `#2`, `#3`...) so you can say *"Summarize number 2"* or *"Open number 1"*, plus click-to-open emitting `select_item` back over the Unix socket.
+
+
+* **`MemoryNodeWidget.qml` (`type: "memory_node"`, Left/Right):** Replaces Obsidian/Calendar apps. Displays facts and daily tasks queried from `jarvis_memory` (SQLite BM25 + vector graph) with interactive checkboxes emitting `toggle_task` back to Python.
+
+
+* **`SwarmStripWidget.qml` (`type: "swarm_strip"`, Left Rail):** Replaces terminal log windows. Renders live background worker progress bars streamed from `orchestration/hermes_api.py` with per-job cancel buttons.
+
+
+* **`CommandPaletteModal.qml` (`WlrLayer.Overlay`, `WlrKeyboardFocus.OnDemand`):** Toggled by `Super + Space` (`qs ipc call jarvis togglePalette`). A single frosted glass input bar for typing commands silently; pressing `Enter` emits `submit_command` over the socket into the exact same voice router, and `Esc` sets `StateStore.paletteOpen = false`.
+
+---
+
+## 8. Phase 7 — Full Voice Control Wiring & Offline Rescue
+
+Wire your existing Python backend (`voice_layer/needle_router.py`, `orchestration/task_events.py`, and `jarvis_control/execution_policy.py`) into `HudBridge`.
+
+### 8.1 Two-Tier Voice Command Routing
+
+| Command Tier | Engine & Latency | Exact Behavior |
+| --- | --- | --- |
+| **HUD Instant Control** | Cactus-Needle (<200 ms, offline) | `"Clear HUD"` → `qs ipc call jarvis clearHud` + `hyprctl dispatch movetoworkspacesilent special:vault`; `"Pin that"` → `qs ipc call jarvis pinLast`; `"Expand this"` → `qs ipc call jarvis expandLast`.
+
+ |
+| **Window Docking** | Cactus-Needle (<200 ms, offline) | `"Dock right"` → `hyprctl dispatch moveactive exact 53% 12%`; `"Dock left"` → `exact 2% 12%`; `"Bring apps back"` → `hyprctl dispatch togglespecialworkspace vault`; `"Close window"` → `killactive`.
+
+ |
+| **Offline System Rescue** | Cactus-Needle (<200 ms, 0 Wi-Fi) | `"Connect Wi-Fi"` → spawns `quick_controls` widget; `"Open emergency terminal"` → launches `kitty`; `"Restart voice daemon"` → `systemctl --user restart jarvis-voice`; `"Reboot"` → spawns `execution_airlock`.
+
+ |
+| **Conversational / Agent** | Gemini Live API + Hermes | Streams `set_voice_state` (`thinking` → `executing` → `speaking`), partial transcripts, and structured `spawn_widget` / `update_widget` JSON via `widget_engine/registry.py`.
+
+ |
+| **Safety Gate** | `jarvis_control/execution_policy.py` | Intercepts destructive/privileged tool calls, emits `spawn_widget` (`type: "execution_airlock", zone: "modal"`), awaits either `widget_action` from QML or spoken `"Approve"`/`"Cancel"` before running.
+
+ |
+
+### 8.2 Conversational Voice UX Loop
+
+Implement three rules in `voice_layer/` so the DE feels genuinely hands-free:
+
+1. **Immediate Acoustic + Visual Ack (<200 ms):** On wake-word detection, play a short low-latency PipeWire chime and fire `qs ipc call jarvis setState listening` simultaneously.
+
+
+2. **6–8 Second Follow-Up Window:** After TTS finishes speaking, keep Silero VAD listening for 7 seconds before returning `voiceState` to `standby`, letting you chain *"Show my recent PDFs"* → *"Summarize number 2"* → *"Pin that"* without repeating the wake word.
+
+
+3. **Instant Barge-In:** If Silero VAD detects user speech or `"Stop"` while `voiceState == "speaking"`, immediately halt TTS audio playback and transition back to `listening`.
+
+
+
+### 8.3 End-to-End Test Emitter (`widget_engine/test_emit.py`)
+
+Run this script before connecting live voice to verify every single HUD behavior:
+
+```python
+import asyncio
+from widget_engine.hud_bridge import HudBridge
+from widget_engine.protocol import HudCommand
+
+
+async def main() -> None:
+    bridge = HudBridge()
+    bridge.on_action(lambda ev: print("HUD RETURNED:", ev.model_dump()))
+
+    await bridge.send(HudCommand(action="set_voice_state", state="listening"))
+    await bridge.send(HudCommand(action="set_transcript", text="Checking system telemetry and CachyOS notes..."))
+
+    # Spawn 6 widgets to prove the 5-widget cap collapses widget #1 into TopBar.qml
+    for i in range(1, 7):
+        await bridge.send(HudCommand(
+            action="spawn_widget",
+            id=f"demo_{i}",
+            type="telemetry" if i % 2 else "web_intel",
+            zone="left" if i % 2 else "right",
+            ttl=30,
+            title=f"Widget #{i}",
+            expand_cmd="kitty" if i % 2 == 0 else "",
+            payload={"summary": f"Live test payload {i}", "bullets": ["8 GB RAM verified", "Hyprland Lua active"]},
+        ))
+        await asyncio.sleep(0.4)
+
+    await asyncio.sleep(5)
+    await bridge.send(HudCommand(action="set_voice_state", state="standby"))
+    await bridge.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+```
+
+---
+
+## 9. Phase 8 — Safe Testing, Auto-Boot (`greetd`) & Custom `archiso`
+
+Never replace your login manager until every fallback works cleanly from a secondary TTY.
+
+### 9.1 Safe TTY2 Verification Checklist
+
+1. Press **`Ctrl + Alt + F2`** to switch to TTY2 and log in as your normal user.
+
+
+2. Launch the isolated session: `./bin/jarvis-de`.
+3. Verify the screen boots to a pure `#05080F` dark canvas with the centered Arc Reactor and zero bars/docks.
+
+
+4. Press **`Super + Shift + T`** to summon the emergency `kitty` terminal; verify it floats translucent and borderless on the Right Stage (`53% 12%`) without covering the Arc Reactor.
+
+
+5. Run `python -m widget_engine.test_emit` inside `kitty`:
+* Confirm 5 cards render cleanly across Left Rail + Right Stage and the 6th collapses the oldest unpinned card into a pill in `TopBar.qml`.
+* Move the mouse over empty space and click inside `kitty` to verify **100% click-through masking**.
+* Hover over a card to verify its TTL bar pauses.
+* Run `qs ipc call jarvis clearHud` and confirm all unpinned cards fade out and release RAM (`ps -o rss= -p $(pgrep quickshell)`).
+
+
+6. Press **`Super + Space`** to verify `CommandPaletteModal` grabs keyboard focus cleanly and closes on `Esc`.
+7. Test offline rescue: disable Wi-Fi (`nmcli radio wifi off`) and test `"Clear HUD"`, `"Connect Wi-Fi"`, and `"Open emergency terminal"` via Cactus-Needle.
+
+
+
+### 9.2 Zero-Click Boot with `greetd`
+
+Once TTY2 passes 100%, install the launcher globally and configure `/etc/greetd/config.toml`:
+
+```bash
+sudo ln -sf "$HOME/JARVIS-OS/bin/jarvis-de" /usr/local/bin/jarvis-de
+sudo install -Dm644 "$HOME/JARVIS-OS/packaging/jarvis-os.desktop" \
+  /usr/share/wayland-sessions/jarvis-os.desktop
+
+```
+
+```toml
+# /etc/greetd/config.toml
+[terminal]
+vt = 1
+
+[default_session]
+command = "/usr/local/bin/jarvis-de"
+user = "gopi"
+
+```
+
+Enable `greetd` (disabling any previous display manager like `sddm` or `gdm` first):
+
+```bash
+sudo systemctl enable greetd.service
+
+```
+
+### 9.3 Optional: Packaging Into a Bootable `archiso`
+
+When you are ready to turn this into a standalone installable JARVIS OS ISO:
+
+1. Copy Arch's releng profile: `cp -r /usr/share/archiso/configs/releng/ ~/jarvis-iso`.
+
+
+2. In `packages.x86_64`, replace `linux` / `linux-headers` with `linux-cachyos` / `linux-cachyos-headers`, and include `hyprland`, `quickshell`, `pipewire`, `pipewire-pulse`, `wireplumber`, `greetd`, `python`, `sqlite`, and your packaged `jarvis-os` `.pkg.tar.zst` (skipping `ollama`/`cuda`/`rocm` to keep the ISO nimble).
+
+
+3. Include a first-boot Quickshell modal (`FirstBootKeyModal.qml`) that prompts for `GEMINI_API_KEY` and stores it securely via Linux `keyctl` / kernel keyring (or `chmod 600 ~/.config/jarvis/config.toml`) rather than baking keys into the ISO.
+
+
+4. Build with `sudo mkarchiso -v -w /tmp/archiso-tmp -o ~/out ~/jarvis-iso` and test in **QEMU/KVM** before flashing to hardware.
+
+
+
+If you want me to write out the full QML code for all 10 files inside `ui/jarvis_shell/widgets/` next—or start directly with `TelemetryWidget.qml`, `QuickControlsWidget.qml`, and `ExecutionAirlockModal.qml`—let me know which batch to generate first.
+**Important note before sharing this with Codex:** GitHub didn't expose the live file tree of `nazirlouis/ada-jarvis-public` to web browsing (only its public listing as Nazir Louis's voice-driven workspace, following the React/Electron/Canvas architecture of `ada_v2`). Because **Codex has direct terminal and `git` access on your machine**, the addendum below instructs Codex to clone that repo into `/tmp` locally, extract its exact frontend design tokens, spatial layout, and organic animation mechanics, and **port them 1:1 into native Quickshell (Qt6/QML)**—giving you that exact natural dynamic widget feel **without** adding Electron, Node.js, or Chromium RAM overhead to your 8 GB Arch Linux DE.
+
+Attach or paste everything below directly after the **Full JARVIS OS DE Build Guide** so Codex treats both as one unified specification.
+
+---
+
+## Addendum A: Natural Dynamic Widget Style & Visual Port (`ada-jarvis-public` → Native Quickshell QML)
+
+### 1. Core Directive (Design Port, Not Runtime Adoption)
+
+Treat `[https://github.com/nazirlouis/ada-jarvis-public.git](https://github.com/nazirlouis/ada-jarvis-public.git)` strictly as the **visual design, spatial layout, and dynamic widget UX reference** for `ui/jarvis_shell/`.
+
+* **DO extract and faithfully recreate:** Color palette nuances, translucent surface styling, glowing edge accents, typography hierarchy, voice orb/visualizer geometry, organic widget spawn/despawn motion, spatial card positioning, drag/reposition feel, and micro-interactions from its frontend folder.
+* **DO NOT import its web runtime:** Do **not** install Node.js, npm, React, Electron, Socket.IO, or Three.js into `JARVIS-OS`, and do **not** run a Chromium/WebView shell as the desktop environment. Every visual and behavioral pattern must be implemented natively in **Quickshell 0.3 (Qt6/QML)** + **Hyprland 0.57+ Lua** to preserve native Wayland click-through masking, Polkit/PipeWire/MPRIS integration, and our **8 GB RAM** budget.
+
+### 2. Local Reference Extraction Protocol (Run During Wave 0)
+
+Before writing `Theme.qml`, `CoreCanvas.qml`, `HologramCard.qml`, or `WidgetCanvas.qml`, run this inspection step:
+
+```bash
+git clone --depth 1 https://github.com/nazirlouis/ada-jarvis-public.git /tmp/ada-jarvis-ref
+
+```
+
+Inspect the frontend directory inside `/tmp/ada-jarvis-ref` (e.g., `frontend/`, `src/`, `components/`, CSS/Tailwind/Canvas shaders) and document a short internal mapping before coding:
+
+1. **Visual Tokens:** Background gradients/vignettes, surface fill opacities, border thicknesses, corner radii, glow colors, primary/secondary/accent hex codes, and monospace vs. sans font scales → map directly into `ui/jarvis_shell/Theme.qml`.
+2. **Voice Core / Orb Mechanics:** Exact ring counts, pulse formulas, idle vs. listening vs. speaking states, and waveform/particle behavior → translate into lightweight `QtQuick.Shapes` / QML `Canvas` inside `CoreCanvas.qml` (keeping **0% running timers in `standby**`).
+3. **Widget Container Behavior:** Header chrome, status badges, drag handles, resize/collapse behavior, spacing, and card entry/exit keyframes → translate into `components/HologramCard.qml` and `WidgetCanvas.qml`.
+4. **Cleanup:** Never copy files verbatim from `/tmp/ada-jarvis-ref` into `JARVIS-OS`, and delete `/tmp/ada-jarvis-ref` once Wave 1 visual parity is verified.
+
+---
+
+### 3. Upgrades Over the Base Guide: Making Dynamic Widgets Feel Natural
+
+Override the rigid vertical side-column layout from Section 6.6 of the base guide with this **Natural Spatial Widget Engine** so widgets feel projected organically around the voice core—matching the fluid style of `ada-jarvis-public`:
+
+#### A. Orbital Spatial Placement + Auto-Deconfliction (Instead of Rigid Sidebars)
+
+* Keep the **Center Voice Core Safe Zone** (`36%–64%` width, `30%–70%` height) strictly clear of widgets at all times.
+* Instead of forcing widgets into stiff top-to-bottom column stacks, place newly spawned widgets into **natural spatial anchor slots** around the core based on widget `type` and open space:
+* **Slot 1 (Top-Left)** & **Slot 2 (Bottom-Left):** Operational & ambient cards (`telemetry`, `quick_controls`, `media_card`, `swarm_strip`).
+* **Slot 3 (Top-Right)** & **Slot 4 (Bottom-Right):** Rich content & intelligence cards (`web_intel`, `file_cards`, `memory_node`).
+* **Slot 5 (Floating Secondary):** Auto-positioned into the least-crowded free quadrant with simple bounding-box collision avoidance (`20px` minimum gap between cards) so widgets never overlap each other or cover the central orb.
+
+
+* Keep the **5-widget screen cap**; when a 6th widget spawns, smoothly animate the oldest unpinned card shrinking into a compact pill inside `TopBar.qml`.
+
+#### B. Core-Projected Spring Animations
+
+Replace plain linear opacity fades with organic projection motion so every card feels like JARVIS is projecting it into space from the center core:
+
+* **Spawn:** Animate simultaneously over `280 ms` using `Easing.OutCubic` / `Easing.OutBack` (overshoot `1.08`): `opacity: 0 → 1`, `scale: 0.88 → 1.0`, and a subtle `24px` directional slide outward from the center orb toward the card's target slot.
+* **Dismiss:** Reverse (`scale: 1.0 → 0.92`, `opacity: 1 → 0`, `200 ms`, `Easing.InCubic`), then immediately set `Loader.active = false` so Qt frees RAM completely.
+* **Slot Reflow:** Animate `x` and `y` smoothly (`240 ms`, `Easing.OutCubic`) whenever another card is dismissed or dragged, so remaining widgets glide cleanly rather than snapping.
+
+#### C. Free Mouse Dragging, Magnetic Snap & Focus Depth
+
+* **Drag Anywhere:** Add a `DragHandler` on `HologramCard.qml`'s header bar so the user can freely drag any floating widget anywhere across the spatial canvas with the mouse.
+* **Magnetic Edge & Safe-Zone Push:** When a drag finishes, gently clamp the card inside screen margins (`16px` padding) and smoothly nudge it clear if dropped directly on top of the central Arc Reactor core.
+* **Focus Depth Hierarchy:** Track `focusedWidgetId` in `StateStore.qml` (updated on hover, click, or newest voice spawn):
+* Focused/active widget: `opacity: 1.0`, crisp bright cyan border (`#00E5FF`), highest `z` order.
+* Passive unhovered widgets: subtle dim (`opacity: 0.84`) with softer translucent border so visual attention stays locked on the active task.
+
+
+
+#### D. Per-Widget Dynamic Click-Through Masking (Critical for Free-Floating Cards)
+
+Because widgets can now float freely and be dragged anywhere on the monitor, **do not** mask only two static `Column` boxes. In `WidgetCanvas.qml`:
+
+* Bind `PanelWindow.mask` (and `HyprlandWindow.visibleMask` if supported by the installed Quickshell 0.3 build) dynamically to **each active widget's live bounding `Item` + `TopBar**`.
+* Every pixel of empty space between floating cards must remain **100% click-through** to Plane 3 Hyprland floating apps (browser, terminal, video) underneath, and Hyprland blur must apply **only** behind actual card rectangles—never across empty transparent canvas space.
+
+---
+
+### 4. Exact Tech Translation Map (`ada-jarvis-public` Frontend → Quickshell QML)
+
+Use this table whenever translating patterns discovered inside `/tmp/ada-jarvis-ref`:
+
+| Pattern in Web Frontend (`ada-jarvis-public`) | Native Quickshell 0.3 + Hyprland Equivalent | 8 GB RAM Safeguard |
+| --- | --- | --- |
+| `backdrop-filter: blur(...)` (CSS) | Hyprland `hl.layer_rule` (`blur = true`, `ignore_alpha = 0`) + translucent QML `Rectangle` | Never use QML `FastBlur` or `ShaderEffectSource`. |
+| CSS `box-shadow` glow | Layered `1px` crisp `border` + subtle translucent inner/outer `Rectangle` halo | Never use QML `DropShadow` (breaks Qt render batching). |
+| Framer Motion / CSS spring transitions | QML `NumberAnimation` (`Easing.OutBack` / `Easing.OutCubic`) + `Behavior on x/y/scale/opacity` | Run animations only during state transitions; zero idle loops. |
+| HTML5 Canvas / Three.js Voice Orb | `QtQuick.Shapes` (`Shape` + `ShapePath` arcs) or throttled QML `Canvas` driven by `PwNodePeakMonitor` | Pause `PwNodePeakMonitor` and all timers completely in `standby`. |
+| React Draggable / Floating Window divs | `HologramCard.qml` with `DragHandler`, `z` elevation, and dynamic `Loader` | Unload via `Loader` (`active: false`) after exit animation; never hide with `visible: false`. |
+| Socket.IO / WebSocket client | `Quickshell.Io` Unix `SocketServer` (`/run/user/$UID/jarvis-hud.sock`) + `SplitParser` NDJSON + `IpcHandler` | Zero HTTP/Node overhead; sub-millisecond local IPC. |
+| Embedded `<iframe>` / Playwright preview | Plane 3 native Hyprland floating app panel (`53% 12%`, `44% 76%`, rounded translucent) launched via `expand_cmd` | Real native browser/video/IDE with zero duplicate Chromium runtime. |
+
+---
+
+### 5. Drop-In Instruction for Codex (How to Merge Both Docs)
+
+Paste this short directive at the top when you hand the **Full Guide + Addendum A** to Codex:
+
+```text
+Combine the attached JARVIS OS Full DE Build Guide with Addendum A.
+During Wave 0, shallow-clone `https://github.com/nazirlouis/ada-jarvis-public.git` into `/tmp/ada-jarvis-ref`, inspect its frontend design tokens, voice core visual style, and dynamic widget interaction patterns, and port that exact natural spatial aesthetic natively into Quickshell 0.3 (Qt6/QML) inside `ui/jarvis_shell/`.
+Apply Addendum A's Orbital Spatial Placement, Core-Projected Spring Animations, Free Dragging with Safe-Zone Push, Focus Depth, and Per-Widget Click-Through Masking in place of rigid side columns.
+Keep all strict constraints from the main guide: Minimal Hyprland 0.57+ Lua, zero Electron/Node/React, zero local LLMs, 8 GB RAM lazy unloading, and full voice + mouse/keyboard parity. Remove `/tmp/ada-jarvis-ref` once Wave 1 is verified.
+
+```
+
+Once Codex clones `ada-jarvis-public` and inspects its `frontend/` folder, if there is any specific interactive widget in that repo (like a 3D/CAD viewer or custom project drawer) that you also want mapped into JARVIS OS, paste its file list here and I'll give you the exact QML/Hyprland integration plan for it.

@@ -27,6 +27,41 @@ def test_fingerprint_tracks_department_schema_and_ignores_local_state(tmp_path, 
     assert source_digest() == after
 
 
+def test_fingerprint_ignores_dist_and_disk_image_suffixes(tmp_path, monkeypatch):
+    monkeypatch.setattr('scripts.behavior_gate.ROOT', tmp_path)
+    packaging = tmp_path / 'packaging'
+    packaging.mkdir()
+    script = packaging / 'build'
+    script.write_text('echo ok\n')
+    baseline = source_digest()
+
+    dist = packaging / 'dist'
+    dist.mkdir()
+    (dist / 'artifact.txt').write_text('ignored build artifact')
+    for suffix in ('.raw', '.iso', '.img', '.qcow2', '.vmdk', '.ova', '.ISO'):
+        (packaging / f'image{suffix}').write_bytes(b'binary image data')
+
+    assert source_digest() == baseline
+
+
+def test_fingerprint_streams_and_guards_large_files(tmp_path, monkeypatch):
+    monkeypatch.setattr('scripts.behavior_gate.ROOT', tmp_path)
+    monkeypatch.setattr('scripts.behavior_gate.MAX_DIGEST_FILE_BYTES', 16)
+    monkeypatch.setattr(Path, 'read_bytes', Mock(side_effect=AssertionError('should stream instead of read_bytes')))
+
+    scripts_dir = tmp_path / 'scripts'
+    scripts_dir.mkdir()
+    small = scripts_dir / 'small.py'
+    small.write_bytes(b'1234567890')
+    large = scripts_dir / 'large.bin'
+    large.write_bytes(b'x' * 32)
+
+    digest_before = source_digest()
+    large.write_bytes(b'y' * 64)
+    digest_after = source_digest()
+    assert digest_after != digest_before
+
+
 @pytest.mark.parametrize('body,passed', [
     ('def test_example(): assert True', True),
     ('def test_example(): assert False', False),

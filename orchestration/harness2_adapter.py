@@ -67,9 +67,9 @@ class Harness2Adapter:
         return out
         return out
 
-    def prepare_prompt(self, prompt: str, *, agent: str, workspace: str) -> str:
+    def prepare_prompt(self, prompt: str, *, agent: str, workspace: str, role: str | None = None) -> str:
         from orchestration.prompt_style import format_prompt
-        formatted = format_prompt(task=prompt, workspace=workspace)
+        formatted = format_prompt(task=prompt, workspace=workspace, role=role)
         return formatted['formatted_prompt']
 
     def record_outcome(self, *, agent: str, task: str, state: str, output: str = "") -> None:

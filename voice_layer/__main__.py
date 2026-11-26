@@ -50,17 +50,34 @@ def _ipc_command(args):
         cmd = 'status --json' if args.json else 'status'
     elif args.command == 'listen':
         action = args.action or 'toggle'
-        cmd = f'listen {action}'
+        if action in ('dictate', 'dictation'):
+            sub = args.text_args[0] if getattr(args, 'text_args', None) else 'toggle'
+            cmd = f'listen dictation {sub}'
+        else:
+            cmd = f'listen {action}'
+    elif args.command in ('dictate', 'dictation'):
+        sub = args.action or 'toggle'
+        cmd = f'dictation {sub}'
     elif args.command == 'standby':
         cmd = 'wake' if args.action == 'off' else 'standby toggle' if args.action == 'toggle' else 'standby'
     elif args.command == 'wake':
         cmd = 'wake'
-    elif args.command in ('send', 'tell', 'prompt'):
+    elif args.command in ('send', 'tell', 'prompt', 'speak'):
         text = ' '.join(([args.action] if args.action else []) + (getattr(args, 'text_args', None) or [])).strip()
-        if not text:
-            print('send requires a text message to send to JARVIS', file=sys.stderr)
+        file_path = getattr(args, 'file', None)
+        if not text and not file_path:
+            print(f'{args.command} requires a text message or --file to send to JARVIS', file=sys.stderr)
             return 1
-        cmd = f'send {text}'
+        if file_path:
+            import json
+            resolved_file = os.path.abspath(os.path.expanduser(file_path))
+            cmd = json.dumps({
+                'command': 'send_input',
+                'text': text,
+                'file_path': resolved_file
+            })
+        else:
+            cmd = f'{args.command} {text}'
     else:
         cmd = args.command
 
@@ -83,10 +100,11 @@ def main(argv=None):
         prog='jarvis-voice',
         description='JARVIS Voice Core — sovereign voice foundation')
     parser.add_argument('command', nargs='?', default='run',
-        choices=['run', 'status', 'listen', 'standby', 'wake', 'send', 'tell', 'prompt', 'restart', 'disable', 'disanble', 'enable', 'start', 'stop'],
+        choices=['run', 'status', 'listen', 'dictate', 'dictation', 'standby', 'wake', 'send', 'tell', 'prompt', 'speak', 'restart', 'disable', 'disanble', 'enable', 'start', 'stop'],
         help='Command to execute (default: run)')
-    parser.add_argument('action', nargs='?', help='Action for listen or first word for send')
-    parser.add_argument('text_args', nargs='*', help='Additional words for send/tell')
+    parser.add_argument('action', nargs='?', help='Action for listen/dictate or first word for send')
+    parser.add_argument('text_args', nargs='*', help='Additional words for send/tell or dictation sub-action')
+    parser.add_argument('--file', '-f', default=None, help='Attach an image, video, audio, or document file')
     parser.add_argument('--model', default=os.getenv('GEMINI_LIVE_MODEL'))
     parser.add_argument('--voice', default=None, help='Gemini voice name')
     parser.add_argument('--check', action='store_true',
@@ -96,8 +114,13 @@ def main(argv=None):
     parser.add_argument('--retries', type=int, default=5)
 
     args = parser.parse_args(argv)
-    if args.command == 'listen' and args.action not in (None, 'toggle', 'start', 'stop', 'cancel', 'confirm', 'standby'):
-        parser.error('listen action must be toggle, start, stop, cancel, confirm or standby')
+    if args.command == 'listen' and args.action not in (None, 'toggle', 'start', 'stop', 'cancel', 'confirm', 'standby', 'dictate', 'dictation'):
+        parser.error('listen action must be toggle, start, stop, cancel, confirm, standby, dictate or dictation')
+    if args.command == 'listen' and args.action in ('dictate', 'dictation'):
+        if len(args.text_args) > 1 or (args.text_args and args.text_args[0] not in ('start', 'stop', 'toggle', 'cancel', 'status', 'on', 'off')):
+            parser.error('listen dictation action must be start, stop, toggle, cancel or status')
+    if args.command in ('dictate', 'dictation') and args.action not in (None, 'start', 'stop', 'toggle', 'cancel', 'status', 'on', 'off'):
+        parser.error('dictate action must be start, stop, toggle, cancel or status')
     if args.retries < 0:
         parser.error('retries must be zero or a positive integer')
 
@@ -124,7 +147,7 @@ def main(argv=None):
     if args.command in ('restart', 'disable', 'disanble', 'enable', 'start', 'stop'):
         return _systemd_command(args.command)
 
-    if args.command in ('status', 'listen', 'standby', 'wake', 'send', 'tell', 'prompt'):
+    if args.command in ('status', 'listen', 'dictate', 'dictation', 'standby', 'wake', 'send', 'tell', 'prompt', 'speak'):
         return _ipc_command(args)
 
     if args.command == 'run':

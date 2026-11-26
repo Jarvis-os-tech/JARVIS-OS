@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=$(cd "$(dirname "$0")/../../.." && pwd)
+out=$1
+mkdir -p "$out"/{ui,runtime,browser-libs}
+cp -r "$root/packaging/iso/voice/prompts" "$out/"
+cp "$root"/packaging/iso/voice/{onboard,projects,hyprland.lua,start-setup,setup.py} "$out/"
+cp "$root/packaging/iso/voice/welcome.html" "$out/"
+cp "$root"/packaging/iso/voice/{Desktop,KeySetup}.qml "$out/ui/"
+cp "$root/upstream/ryoku/ryoku/hyprland/modules/resize.lua" "$out/"
+cp "$root/upstream/ryoku"/{LICENSE,NOTICE} "$out/"
+cp -r "$root"/ui/{jarvis_shell,jarvis_widgets,omarchy-jarvis-island} "$out/ui/"
+rt=$(realpath "$HOME/.local/share/jarvis-runtime/current")
+cd "$rt"
+find ui jarvis_voice omarchy_voice pma_voice_only core voice_layer filesystem jarvis_control jarvis_memory audio orchestration skills connectors departments learning plugins proactive skill_manifests contracts -type f \( -name '*.py' -o -name '*.pcm' -o -path 'skill_manifests/*.json' -o -path 'contracts/*.json' -o -path '*/assets/acknowledgements.json' \) ! -path '*/data/*' ! -path '*/.*' -print0 | tar --null -T - -cf - | tar -xf - -C "$out/runtime"
+cp ./*.py "$out/runtime/"
+py=$(realpath "$HOME/.local/share/jarvis-runtime/venv/bin/python")
+cp -a "$(dirname "$(dirname "$py")")" "$out/python"
+mkdir "$out/site"
+site=$(dirname "$py")
+site="$HOME/.local/share/jarvis-runtime/venv/lib/python3.13/site-packages"
+tar -C "$site" --exclude='*.pth' --exclude='__pycache__' --exclude='direct_url.json' -cf - . | tar -xf - -C "$out/site"
+cp -a /usr/lib/chromium "$out/chromium"
+ldd /usr/lib/chromium/chromium | awk '/=> \// {print $3}' | while read -r lib; do cp -L "$lib" "$out/browser-libs/"; done
+mkdir -p "$out/ada/backend"
+cp -a "$root/ui/ada/frontend" "$out/ada/"
+cp "$root"/ui/ada/{desktop.py,desktop.js} "$out/ada/"
+cp "$root"/ui/ada/backend/{__init__,projects,config}.py "$out/ada/backend/"
+chmod -R a+rX "$out"

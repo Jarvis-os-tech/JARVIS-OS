@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import "style"
 
 PanelWindow {
     id: rootWin
@@ -30,6 +31,32 @@ PanelWindow {
     property real cpuPercent: 18.0
     property real ramPercent: 52.0
     property real gpuPercent: 32.0
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR")
+    readonly property bool activeVoice: visible && !standby && !muted && (voiceState === "listening" || voiceState === "speaking")
+
+    function applyStateText(raw) {
+        try {
+            var payload = JSON.parse(raw || "{}");
+            if (payload.state !== undefined)
+                rootWin.voiceState = String(payload.state || "offline").toLowerCase();
+            if (payload.activity !== undefined)
+                rootWin.activityLabel = String(payload.activity || (rootWin.voiceState === "idle" ? "Online" : rootWin.voiceState));
+            if (payload.standby !== undefined)
+                rootWin.standby = Boolean(payload.standby);
+            if (payload.muted !== undefined)
+                rootWin.muted = Boolean(payload.muted);
+            if (payload.microphone_rms !== undefined) {
+                var rms = Number(payload.microphone_rms) || 0.0;
+                rootWin.micLevel = Math.min(1.0, rms * 25.0);
+            }
+        } catch (e) {
+            rootWin.voiceState = "offline";
+        }
+    }
+
+    onVisibleChanged: if (visible && !telemetryProc.running) telemetryProc.running = true
+    Component.onCompleted: if (visible && !telemetryProc.running) telemetryProc.running = true
+
     // Watch Active System Theme
     FileView {
         id: themeWatcher
@@ -41,46 +68,22 @@ PanelWindow {
         }
     }
 
-    // 1. Live Voice State Polling (every 200ms)
-    Process {
-        id: stateProc
-        command: ["sh", "-c", "cat ${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/jarvis/state.json 2>/dev/null || echo '{}'"]
-        running: false
-        stdout: SplitParser {
-            onRead: function(line) {
-                try {
-                    var payload = JSON.parse(line || "{}");
-                    if (payload.state !== undefined)
-                        rootWin.voiceState = String(payload.state || "offline").toLowerCase();
-                    if (payload.activity !== undefined)
-                        rootWin.activityLabel = String(payload.activity || (rootWin.voiceState === "idle" ? "Online" : rootWin.voiceState));
-                    if (payload.standby !== undefined)
-                        rootWin.standby = Boolean(payload.standby);
-                    if (payload.muted !== undefined)
-                        rootWin.muted = Boolean(payload.muted);
-                    if (payload.microphone_rms !== undefined) {
-                        var rms = Number(payload.microphone_rms) || 0.0;
-                        rootWin.micLevel = Math.min(1.0, rms * 25.0);
-                    }
-                } catch (e) {}
-            }
-        }
+    // 1. Live Voice State via FileView watchChanges (zero polling)
+    FileView {
+        id: stateFileView
+        path: rootWin.visible && rootWin.runtimeDir ? rootWin.runtimeDir + "/jarvis/state.json" : ""
+        preload: true
+        watchChanges: path !== ""
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: rootWin.applyStateText(text())
+        onLoadFailed: rootWin.voiceState = "offline"
     }
 
-    Timer {
-        interval: 200
-        repeat: true
-        running: true
-        triggeredOnStart: true
-        onTriggered: {
-            if (!stateProc.running) stateProc.running = true;
-        }
-    }
-
-    // 2. Real-time Telemetry Polling (every 1.5s)
+    // 2. Real-time Telemetry (strictly gated on active visibility + active voice state)
     Process {
         id: telemetryProc
-        command: ["/home/g0pi/.local/bin/jarvis-sysinfo"]
+        command: [Quickshell.env("HOME") + "/.local/bin/jarvis-sysinfo"]
         running: false
         stdout: SplitParser {
             onRead: function(line) {
@@ -96,7 +99,7 @@ PanelWindow {
     Timer {
         interval: 1500
         repeat: true
-        running: true
+        running: rootWin.visible && rootWin.activeVoice
         triggeredOnStart: true
         onTriggered: {
             if (!telemetryProc.running) telemetryProc.running = true;
@@ -248,6 +251,7 @@ PanelWindow {
                     spacing: 6
                     Text {
                         text: rootWin.muted ? "󰍭" : "🎙️"
+                        textFormat: Text.PlainText
                         font.pixelSize: 13
                     }
                     Text {
@@ -256,6 +260,7 @@ PanelWindow {
                             : rootWin.voiceState === "thinking" ? "Thinking..."
                             : rootWin.voiceState === "listening" ? "Listening..."
                             : "Online..."
+                        textFormat: Text.PlainText
                         color: rootWin.muted ? "#ff8da1" : "#00e5ff"
                         font.family: "JetBrainsMono Nerd Font, monospace"
                         font.pixelSize: 11
@@ -270,6 +275,7 @@ PanelWindow {
                 anchors.topMargin: 4
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: rootWin.muted ? "Double-click to activate voice" : "\"Listening for your commands...\""
+                textFormat: Text.PlainText
                 color: "#4f7285"
                 font.family: "Inter, sans-serif"
                 font.pixelSize: 9
@@ -283,6 +289,7 @@ PanelWindow {
                 anchors.topMargin: 20
                 anchors.horizontalCenter: parent.horizontalCenter
                 voiceState: rootWin.voiceState
+                muted: rootWin.muted
                 audioLevel: rootWin.micLevel
                 width: Math.min(460, parent.width - 20)
             }
@@ -303,10 +310,12 @@ PanelWindow {
 
             AgentsStatusPanel {
                 width: parent.width
+                activeVoice: rootWin.activeVoice
             }
 
             MemoryPanel {
                 width: parent.width
+                activeVoice: rootWin.activeVoice
             }
         }
 

@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Input is a freshly provisioned, never-booted disk from packaging/vm/build.
+set -euo pipefail
+guest=$(realpath "${1:?fresh guest directory required}")
+iso=$(realpath -m "${2:?output ISO required}")
+kver=${3:?matching installed kernel release required}
+here=$(cd -- "$(dirname -- "$0")" && pwd)
+grub="${GRUB_MODULES:-/usr/lib/grub}"
+mkdir -p "$(dirname "$iso")"
+stage=$(mktemp -d "$(dirname "$iso")/.iso-stage.XXXXXX")
+trap 'rm -rf -- "$stage"' EXIT
+cd "$stage"
+mkdir -p medium/{jarvis,boot/grub} image ram/{bin,dev,proc,sys,run,newroot,usr/bin,usr/lib}
+cp --reflink=auto --sparse=always "$guest/desktop.raw" image/root.ext4
+cat >live-profile <<'PROFILE'
+if [[ $(tty) == /dev/tty1 ]]; then
+    exec start-hyprland -- -c /opt/voice-os/hyprland.lua >>"$HOME/jarvis-session.log" 2>&1
+fi
+PROFILE
+debugfs -w -R 'set_inode_field /usr/lib/jarvis-de/config/omarchy/shell.json mode 0100644' image/root.ext4
+debugfs -w -R 'rm /home/jarvis/.bash_profile' image/root.ext4
+debugfs -w -R 'write live-profile /home/jarvis/.bash_profile' image/root.ext4
+debugfs -w -R 'set_inode_field /home/jarvis/.bash_profile uid 1000' image/root.ext4
+debugfs -w -R 'set_inode_field /home/jarvis/.bash_profile gid 1000' image/root.ext4
+cp "$guest/vmlinuz" medium/boot/vmlinuz
+cmp medium/boot/vmlinuz "/usr/lib/modules/$kver/vmlinuz"
+"$here/voice/stage" "$PWD/image/voice-os"
+mksquashfs image medium/jarvis/system.sfs -noappend -all-root -no-progress -comp zstd -Xcompression-level 5 -processors 2 -mem 256M
+ln -s usr/lib ram/lib
+ln -s usr/lib ram/lib64
+cp /usr/lib/initcpio/busybox ram/bin/
+for name in mount switch_root blkid modprobe losetup; do cp -L "/usr/bin/$name" ram/usr/bin/; done
+for exe in ram/bin/busybox ram/usr/bin/*; do
+    while read -r lib; do cp -L "$lib" "ram/usr/lib/${lib##*/}"; done < <(ldd "$exe" | awk '/=> \// {print $3} /^[[:space:]]*\// {print $1}')
+done
+modules="ram/usr/lib/modules/$kver"
+mkdir -p "$modules"
+cp "/usr/lib/modules/$kver"/modules.{builtin,builtin.modinfo,order} "$modules/"
+for module in isofs squashfs loop overlay sr_mod sd_mod ata_piix ahci xhci_pci usb_storage uas virtio_scsi; do
+    modprobe --show-depends -S "$kver" "$module" | awk '$1=="insmod"{print $2}'
+done | sort -u >drivers
+while read -r driver; do
+    dest="$modules/${driver#*/modules/$kver/}"
+    install -Dm644 "$driver" "$dest"
+done <drivers
+depmod -b "$PWD/ram" "$kver"
+install -m755 "$here/init" ram/init
+(cd ram && find . -print0 | cpio --null -o -H newc --owner=0:0 2>/dev/null | gzip -1 >../medium/boot/initrd)
+cat >medium/boot/grub/grub.cfg <<'GRUB'
+set timeout=2
+set default=0
+menuentry 'JARVIS OS — Live desktop' {
+    linux /boot/vmlinuz console=ttyS0,115200 console=tty1
+    initrd /boot/initrd
+}
+GRUB
+echo 'search --no-floppy --label JARVIS_OS --set=root
+set prefix=($root)/boot/grub
+configfile /boot/grub/grub.cfg' >early.cfg
+common=(iso9660 fat part_gpt part_msdos normal linux search search_label configfile)
+grub-mkimage -O i386-pc -d "$grub/i386-pc" -p /boot/grub -c early.cfg -o bios.core biosdisk "${common[@]}"
+cat "$grub/i386-pc/cdboot.img" bios.core >medium/boot/grub/bios.img
+grub-mkimage -O x86_64-efi -d "$grub/x86_64-efi" -p /boot/grub -c early.cfg -o BOOTX64.EFI "${common[@]}"
+truncate -s 8M efi.img
+mkfs.fat efi.img >/dev/null
+mmd -i efi.img ::EFI ::EFI/BOOT
+mcopy -i efi.img BOOTX64.EFI ::EFI/BOOT/
+xorriso -as mkisofs -R -J -V JARVIS_OS -o "$stage/live.iso" \
+    --grub2-mbr "$grub/i386-pc/boot_hybrid.img" --grub2-boot-info \
+    -partition_offset 16 -appended_part_as_gpt -append_partition 2 0xef efi.img \
+    -c boot/grub/boot.cat -b boot/grub/bios.img -no-emul-boot -boot-load-size 4 -boot-info-table \
+    -eltorito-alt-boot -e '--interval:appended_partition_2:all::' -no-emul-boot medium
+mv "$stage/live.iso" "$iso"
+(cd "$(dirname "$iso")" && sha256sum "$(basename "$iso")" >"$(basename "$iso").sha256")

@@ -73,10 +73,15 @@ class PowerSkillsIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.skills._run.assert_awaited_once_with(self.skills._commands["loginctl"], "lock-session")
         self.assertIsNone(POWER_MANAGER.get_pending())
 
-    async def test_direct_confirmed_lock_screen(self):
-        res = await self.skills.execute("lock_screen", {"confirm": True})
-        self.assertEqual(res["status"], "locked")
-        self.skills._run.assert_awaited_once_with(self.skills._commands["loginctl"], "lock-session")
+    async def test_confirm_true_cannot_bypass_pending_confirmation(self):
+        with self.assertRaises(SkillError):
+            await self.skills.execute("lock_screen", {"confirm": True})
+        self.skills._run.assert_not_called()
+
+        # Direct adapter call with confirm=True still requires prior pending request
+        direct = await self.skills._adapter_lock_screen(confirm=True)
+        self.assertEqual(direct["status"], "needs_confirmation")
+        self.skills._run.assert_not_called()
 
     async def test_cancellation_sequence(self):
         await self.skills.execute("shutdown_system", {})

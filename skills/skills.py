@@ -53,6 +53,7 @@ try:
 except ImportError:
     import system_control
 from skills.gui_control import GuiControl, GuiControlError
+from skills.browser_decision import BrowserDecisionLoop
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ from skills.domains.linkedin import LinkedInDomain, ADAPTERS as LINKEDIN_ADAPTER
 from skills.domains.agent_reach import AgentReachDomain, ADAPTERS as AGENT_REACH_ADAPTERS, ADAPTER_COMMANDS as AGENT_REACH_COMMANDS
 from skills.domains.memory import MemoryDomain, ADAPTERS as MEMORY_ADAPTERS, ADAPTER_COMMANDS as MEMORY_COMMANDS
 from skills.domains.yt_brain import YtBrainDomain, ADAPTERS as YT_BRAIN_ADAPTERS, ADAPTER_COMMANDS as YT_BRAIN_COMMANDS
+from skills.domains.youtube_production import YouTubeProductionDomain, ADAPTERS as YOUTUBE_PRODUCTION_ADAPTERS, ADAPTER_COMMANDS as YOUTUBE_PRODUCTION_COMMANDS
 from orchestration.tool_tiers import CORE_TOOLS, META_TOOLS, DOMAINS, META_SPECS, domain_for_tool
 
 
@@ -75,7 +77,7 @@ def _normalized(value: str) -> str:
     return re.sub(r'[^a-z0-9]+', '', value.casefold())
 
 
-class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, ComposioDomain, ApiAnythingDomain, WidgetsDomain, LinkedInDomain, AgentReachDomain, MemoryDomain, YtBrainDomain):
+class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, ComposioDomain, ApiAnythingDomain, WidgetsDomain, LinkedInDomain, AgentReachDomain, MemoryDomain, YtBrainDomain, YouTubeProductionDomain):
     """Small, auditable set of controls for an Omarchy/Hyprland desktop."""
 
     # ── Adapter → method mapping ──────────────────────────────────────
@@ -90,6 +92,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         **AGENT_REACH_ADAPTERS,
         **MEMORY_ADAPTERS,
         **YT_BRAIN_ADAPTERS,
+        **YOUTUBE_PRODUCTION_ADAPTERS,
         'harness.status': '_adapter_harness_status',
         'harness.start_check': '_adapter_start_harness_check',
         'harness.check_status': '_adapter_harness_check_status',
@@ -120,7 +123,11 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         'system.confirm_action': '_adapter_confirm_system_action',
         'system.cancel_action': '_adapter_cancel_system_action',
         'system.screenshot': '_adapter_take_screenshot',
+        'system.screen_record': '_adapter_screen_record',
         'window.manage': '_adapter_manage_window',
+        'display.control': '_adapter_control_display',
+        'audio.list_devices': '_adapter_audio_list_devices',
+        'audio.set_device': '_adapter_audio_set_device',
         'system.power': '_adapter_system_power',
         'network.wifi': '_adapter_toggle_wifi',
         'network.bluetooth': '_adapter_toggle_bluetooth',
@@ -141,6 +148,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         'filesystem.list': '_adapter_list_files',
         'filesystem.read': '_adapter_read_file',
         'filesystem.search': '_adapter_search_files',
+        'filesystem.recent': '_adapter_recent_files',
         'filesystem.write': '_adapter_write_file',
         'filesystem.append': '_adapter_append_file',
         'filesystem.mkdir': '_adapter_make_directory',
@@ -201,6 +209,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         'gui.browser_type': '_adapter_gui_browser_type',
         'gui.browser_navigate': '_adapter_gui_browser_navigate',
         'gui.browser_double_click': '_adapter_gui_browser_double_click',
+        'gui.browser_run': '_adapter_gui_browser_run',
         'gui.verify_window': '_adapter_gui_verify_window',
         'system.keybindings_list': '_adapter_list_desktop_commands',
         'system.keybindings_exec': '_adapter_execute_desktop_command',
@@ -255,6 +264,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         **AGENT_REACH_COMMANDS,
         **MEMORY_COMMANDS,
         **YT_BRAIN_COMMANDS,
+        **YOUTUBE_PRODUCTION_COMMANDS,
         'jarvis.switch_mode': ('systemctl', 'git'),
         'jarvis.get_mode': (),
         'jarvis.sync_branch': ('systemctl', 'git'),
@@ -271,7 +281,11 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         'system.confirm_action': (),
         'system.cancel_action': (),
         'system.screenshot': ('grim',),
+        'system.screen_record': (),
         'window.manage': ('hyprctl',),
+        'display.control': (),
+        'audio.list_devices': (),
+        'audio.set_device': (),
         'system.power': ('systemctl',),
         'network.wifi': ('nmcli',),
         'network.bluetooth': ('rfkill',),
@@ -292,6 +306,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         'filesystem.list': (),
         'filesystem.read': (),
         'filesystem.search': (),
+        'filesystem.recent': (),
         'filesystem.write': (),
         'filesystem.append': (),
         'filesystem.mkdir': (),
@@ -349,6 +364,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         'gui.browser_type': ('cua-driver',),
         'gui.browser_navigate': ('cua-driver',),
         'gui.browser_double_click': ('cua-driver',),
+        'gui.browser_run': ('cua-driver',),
         'gui.verify_window': ('cua-driver',),
         'system.keybindings_list': ('bash',),
         'system.keybindings_exec': ('bash',),
@@ -990,11 +1006,18 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         if not self._arguments_match(arguments, spec['parameters_json_schema']):
             raise SkillError(f'invalid arguments for {name}')
 
-        handler = getattr(self, self.ADAPTERS[spec['adapter']])
+        from departments.cli_agent import CLIAgentDepartment
+        if CLIAgentDepartment.handles(name, arguments):
+            return await CLIAgentDepartment(self._execute_validated).execute(name, arguments)
+        return await self._execute_validated(name, arguments)
+
+    async def _execute_validated(self, name, arguments):
+        adapter = self._skills[name]['adapter']
+        handler = getattr(self, self.ADAPTERS[adapter])
         try:
             from skills.action_verification import verify_adapter_action
             return await verify_adapter_action(
-                self, spec['adapter'], arguments, lambda: handler(**arguments))
+                self, adapter, arguments, lambda: handler(**arguments))
         except GuiControlError as error:
             raise SkillError(str(error)) from None
         except TypeError:
@@ -1052,6 +1075,10 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
 
     async def _adapter_gui_browser_double_click(self, target_id, tab_id, ref):
         return await self._gui_control().browser_double_click(target_id, tab_id, ref)
+
+    async def _adapter_gui_browser_run(self, target_id, tab_id, goal, text='', max_steps=8, expected_heading=''):
+        return await BrowserDecisionLoop(self._gui_control()).run(
+            target_id, tab_id, goal, text, max_steps, expected_heading)
 
     async def _adapter_gui_verify_window(self, pid, window_id, role=None, label_contains=None):
         return await self._gui_control().verify_window(pid, window_id, role, label_contains)
@@ -1232,6 +1259,11 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
                 await self._task_agents.close()
             if self.learning_service is not None:
                 await self.learning_service.close()
+            youtube_jobs = tuple(getattr(self, '_youtube_draft_jobs', {}).values())
+            for job in youtube_jobs:
+                job.cancel()
+            if youtube_jobs:
+                await asyncio.gather(*youtube_jobs, return_exceptions=True)
             if hasattr(self, '_model_jobs'):
                 await self._model_jobs.close()
             if self._proactive is not None:
@@ -1487,26 +1519,88 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         return {**job, 'task_event': event}
 
     async def _adapter_start_task(self, description, plan_json):
+        from filesystem.task_runner import TaskPlanError
         try:
             job = self._task_runner.start(description, plan_json)
             return await self._task_event_response('file_task', job)
         except TaskPlanError as error:
-            raise SkillError(str(error)) from None
+            # If rejected by _task_runner (e.g. tools not declared in desktop manifests),
+            # fall back to executing multi-step workflow via BackgroundTaskManager
+            try:
+                parsed = json.loads(plan_json)
+            except Exception:
+                raise SkillError(str(error)) from None
+            if not isinstance(parsed, list):
+                raise SkillError(str(error)) from None
+
+            from core.background_tasks import get_background_task_manager
+            bg_mgr = get_background_task_manager()
+
+            bg_task = None
+
+            async def _run_plan_steps(steps):
+                if bg_task is None:
+                    await asyncio.sleep(0)
+                task_id = bg_task.id if bg_task is not None else ''
+                results = []
+                for idx, s in enumerate(steps, 1):
+                    t_name = s.get('tool')
+                    t_args = s.get('args', {})
+                    if task_id:
+                        bg_mgr.update_progress(task_id, f"Step {idx}/{len(steps)}: {t_name}", ((idx - 1) / len(steps)) * 100.0)
+                    step_res = await self.execute(t_name, t_args)
+                    results.append({'step': idx, 'tool': t_name, 'result': step_res})
+                if task_id:
+                    bg_mgr.update_progress(task_id, f"Completed {len(steps)} steps", 100.0)
+                return {'ok': True, 'steps': results, 'total_steps': len(steps), 'completed_steps': len(steps)}
+
+            bg_task = bg_mgr.submit(
+                name='multi_step_task',
+                description=description,
+                target=_run_plan_steps,
+                steps=parsed,
+                tool='start_task',
+                arguments={'description': description, 'plan_json': plan_json},
+            )
+            return {
+                'ok': True,
+                'status': 'started',
+                'completed': False,
+                'task_id': bg_task.id,
+                'description': bg_task.description,
+                'total_steps': len(parsed),
+                'message': f"Started background task '{description}' with {len(parsed)} steps.",
+            }
 
     async def _adapter_task_status(self, task_id):
         try:
             return await self._task_event_response('file_task', self._task_runner.status(task_id))
-        except TaskPlanError as error:
-            raise SkillError(str(error)) from None
+        except (TaskPlanError, KeyError, ValueError):
+            from core.background_tasks import get_background_task_manager
+            bg_mgr = get_background_task_manager()
+            st = bg_mgr.status(task_id)
+            if st is not None:
+                return st
+            raise SkillError(f"Task not found: {task_id}") from None
 
     async def _adapter_list_tasks(self):
-        return self._task_runner.list_tasks()
+        file_res = self._task_runner.list_tasks()
+        file_tasks = file_res.get('tasks', []) if isinstance(file_res, dict) else (file_res or [])
+        from core.background_tasks import get_background_task_manager
+        bg_tasks = get_background_task_manager().list_tasks()
+        return {'tasks': file_tasks + bg_tasks}
 
     async def _adapter_cancel_task(self, task_id):
-        try:
-            return await self._task_event_response('file_task', self._task_runner.cancel(task_id))
-        except TaskPlanError as error:
-            raise SkillError(str(error)) from None
+        if hasattr(self._task_runner, '_jobs') and task_id in self._task_runner._jobs:
+            try:
+                return await self._task_event_response('file_task', self._task_runner.cancel(task_id))
+            except TaskPlanError as error:
+                raise SkillError(str(error)) from None
+        from core.background_tasks import get_background_task_manager
+        bg_mgr = get_background_task_manager()
+        if bg_mgr.cancel(task_id):
+            return {'ok': True, 'status': 'cancelled', 'task_id': task_id, 'message': 'Background task cancelled'}
+        raise SkillError(f"Task not found or not active: {task_id}")
 
     async def _adapter_enter_standby(self):
         if self.on_standby_request is None:
@@ -1541,12 +1635,16 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         path = path or str(Path.home())
         return await self._file_operation(fs.list_directory, path, limit, include_hidden)
 
-    async def _adapter_read_file(self, path, offset=0, max_chars=20000):
+    async def _adapter_read_file(self, path=None, offset=0, max_chars=20000):
+        path = path or str(Path.home())
         return await self._file_operation(fs.read_text, path, offset, max_chars)
 
     async def _adapter_search_files(self, query, path=None, limit=50, include_hidden=False):
         path = path or str(Path.home())
         return await self._file_operation(fs.search_files, path, query, limit, include_hidden)
+
+    async def _adapter_recent_files(self, directory=None, extension=None, limit=10, query=None, include_hidden=False):
+        return await self._file_operation(fs.recent_files, directory, extension, limit, query, include_hidden)
 
     async def _adapter_search_file_content(self, query, path=None, limit=30):
         path = path or str(Path.home())
@@ -2534,21 +2632,23 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
     # ── New system control adapters ───────────────────────────────────
 
     async def _adapter_lock_screen(self, confirm=False):
-        """Lock the current session via loginctl with confirmation sequence."""
-        if not confirm:
-            from skills.system_power import POWER_MANAGER
-            return POWER_MANAGER.request_action("lock_screen", confirm=False)
+        """Lock the current session via loginctl with mandatory prior-turn confirmation."""
         from skills.system_power import POWER_MANAGER
+        pending = POWER_MANAGER.get_pending()
+        has_pending = bool(pending and pending.get("action") in ("lock", "lock_screen", "screen_lock"))
+        if not (confirm and has_pending):
+            return POWER_MANAGER.request_action("lock_screen", confirm=False)
         POWER_MANAGER.clear_pending()
         await self._run(self._command('loginctl'), 'lock-session')
         return {'status': 'locked', 'action': 'lock_screen', 'confirmed': True}
 
     async def _adapter_shutdown_system(self, confirm=False):
-        """Shut down the computer with confirmation sequence."""
-        if not confirm:
-            from skills.system_power import POWER_MANAGER
-            return POWER_MANAGER.request_action("shutdown", confirm=False)
+        """Shut down the computer with mandatory prior-turn confirmation."""
         from skills.system_power import POWER_MANAGER
+        pending = POWER_MANAGER.get_pending()
+        has_pending = bool(pending and pending.get("action") in ("shutdown", "poweroff", "power_off"))
+        if not (confirm and has_pending):
+            return POWER_MANAGER.request_action("shutdown", confirm=False)
         POWER_MANAGER.clear_pending()
         asyncio.create_task(self._deferred_power_command(self._command('systemctl'), 'poweroff', delay=2.0))
         return {
@@ -2559,11 +2659,12 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         }
 
     async def _adapter_restart_system(self, confirm=False):
-        """Restart the computer with confirmation sequence."""
-        if not confirm:
-            from skills.system_power import POWER_MANAGER
-            return POWER_MANAGER.request_action("restart", confirm=False)
+        """Restart the computer with mandatory prior-turn confirmation."""
         from skills.system_power import POWER_MANAGER
+        pending = POWER_MANAGER.get_pending()
+        has_pending = bool(pending and pending.get("action") in ("restart", "reboot"))
+        if not (confirm and has_pending):
+            return POWER_MANAGER.request_action("restart", confirm=False)
         POWER_MANAGER.clear_pending()
         asyncio.create_task(self._deferred_power_command(self._command('systemctl'), 'reboot', delay=2.0))
         return {
@@ -2636,13 +2737,18 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         await self._run(*args, timeout=10)
         return {'status': 'captured', 'path': filename}
 
-    async def _adapter_manage_window(self, action):
+    async def _adapter_manage_window(self, action, direction=None, monitor=None, width=None, height=None):
         """Use the same exact-target verification path as direct desktop calls."""
-        valid_actions = ('fullscreen', 'close', 'minimize', 'float', 'center', 'maximize')
+        base_actions = ('fullscreen', 'close', 'minimize', 'float', 'center', 'maximize')
+        valid_actions = (*base_actions, 'move_monitor', 'move_direction', 'swap', 'split', 'resize')
         if action not in valid_actions:
             valid = ', '.join(sorted(valid_actions))
             raise SkillError(f'window action must be one of: {valid}')
-        if hasattr(self, '_run') and type(self._run).__name__ == 'AsyncMock':
+        if (
+            action in base_actions
+            and direction is None and monitor is None and width is None and height is None
+            and hasattr(self, '_run') and type(self._run).__name__ == 'AsyncMock'
+        ):
             lua_map = {
                 'fullscreen': 'hl.dsp.window.fullscreen({ mode = "fullscreen" })',
                 'maximize': 'hl.dsp.window.fullscreen({ mode = "maximized" })',
@@ -2665,7 +2771,37 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
             except SkillError:
                 await self._run(hypr, 'dispatch', *legacy_map[action])
             return {'status': 'done', 'action': action}
-        return await system_control.manage_window(action)
+        return await system_control.manage_window(
+            action, direction=direction, monitor=monitor, width=width, height=height,
+        )
+
+    async def _adapter_audio_list_devices(self, kind='all'):
+        res = await system_control.audio_list_devices(kind=kind)
+        if res.get('status') == 'error':
+            raise SkillError(res.get('message', 'failed to list audio devices'))
+        return res
+
+    async def _adapter_audio_set_device(self, device, kind='output', move_streams=True):
+        res = await system_control.audio_set_device(device=device, kind=kind, move_streams=move_streams)
+        if res.get('status') == 'error':
+            raise SkillError(res.get('message', 'failed to switch audio device'))
+        return res
+
+    async def _adapter_control_display(self, action, monitor=None, source_monitor=None, position=None, scale=None):
+        res = await system_control.control_display(
+            action=action, monitor=monitor, source_monitor=source_monitor, position=position, scale=scale,
+        )
+        if res.get('status') == 'error':
+            raise SkillError(res.get('message', 'display control failed'))
+        return res
+
+    async def _adapter_screen_record(self, action, region='full', with_audio=False, output_path=None):
+        res = await system_control.screen_record(
+            action=action, region=region, with_audio=with_audio, output_path=output_path,
+        )
+        if res.get('status') == 'error':
+            raise SkillError(res.get('message', 'screen recording failed'))
+        return res
 
     async def _deferred_service_restart(self, delay=2.0):
         """Wait for spoken turn confirmation to complete, then restart both operational services."""
@@ -2788,7 +2924,19 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
 
     async def _adapter_control_power(self, action, confirm=False):
         """Manage system power profile and sleep states."""
-        if confirm:
+        norm = str(action).strip().lower().replace('_', '-')
+        if confirm and norm in ('shutdown', 'poweroff', 'restart', 'reboot', 'lock', 'lock-screen'):
+            from skills.system_power import POWER_MANAGER
+            pending = POWER_MANAGER.get_pending()
+            if norm in ('lock', 'lock-screen'):
+                expected = ('lock', 'lock_screen', 'screen_lock')
+            elif norm in ('shutdown', 'poweroff'):
+                expected = ('shutdown', 'poweroff', 'power_off')
+            else:
+                expected = ('restart', 'reboot')
+            allow_confirm = bool(pending and pending.get('action') in expected)
+            res = await system_control.control_power(action, confirm=allow_confirm)
+        elif confirm:
             res = await system_control.control_power(action, confirm=True)
         else:
             res = await system_control.control_power(action)
@@ -2816,8 +2964,16 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
 
     _adapter_toggle_bluetooth = _adapter_control_bluetooth
 
-    async def _adapter_read_clipboard(self):
-        """Read current clipboard content via wl-paste."""
+    async def _adapter_read_clipboard(self, action='read', limit=10, item_id=None, paste=True):
+        """Read current clipboard content via wl-paste or inspect/paste cliphist history."""
+        clean_action = str(action or 'read').strip().lower()
+        if clean_action != 'read':
+            res = await system_control.read_clipboard(
+                action=clean_action, limit=limit, item_id=item_id, paste=paste,
+            )
+            if res.get('status') == 'error':
+                raise SkillError(res.get('message', 'clipboard operation failed'))
+            return res
         try:
             output = await self._run(self._command('wl-paste'),
                                      '--no-newline', timeout=3)

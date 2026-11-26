@@ -1,4 +1,5 @@
 """Delivery and authorization boundaries for background task/terminal results."""
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -60,6 +61,28 @@ async def test_send_failure_releases_authorization_for_retry(voice):
         await voice.announce_background('done')
     assert not voice._background_active
     assert not voice._waiting and not voice._reply_authorized
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('muted', [False, True])
+async def test_os_alert_uses_guarded_gemini_turn(voice, muted):
+    voice.muted = muted
+    await voice.speak_announcement('System ready.')
+    worker = asyncio.create_task(voice._speak_queue_worker())
+    try:
+        await asyncio.wait_for(voice._speak_announcement_queue.join(), 2)
+    finally:
+        worker.cancel()
+        await worker
+
+    if muted:
+        voice._session.send_client_content.assert_not_awaited()
+        assert not voice._reply_authorized
+    else:
+        voice._session.send_client_content.assert_awaited_once()
+        content = voice._session.send_client_content.call_args.kwargs['turns'][0].parts[0].text
+        assert 'System ready.' in content
+        assert voice._background_active and voice._reply_authorized
 
 
 def fake_control():
@@ -148,5 +171,76 @@ async def test_local_confirmation_and_cancellation_share_the_voice_gate():
         await control.execute('omarchy_cli', {'command': 'reboot'})
         assert 'Cancelled:' in await control.cancel_local()
         assert control.executor.pending is None
+    finally:
+        await control.close()
+
+
+@pytest.mark.asyncio
+async def test_old_fish_trial_setting_cannot_suppress_gemini_audio(monkeypatch):
+    monkeypatch.setenv('JARVIS_FISH_CONVERSATION_TEST', '1')
+    voice = LiveVoice(Playback('default'))
+    voice._reply_authorized = True
+    voice.player.enqueue_response = Mock()
+
+    pcm = b'\x02\x00'
+    await voice.handle(SimpleNamespace(server_content=SimpleNamespace(
+        model_turn=SimpleNamespace(parts=[SimpleNamespace(
+            inline_data=SimpleNamespace(data=pcm),
+        )]),
+        turn_complete=True,
+    )))
+
+    voice.player.enqueue_response.assert_called_once_with(pcm)
+
+
+@pytest.mark.asyncio
+async def test_cancelling_os_alert_releases_queue_and_gemini_turn(voice):
+    send_started = asyncio.Event()
+
+    async def send(**kwargs):
+        send_started.set()
+        await asyncio.Future()
+
+    voice._session.send_client_content.side_effect = send
+    await voice.speak_announcement('System ready.')
+    worker = asyncio.create_task(voice._speak_queue_worker())
+    try:
+        await asyncio.wait_for(send_started.wait(), 2)
+    finally:
+        worker.cancel()
+        await worker
+
+    await asyncio.wait_for(voice._speak_announcement_queue.join(), 1)
+    assert not voice._background_active
+    assert not voice._reply_authorized
+    assert not voice._waiting
+
+
+@pytest.mark.asyncio
+async def test_execution_airlock_rejects_stale_and_replayed_approval():
+    import json
+    from voice_layer.ipc import ControlServer
+
+    control = ControlSkills(ControlConfig(dry_run=True, tasks_enabled=False))
+    server = ControlServer(approval_cb=control.resolve_local_approval)
+
+    async def resolve(request_id, approve):
+        return json.loads(await server._handle_json_command({
+            'command': 'resolve_approval', 'id': request_id, 'approve': approve,
+        }))
+
+    try:
+        await control.execute('omarchy_cli', {'command': 'reboot'})
+        old = control.executor.pending_approval()['id']
+        assert (await resolve(old, False))['ok']
+        await control.execute('omarchy_cli', {'command': 'reboot'})
+        current = control.executor.pending_approval()['id']
+        assert old != current
+        assert not (await resolve(old, True))['ok']
+        assert not (await resolve(current, 'yes'))['ok']
+        assert control.executor.pending_approval()['id'] == current
+        result = await resolve(current, True)
+        assert result['ok'] and '[dry-run]' in result['message']
+        assert not (await resolve(current, True))['ok']
     finally:
         await control.close()

@@ -12,7 +12,9 @@ from .playback import Playback, MicrophoneBacklogError, PlaybackBacklogError
 from .recovery import ConnectionRecovery, RecoveryDecision
 from .standby import OpenWakeWordDetector, StandbyController, WakeWordUnavailable
 from .ipc import ControlServer
+from .fish_speaker import FishAudioClient, has_emotion_cues, strip_cues
 from .config import Config, load as load_config, load_env
+from .hypr_monitor import HyprlandMonitor, SessionContext
 
 __version__ = '0.1.0'
 
@@ -37,7 +39,12 @@ __all__ = [
     'StandbyController',
     'WakeWordUnavailable',
     'ControlServer',
+    'FishAudioClient',
+    'has_emotion_cues',
+    'strip_cues',
     'Config',
     'load_config',
     'load_env',
+    'HyprlandMonitor',
+    'SessionContext',
 ]

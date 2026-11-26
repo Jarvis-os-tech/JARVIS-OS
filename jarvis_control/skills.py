@@ -167,9 +167,10 @@ class ControlSkills:
 
     async def confirm(self, heard_phrase: str) -> str:
         """Confirm a held action."""
-        if not self.executor.pending:
+        approval = self.executor.pending_approval()
+        if not approval:
             return "ERROR: nothing is waiting for confirmation. Do not call this again."
-        held = self.executor.describe(*self.executor.pending)
+        held = approval["description"]
         confirm_words = getattr(self.config, "confirm_words", None)
         cancel_words = getattr(self.config, "cancel_words", None)
         from .nlu import NLUEngine, ConfirmationDecision
@@ -179,17 +180,20 @@ class ControlSkills:
             cancel_words=cancel_words,
             held_action=held,
         )
-        if decision == ConfirmationDecision.DECLINED:
-            cancel_msg = await self._run(self.cancel)
-            return cancel_msg
-        elif decision == ConfirmationDecision.AFFIRMED:
-            result = await self._run(self.executor.run_pending)
+        if decision in (ConfirmationDecision.DECLINED, ConfirmationDecision.AFFIRMED):
+            result = await self._run(
+                self.executor.resolve_approval, approval["id"], decision == ConfirmationDecision.AFFIRMED,
+            )
             return result.as_tool_result()
         else:
             return (
                 f"ERROR: '{heard_phrase}' did not clearly confirm or cancel {held}, so it is still held. "
                 f"Ask the user conversationally if they want to proceed with {held}."
             )
+
+    async def resolve_local_approval(self, request_id: str, approve: bool) -> dict:
+        result = await self._run(self.executor.resolve_approval, request_id, approve)
+        return {"ok": result.ok, "message": result.output}
 
     async def confirm_local(self) -> str:
         """Explicit confirmation from the private local CLI/socket."""
@@ -234,10 +238,31 @@ class UnifiedSkills:
             self.declarations.extend(self._memory_skills.declarations)
         self._memory_names = frozenset(tool["name"] for tool in self.declarations)
 
+        desktop_names_available = (
+            {d["name"] for d in self.desktop.declarations}
+            if self.desktop and hasattr(self.desktop, "declarations")
+            else set()
+        )
+        # Prefer DesktopSkills schemas and execution for overlapping verbs so
+        # richer schemas (target_window, widget views, reach/url) win over
+        # legacy ControlSkills duplicates, while keeping lock/shutdown/restart/
+        # system_power on ControlSkills.executor for NeedsConfirmation +
+        # ExecutionAirlock pending_approval() gating.
+        desktop_preferred = desktop_names_available & frozenset({
+            'type_text',
+            'show_widget',
+            'manage_widget',
+            'read_url',
+            'reach_search',
+            'reach_read',
+            'reach_transcript',
+            'reach_status',
+        })
+
         self._control_names = set()
         if self.control and hasattr(self.control, "declarations"):
             for d in self.control.declarations:
-                if d["name"] not in self._memory_names:
+                if d["name"] not in self._memory_names and d["name"] not in desktop_preferred:
                     self.declarations.append(d)
                     self._control_names.add(d["name"])
         self._control_names = frozenset(self._control_names)
@@ -250,24 +275,19 @@ class UnifiedSkills:
                     self.declarations.append(d)
                     self._desktop_names.add(d["name"])
         self._desktop_names = frozenset(self._desktop_names)
-        # Keep the full registry for execution/IPC, but avoid sending every
-        # specialist schema on every low-latency voice turn. Advanced domains
-        # retain the existing discover/execute tools.
+        # Keep the full registry for execution/IPC, and cap the voice-turn live
+        # schema surface to <=50 canonical OS verbs. Advanced domains remain
+        # reachable via discover_domain_tools / execute_domain_tool, and legacy
+        # aliases remain executable via UnifiedSkills.execute().
         desktop_live = getattr(self.desktop, 'live_declarations', None)
         if desktop_live is None:
             self._live_declarations = self.declarations
         else:
-            live_names = {tool['name'] for tool in desktop_live}
-            live_names.update({
-                'call_hermes_api', 'start_hermes_goal', 'get_hermes_status',
-                'linkedin_draft_post', 'linkedin_plan_sprint', 'linkedin_audit_profile',
-                'linkedin_pending_reviews', 'linkedin_approve_post', 'linkedin_sync_profile',
-                'linkedin_propose_tool',
-                'yt_brain_search', 'yt_brain_get', 'yt_brain_topics', 'yt_brain_status',
-                'drone_control',
-            })
-            self._live_declarations = [tool for tool in self.declarations
-                                      if tool['name'] not in self._desktop_names or tool['name'] in live_names]
+            from orchestration.tool_tiers import CANONICAL_VOICE_TOOLS
+            self._live_declarations = [
+                tool for tool in self.declarations
+                if tool['name'] in CANONICAL_VOICE_TOOLS
+            ]
         self.on_standby_request = None
         if not any(d.get("name") == "enter_standby" for d in self.declarations):
             self.declarations.append({
@@ -392,6 +412,31 @@ class UnifiedSkills:
                 })
             except Exception as exc:
                 return json.dumps({'ok': False, 'action': subcmd, 'error': str(exc)})
+        if name in ('confirm_system_action', 'confirm_last'):
+            control_exec = getattr(self.control, 'executor', None)
+            if self.control and control_exec and control_exec.pending_approval():
+                return await self.control.execute(name, args)
+            from skills.system_power import POWER_MANAGER
+            if self.desktop and POWER_MANAGER.get_pending():
+                heard = str(args.get('heard_phrase', 'yes')) if isinstance(args, dict) else 'yes'
+                res = self.desktop.execute('confirm_system_action', {'heard_phrase': heard})
+                if asyncio.iscoroutine(res):
+                    res = await res
+                return json.dumps(res) if isinstance(res, (dict, list)) else str(res)
+            if name in self._control_names and self.control:
+                return await self.control.execute(name, args)
+        if name in ('cancel_system_action', 'cancel_last'):
+            control_exec = getattr(self.control, 'executor', None)
+            if self.control and control_exec and control_exec.pending_approval():
+                return await self.control.execute(name, args)
+            from skills.system_power import POWER_MANAGER
+            if self.desktop and POWER_MANAGER.get_pending():
+                res = self.desktop.execute('cancel_system_action', {})
+                if asyncio.iscoroutine(res):
+                    res = await res
+                return json.dumps(res) if isinstance(res, (dict, list)) else str(res)
+            if name in self._control_names and self.control:
+                return await self.control.execute(name, args)
         if name in self._memory_names:
             return await self._memory_skills.execute(name, args)
         if name in self._control_names:
@@ -460,18 +505,49 @@ class UnifiedSkills:
             return self._memory_skills.memory_context()
         return ""
 
+    VOICE_ALWAYS_BACKGROUND_TOOLS = frozenset({
+        'start_task', 'task_submit', 'start_hermes_goal', 'start_agent_goal',
+        'create_task_agent', 'api_anything_learn',
+    })
+
     async def start_voice_background(self, name, arguments):
         """Admit preparatory work after voice authorization."""
         label = self._voice_background_labels.get(name)
-        if label is None or 'start_task' not in self._desktop_names:
-            return None
-        return await self.execute('start_task', {
-            'description': label,
-            'plan_json': json.dumps([{'tool': name, 'args': arguments}]),
-        })
+        if label is not None and 'start_task' in self._desktop_names:
+            return await self.execute('start_task', {
+                'description': label,
+                'plan_json': json.dumps([{'tool': name, 'args': arguments}]),
+            })
+
+        effective_name = name
+        if name == 'execute_domain_tool' and isinstance(arguments, dict):
+            effective_name = arguments.get('tool_name', name)
+
+        if effective_name in self.VOICE_ALWAYS_BACKGROUND_TOOLS:
+            from core.background_tasks import get_background_task_manager
+            bg_mgr = get_background_task_manager()
+            task = bg_mgr.submit_tool(name, arguments, self.execute)
+            return {
+                'ok': True,
+                'status': 'started',
+                'completed': False,
+                'task_id': task.id,
+                'description': task.description,
+                'message': (
+                    f"Task '{task.description}' started in the background. "
+                    "It is actively executing. You can converse freely with the user "
+                    "and answer other questions while it runs."
+                ),
+            }
+        return None
 
     async def background_events(self) -> list[dict]:
         events = await self.control.background_events() if self.control else []
+        try:
+            from core.background_tasks import get_background_task_manager
+            events.extend(get_background_task_manager().events())
+        except Exception as err:
+            log.debug("Background task manager events lookup error: %s", err)
         presented = self.desktop is not None and hasattr(self.desktop, 'refresh_task_presentation')
         if not presented:
             from orchestration.model_notices import pending_model_notices
@@ -505,7 +581,13 @@ class UnifiedSkills:
         return events[:10]
 
     async def acknowledge_event(self, identity: str) -> None:
-        if identity.startswith('task-event:'):
+        if identity.startswith('bg-task:'):
+            try:
+                from core.background_tasks import get_background_task_manager
+                get_background_task_manager().acknowledge_event(identity)
+            except Exception as err:
+                log.debug("Background task manager acknowledge error: %s", err)
+        elif identity.startswith('task-event:'):
             presenter = getattr(self.desktop, '_task_presentation', None)
             if presenter is not None:
                 await asyncio.to_thread(presenter.acknowledge, identity)

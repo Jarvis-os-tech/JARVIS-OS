@@ -1116,31 +1116,51 @@ class AlertStateManager:
         desktop_notify: bool = True,
         quiet_audio: bool = False,
         voice_battery_only: bool = True,
+        auto_heal: bool = False,
     ) -> None:
         if quiet_audio:
             voice_alert = False
             sound_alert = False
 
         for act in actions:
-            if desktop_notify and notifier:
-                title = f"[{'ALERT' if act.action_type == 'ALERT' else 'RESOLVED'}] {act.name}"
-                notifier.notify(title, act.message, urgency=act.urgency, suppress_sound=True)
+            # Autonomous healing attempt for actionable alerts
+            healed = False
+            if auto_heal and act.action_type == "ALERT":
+                try:
+                    from core.self_healer import AutoHealer
+                    heal_res = AutoHealer.auto_heal_action(act.alert_type, act.name, act.message)
+                    if heal_res and heal_res.success:
+                        healed = True
+                        resolved_msg = f"[Auto-Healed] {act.name}: {heal_res.action_taken}"
+                        if desktop_notify and notifier:
+                            notifier.notify(f"[RESOLVED] {act.name}", resolved_msg, urgency="low", suppress_sound=True)
+                        if sound_alert and audio_engine:
+                            audio_engine.play_alert("recovery", async_play=True)
+                        if voice_alert and jarvis_speaker and not voice_battery_only:
+                            jarvis_speaker.speak_alert(f"System recovered: {act.name} was automatically healed.")
+                except Exception as h_err:
+                    log.debug("AutoHealer invocation notice: %s", h_err)
 
-            is_battery = act.alert_type in ("battery_low", "battery_critical") or (
-                "battery" in act.name.lower() or "battery" in act.alert_type.lower()
-            )
-            should_speak = (
-                voice_alert
-                and jarvis_speaker
-                and (not voice_battery_only or (act.action_type == "ALERT" and is_battery))
-            )
+            if not healed:
+                if desktop_notify and notifier:
+                    title = f"[{'ALERT' if act.action_type == 'ALERT' else 'RESOLVED'}] {act.name}"
+                    notifier.notify(title, act.message, urgency=act.urgency, suppress_sound=True)
 
-            if should_speak:
-                speech_text = format_alert_speech(act)
-                jarvis_speaker.speak_alert(speech_text)
+                is_battery = act.alert_type in ("battery_low", "battery_critical") or (
+                    "battery" in act.name.lower() or "battery" in act.alert_type.lower()
+                )
+                should_speak = (
+                    voice_alert
+                    and jarvis_speaker
+                    and (not voice_battery_only or (act.action_type == "ALERT" and is_battery))
+                )
 
-            if sound_alert and audio_engine:
-                audio_engine.play_alert(act.alert_type, async_play=True)
+                if should_speak:
+                    speech_text = format_alert_speech(act)
+                    jarvis_speaker.speak_alert(speech_text)
+
+                if sound_alert and audio_engine:
+                    audio_engine.play_alert(act.alert_type, async_play=True)
 
 
 def format_alert_speech(action: AlertAction) -> str:

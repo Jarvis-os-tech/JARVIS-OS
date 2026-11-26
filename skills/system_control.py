@@ -14,6 +14,7 @@ import math
 import os
 import re
 import shutil
+import signal
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +28,25 @@ _TIMEOUT = 10.0
 _KEYBINDINGS_SCRIPT = "/usr/share/omarchy/bin/omarchy-menu-keybindings"
 _WTYPE_MODIFIERS = {"shift", "ctrl", "alt", "logo", "altgr", "capslock"}
 _TERMINAL_CLASSES = ("foot", "kitty", "alacritty", "ghostty", "wezterm", "konsole", "terminal", "xterm", "gnome-terminal", "st")
+_PASTE_PREFERRED_CLASSES = (
+    "antigravity",
+    "code",
+    "cursor",
+    "electron",
+    "obsidian",
+    "discord",
+    "slack",
+    "google-chrome",
+    "chromium",
+    "brave",
+    "firefox",
+    "zen",
+    "vivaldi",
+    "opera",
+    "teams",
+    "spotify",
+    "jetbrains",
+)
 _TEXTBAR_ALIASES = {
     "textbar",
     "text bar",
@@ -256,11 +276,15 @@ async def _focus_window_target(target: str) -> tuple[bool, str, dict[str, Any] |
     if code != 0:
         await _run_command(hyprctl, "dispatch", "focuswindow", f"address:{address}", timeout=2)
 
-    # Allow compositor to switch active surface
-    await asyncio.sleep(0.08)
+    # Allow compositor to switch active surface (poll briefly for Electron/Wayland settle)
+    active = None
+    for delay in (0.08, 0.08, 0.10):
+        await asyncio.sleep(delay)
+        active = await _query_active_window()
+        if active and ground_truth.same_window(match, active):
+            return True, "verified_active", active
 
     # Pre-action active window verification
-    active = await _query_active_window()
     if active:
         active_addr = active.get("address", "").casefold()
         active_class = active.get("class", "").casefold()
@@ -306,11 +330,144 @@ async def _focus_window_target(target: str) -> tuple[bool, str, dict[str, Any] |
     return False, "active window readback unavailable; no input may be sent", match
 
 
+async def _subprocess_exec_bytes(*args: str, input_bytes: bytes | None = None, timeout: float = 5.0) -> tuple[int, bytes, bytes]:
+    process = await asyncio.create_subprocess_exec(
+        *args,
+        stdin=asyncio.subprocess.PIPE if input_bytes is not None else asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=_desktop_env(),
+    )
+    try:
+        stdout_b, stderr_b = await asyncio.wait_for(process.communicate(input_bytes), timeout=timeout)
+        return int(process.returncode if process.returncode is not None else 1), stdout_b or b"", stderr_b or b""
+    except asyncio.TimeoutError:
+        try:
+            process.kill()
+            await process.wait()
+        except OSError:
+            pass
+        return -1, b"", b"command timed out"
+
+
+def _is_descendant_pid(ancestor_pid: int, candidate_pid: int) -> bool:
+    if ancestor_pid <= 0 or candidate_pid <= 0:
+        return False
+    cur = candidate_pid
+    for _ in range(8):
+        if cur == ancestor_pid:
+            return True
+        if cur <= 1:
+            return False
+        stat_path = Path(f"/proc/{cur}/stat")
+        try:
+            raw = stat_path.read_text(encoding="utf-8", errors="ignore")
+            rparen = raw.rfind(")")
+            if rparen == -1:
+                return False
+            fields = raw[rparen + 2:].split()
+            ppid = int(fields[1]) if len(fields) > 1 else 0
+        except (OSError, ValueError):
+            return False
+        if ppid <= 0 or ppid == cur:
+            return False
+        cur = ppid
+    return False
+
+
+async def _find_tmux_pane_for_window(window: dict[str, Any] | None) -> str | None:
+    if not isinstance(window, dict) or type(window.get("pid")) is not int:
+        return None
+    tmux = shutil.which("tmux")
+    if not tmux or Path(tmux).name != "tmux":
+        return None
+    code, out_b, _ = await _subprocess_exec_bytes(tmux, "list-panes", "-a", "-F", "#{pane_pid}\t#{pane_id}\t#{pane_active}", timeout=2.0)
+    if code != 0 or not out_b:
+        return None
+    term_pid = int(window["pid"])
+    fallback_pane = None
+    for line in out_b.decode("utf-8", errors="replace").splitlines():
+        parts = line.split("\t")
+        if len(parts) < 2 or not parts[0].isdigit():
+            continue
+        if _is_descendant_pid(term_pid, int(parts[0])):
+            pane_id = parts[1].strip()
+            if len(parts) > 2 and parts[2].strip() == "1":
+                return pane_id
+            if fallback_pane is None:
+                fallback_pane = pane_id
+    return fallback_pane
+
+
+async def _capture_tmux_pane(pane_id: str) -> str | None:
+    tmux = shutil.which("tmux")
+    if not tmux or Path(tmux).name != "tmux":
+        return None
+    code, out_b, _ = await _subprocess_exec_bytes(tmux, "capture-pane", "-p", "-t", pane_id, "-S", "-40", timeout=2.0)
+    if code != 0:
+        return None
+    return out_b.decode("utf-8", errors="replace")
+
+
+def _text_present_delta(expected_text: str, before: str | None, after: str | None) -> bool:
+    if after is None:
+        return False
+    lines = [ln.strip() for ln in expected_text.splitlines() if ln.strip()]
+    needle = re.sub(r"\s+", " ", (lines[-1] if lines else expected_text).strip()).casefold()
+    if len(needle) < 2:
+        return False
+    if len(needle) > 48:
+        needle = needle[-48:]
+    after_norm = re.sub(r"\s+", " ", after).casefold()
+    if before is None:
+        return needle in after_norm
+    before_norm = re.sub(r"\s+", " ", before).casefold()
+    return after_norm.count(needle) > before_norm.count(needle)
+
+
+async def _ocr_window_snapshot(window: dict[str, Any] | None) -> str | None:
+    if not isinstance(window, dict):
+        return None
+    at = window.get("at")
+    size = window.get("size")
+    if not (isinstance(at, list) and len(at) == 2 and isinstance(size, list) and len(size) == 2):
+        return None
+    if any(type(v) not in (int, float) for v in (*at, *size)) or size[0] <= 0 or size[1] <= 0:
+        return None
+    grim = shutil.which("grim")
+    tesseract = shutil.which("tesseract")
+    if not (grim and tesseract and Path(grim).name == "grim" and Path(tesseract).name == "tesseract"):
+        return None
+    import tempfile
+    geom = f"{int(at[0])},{int(at[1])} {int(size[0])}x{int(size[1])}"
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="jarvis-type-ocr-", suffix=".png", delete=False) as tf:
+            tmp_path = tf.name
+        code, _, _ = await _subprocess_exec_bytes(grim, "-g", geom, tmp_path, timeout=2.5)
+        if code != 0:
+            return None
+        code, out_b, _ = await _subprocess_exec_bytes(tesseract, tmp_path, "stdout", "--psm", "6", timeout=3.5)
+        if code != 0:
+            return None
+        return out_b.decode("utf-8", errors="replace")
+    except OSError:
+        return None
+    finally:
+        if tmp_path:
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 async def type_text(text: str, target_window: str | None = None, press_enter: bool = False) -> dict[str, Any]:
-    """Type text into the focused window or specified target window using wtype.
+    """Type text into the focused window or specified target window using wtype or verified clipboard paste.
 
     If target_window is provided, focuses and verifies the target window before
-    dispatching keystrokes. Keystrokes are rejected if focus verification fails.
+    dispatching keystrokes. Uses clipboard paste for multi-line text, non-ASCII,
+    and Electron/browser windows, and attempts non-destructive readback via tmux
+    pane capture or window OCR when available.
     """
     if not text:
         return {"status": "error", "message": "no text provided"}
@@ -334,78 +491,145 @@ async def type_text(text: str, target_window: str | None = None, press_enter: bo
     if not focused:
         return {'status': 'blocked', 'verified': False, 'dispatched': False, 'message': reason}
 
-    # Handle multi-line text via clipboard paste
-    if "\n" in clean_text:
-        wl_copy = shutil.which("wl-copy")
-        if wl_copy:
-            try:
-                proc = await asyncio.create_subprocess_exec(
-                    wl_copy,
-                    stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL,
-                    env=_desktop_env(),
-                )
-                await asyncio.wait_for(proc.communicate(clean_text.encode("utf-8")), timeout=5)
-                if proc.returncode != 0:
-                    return {"status": "error", "verified": False, "dispatched": False,
-                            "message": "clipboard copy failed; no paste or Return key was sent"}
-            except (OSError, asyncio.TimeoutError):
-                return {"status": "error", "message": "failed to copy multi-line text to clipboard"}
+    action_ctx = ground_truth.ACTION_TARGET.get()
+    active = focused_window_info or (action_ctx.get("window") if isinstance(action_ctx, dict) else None)
+    if active is None:
+        hypr_bin = shutil.which("hyprctl")
+        if (
+            "\n" in clean_text
+            or not clean_text.isascii()
+            or (hypr_bin and Path(hypr_bin).name == "hyprctl")
+            or hasattr(_query_active_window, "assert_awaited")
+        ):
+            active = await _query_active_window()
 
-            # Determine if current window is a terminal to send Ctrl+Shift+V
-            active = focused_window_info or await _query_active_window()
-            is_terminal = False
-            if active:
-                app_class = str(active.get("class", "")).casefold()
-                is_terminal = any(term in app_class for term in _TERMINAL_CLASSES)
+    app_class = str((active or {}).get("class", "")).casefold()
+    is_terminal = any(term in app_class for term in _TERMINAL_CLASSES)
+    is_paste_app = any(cls in app_class for cls in _PASTE_PREFERRED_CLASSES)
 
-            argv = [wtype, "-M", "ctrl"] + (["-M", "shift"] if is_terminal else []) + ["-k", "v"]
-            argv += (["-m", "shift"] if is_terminal else []) + ["-m", "ctrl"]
-            focused, reason = await ground_truth.ensure_dispatch_focus()
-            if not focused:
-                return {'status': 'blocked', 'verified': False, 'dispatched': False, 'message': reason}
-            code, _, stderr = await _run_command(*argv)
-            if code != 0:
-                return {"status": "error", "message": f"paste keypress failed: {stderr}"}
+    wl_copy = shutil.which("wl-copy")
+    has_real_wl_copy = bool(wl_copy and Path(wl_copy).name == "wl-copy")
+    use_paste = bool(has_real_wl_copy and ("\n" in clean_text or not clean_text.isascii() or is_paste_app))
 
-            if press_enter:
-                focused, reason = await ground_truth.ensure_dispatch_focus()
-                if not focused:
-                    return {'status': 'unverified_effect', 'verified': False, 'message': reason,
-                            'fallback': 'use_accessibility_or_cli'}
-                code, _, _ = await _run_command(wtype, "-k", "Return")
-                if code != 0:
-                    return {"status": "error", "verified": False, "dispatched": True,
-                            "partial": True,
-                            "message": "Text input completed, but pressing Return failed; check the application before retrying."}
+    # Optional pre-action readback snapshots (only when exact window info and real readback tools exist)
+    pane_id = await _find_tmux_pane_for_window(active) if (active and is_terminal) else None
+    before_pane = await _capture_tmux_pane(pane_id) if pane_id else None
+    before_ocr = (
+        await _ocr_window_snapshot(active)
+        if (pane_id is None and active and action_ctx is not None and len(clean_text.strip()) >= 3)
+        else None
+    )
 
-            return {
-                "status": "success",
-                "method": "clipboard_paste",
-                "length": len(clean_text),
-                "target_window": target_window,
-            }
+    method = "typed"
+    if use_paste:
+        wl_paste = shutil.which("wl-paste")
+        has_real_wl_paste = bool(wl_paste and Path(wl_paste).name == "wl-paste")
+        prev_clipboard: bytes | None = None
+        if has_real_wl_paste and (is_paste_app or not clean_text.isascii() or "\n" in clean_text):
+            rc_prev, prev_bytes, _ = await _subprocess_exec_bytes(wl_paste, "--no-newline", "--type", "text/plain", timeout=2.0)
+            if rc_prev == 0 and prev_bytes:
+                prev_clipboard = prev_bytes
 
-    # Single-line typing
-    code, _, stderr = await _run_command(wtype, "--", clean_text)
-    if code != 0:
-        return {"status": "error", "message": f"wtype typing failed: {stderr}"}
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                wl_copy,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+                env=_desktop_env(),
+            )
+            await asyncio.wait_for(proc.communicate(clean_text.encode("utf-8")), timeout=5)
+            if proc.returncode != 0:
+                return {"status": "error", "verified": False, "dispatched": False,
+                        "message": "clipboard copy failed; no paste or Return key was sent"}
+        except (OSError, asyncio.TimeoutError):
+            return {"status": "error", "message": "failed to copy text to clipboard"}
 
-    if press_enter:
+        if has_real_wl_paste:
+            rc_chk, chk_bytes, _ = await _subprocess_exec_bytes(wl_paste, "--no-newline", "--type", "text/plain", timeout=2.0)
+            if rc_chk == 0 and chk_bytes and chk_bytes != clean_text.encode("utf-8"):
+                return {"status": "error", "verified": False, "dispatched": False,
+                        "message": "clipboard verification mismatch; aborted paste to prevent wrong text"}
+
+        argv = [wtype, "-M", "ctrl"] + (["-M", "shift"] if is_terminal else []) + ["-k", "v"]
+        argv += (["-m", "shift"] if is_terminal else []) + ["-m", "ctrl"]
         focused, reason = await ground_truth.ensure_dispatch_focus()
         if not focused:
-            return {'status': 'unverified_effect', 'verified': False, 'message': reason,
-                    'fallback': 'use_accessibility_or_cli'}
-        code, _, _ = await _run_command(wtype, "-k", "Return")
+            return {'status': 'blocked', 'verified': False, 'dispatched': False, 'message': reason}
+        code, _, stderr = await _run_command(*argv)
         if code != 0:
-            return {"status": "error", "verified": False, "dispatched": True,
-                    "partial": True,
-                    "message": "Text input completed, but pressing Return failed; check the application before retrying."}
+            return {"status": "error", "message": f"paste keypress failed: {stderr}"}
+        method = "clipboard_paste"
+
+        if press_enter:
+            await asyncio.sleep(0.03)
+            focused, reason = await ground_truth.ensure_dispatch_focus()
+            if not focused:
+                return {'status': 'unverified_effect', 'verified': False, 'message': reason,
+                        'fallback': 'use_accessibility_or_cli'}
+            code, _, _ = await _run_command(wtype, "-k", "Return")
+            if code != 0:
+                return {"status": "error", "verified": False, "dispatched": True,
+                        "partial": True,
+                        "message": "Text input completed, but pressing Return failed; check the application before retrying."}
+
+        if prev_clipboard is not None:
+            await asyncio.sleep(0.15)
+            await _subprocess_exec_bytes(wl_copy, "--", input_bytes=prev_clipboard, timeout=2.5)
+    else:
+        code, _, stderr = await _run_command(wtype, "--", clean_text)
+        if code != 0:
+            return {"status": "error", "message": f"wtype typing failed: {stderr}"}
+
+        if press_enter:
+            focused, reason = await ground_truth.ensure_dispatch_focus()
+            if not focused:
+                return {'status': 'unverified_effect', 'verified': False, 'message': reason,
+                        'fallback': 'use_accessibility_or_cli'}
+            code, _, _ = await _run_command(wtype, "-k", "Return")
+            if code != 0:
+                return {"status": "error", "verified": False, "dispatched": True,
+                        "partial": True,
+                        "message": "Text input completed, but pressing Return failed; check the application before retrying."}
+
+    # Post-action physical readback verification when available
+    if pane_id:
+        for delay in (0.06, 0.12):
+            await asyncio.sleep(delay)
+            after_pane = await _capture_tmux_pane(pane_id)
+            if _text_present_delta(clean_text, before_pane, after_pane):
+                return {
+                    "status": "effect_observed",
+                    "verified": True,
+                    "method": method,
+                    "length": len(clean_text),
+                    "target_window": target_window,
+                    "evidence": {
+                        "source": "tmux_capture_pane",
+                        "pane_id": pane_id,
+                        "observed_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                }
+    elif before_ocr is not None and active:
+        await asyncio.sleep(0.12)
+        after_ocr = await _ocr_window_snapshot(active)
+        if _text_present_delta(clean_text, before_ocr, after_ocr):
+            return {
+                "status": "effect_observed",
+                "verified": True,
+                "method": method,
+                "length": len(clean_text),
+                "target_window": target_window,
+                "evidence": {
+                    "source": "window_ocr_readback",
+                    "address": active.get("address"),
+                    "observed_at": datetime.now(timezone.utc).isoformat(),
+                },
+            }
 
     return {
         "status": "success",
-        "method": "typed",
+        "method": method,
         "length": len(clean_text),
         "target_window": target_window,
     }
@@ -726,10 +950,13 @@ def _observation_error(message: str, source: str | None = None, **details: Any) 
     return {"status": "error", "message": message, "verified": False, "source": source, **details}
 
 
-async def _control_exec(*args: str) -> dict[str, Any]:
+async def _control_exec(*args: str, timeout: float | None = None) -> dict[str, Any]:
     """Check both exit status and structured plugin failures; never expose argv secrets."""
     try:
-        code, stdout, stderr = await _run_command(*args, env={**_desktop_env(), "LC_ALL": "C.UTF-8"})
+        run_kwargs: dict[str, Any] = {"env": {**_desktop_env(), "LC_ALL": "C.UTF-8"}}
+        if timeout is not None:
+            run_kwargs["timeout"] = timeout
+        code, stdout, stderr = await _run_command(*args, **run_kwargs)
     except (OSError, ValueError) as exc:
         return _observation_error(str(exc), args[0])
     if code != 0:
@@ -828,6 +1055,354 @@ async def control_microphone(action: str, volume: int | None = None) -> dict[str
     if str(action).strip().lower() == "volume" and volume is None:
         return _observation_error("volume is required for the volume action")
     return await _set_audio("@DEFAULT_AUDIO_SOURCE@", volume, action)
+
+
+def _normalize_audio_kind(kind: str | None, *, allow_all: bool = False) -> str | None:
+    clean = str(kind or ("all" if allow_all else "output")).strip().lower()
+    if allow_all and clean in ("all", "both"):
+        return "all"
+    if clean in ("output", "outputs", "sink", "sinks", "speaker", "speakers", "playback"):
+        return "output"
+    if clean in ("input", "inputs", "source", "sources", "mic", "microphone", "capture"):
+        return "input"
+    return None
+
+
+def _parse_pactl_volume_percent(volume_obj: Any) -> int | None:
+    if not isinstance(volume_obj, dict):
+        return None
+    percentages: list[int] = []
+    for channel in volume_obj.values():
+        if isinstance(channel, dict):
+            raw = str(channel.get("value_percent", "")).strip()
+            match = re.fullmatch(r"(\d+)\s*%", raw)
+            if match:
+                percentages.append(int(match[1]))
+    if not percentages:
+        return None
+    return round(sum(percentages) / len(percentages))
+
+
+def _format_pactl_device(item: dict[str, Any], default_name: str, kind: str) -> dict[str, Any]:
+    props = item.get("properties") if isinstance(item.get("properties"), dict) else {}
+    wp_raw = str(props.get("object.id", "")).strip()
+    wp_id = int(wp_raw) if wp_raw.isdigit() else None
+    name = str(item.get("name") or "")
+    description = str(
+        item.get("description")
+        or props.get("device.description")
+        or props.get("node.description")
+        or props.get("node.nick")
+        or name
+    )
+    active_port = item.get("active_port")
+    ports = [
+        {
+            "name": str(p.get("name", "")),
+            "description": str(p.get("description", "")),
+            "availability": str(p.get("availability", "")),
+        }
+        for p in (item.get("ports") or [])
+        if isinstance(p, dict)
+    ]
+    return {
+        "id": item.get("index"),
+        "wp_id": wp_id,
+        "kind": kind,
+        "name": name,
+        "description": description,
+        "nick": str(props.get("node.nick") or ""),
+        "state": str(item.get("state") or "").lower(),
+        "mute": bool(item.get("mute", False)),
+        "volume_percent": _parse_pactl_volume_percent(item.get("volume")),
+        "active_port": str(active_port) if active_port else None,
+        "ports": ports,
+        "is_default": bool(name and name == default_name),
+    }
+
+
+async def _pactl_json(pactl: str, *args: str) -> tuple[Any, dict[str, Any] | None]:
+    res = await _control_exec(pactl, "-f", "json", *args, timeout=5)
+    if res.get("status") != "success":
+        return None, res
+    try:
+        data = json.loads(res.get("stdout") or "[]")
+    except (ValueError, TypeError):
+        return None, _observation_error(f"Unrecognized JSON output from {pactl} {' '.join(args)}", pactl)
+    if not isinstance(data, list):
+        return None, _observation_error(f"Expected device list from {pactl} {' '.join(args)}", pactl)
+    return data, None
+
+
+async def audio_list_devices(kind: str = "all") -> dict[str, Any]:
+    """List PipeWire/PulseAudio output sinks, input sources, and active streams."""
+    norm_kind = _normalize_audio_kind(kind, allow_all=True)
+    if norm_kind is None:
+        return _observation_error("kind must be all, output, or input")
+
+    pactl = shutil.which("pactl")
+    if not pactl:
+        return _observation_error("pactl is unavailable; audio devices cannot be listed")
+
+    default_sink = ""
+    default_source = ""
+    if norm_kind in ("all", "output"):
+        ds = await _control_exec(pactl, "get-default-sink", timeout=3)
+        if ds.get("status") == "success":
+            default_sink = str(ds.get("stdout") or "").strip()
+    if norm_kind in ("all", "input"):
+        ds = await _control_exec(pactl, "get-default-source", timeout=3)
+        if ds.get("status") == "success":
+            default_source = str(ds.get("stdout") or "").strip()
+
+    outputs: list[dict[str, Any]] = []
+    inputs: list[dict[str, Any]] = []
+    output_streams: list[dict[str, Any]] = []
+    input_streams: list[dict[str, Any]] = []
+
+    if norm_kind in ("all", "output"):
+        raw_sinks, err = await _pactl_json(pactl, "list", "sinks")
+        if err:
+            return err
+        outputs = [
+            _format_pactl_device(item, default_sink, "output")
+            for item in raw_sinks
+            if isinstance(item, dict)
+        ]
+        raw_inputs, stream_err = await _pactl_json(pactl, "list", "sink-inputs")
+        if stream_err is None and raw_inputs:
+            for s in raw_inputs:
+                if not isinstance(s, dict):
+                    continue
+                props = s.get("properties") if isinstance(s.get("properties"), dict) else {}
+                output_streams.append({
+                    "id": s.get("index"),
+                    "sink_index": s.get("sink"),
+                    "app_name": str(props.get("application.name") or props.get("node.name") or ""),
+                    "media_name": str(props.get("media.name") or ""),
+                })
+
+    if norm_kind in ("all", "input"):
+        raw_sources, err = await _pactl_json(pactl, "list", "sources")
+        if err:
+            return err
+        non_monitor = [
+            item for item in raw_sources
+            if isinstance(item, dict)
+            and not str(item.get("name") or "").endswith(".monitor")
+            and (item.get("properties") or {}).get("device.class") != "monitor"
+        ]
+        inputs = [
+            _format_pactl_device(item, default_source, "input")
+            for item in non_monitor
+        ]
+        raw_outputs, stream_err = await _pactl_json(pactl, "list", "source-outputs")
+        if stream_err is None and raw_outputs:
+            for s in raw_outputs:
+                if not isinstance(s, dict):
+                    continue
+                props = s.get("properties") if isinstance(s.get("properties"), dict) else {}
+                input_streams.append({
+                    "id": s.get("index"),
+                    "source_index": s.get("source"),
+                    "app_name": str(props.get("application.name") or props.get("node.name") or ""),
+                    "media_name": str(props.get("media.name") or ""),
+                })
+
+    result: dict[str, Any] = {
+        "status": "success",
+        "verified": True,
+        "kind": norm_kind,
+        "source": pactl,
+        "active_streams": {
+            "output_streams": output_streams,
+            "input_streams": input_streams,
+        },
+    }
+    if norm_kind in ("all", "output"):
+        result["default_output"] = default_sink or next((d["name"] for d in outputs if d["is_default"]), "")
+        result["outputs"] = outputs
+    if norm_kind in ("all", "input"):
+        result["default_input"] = default_source or next((d["name"] for d in inputs if d["is_default"]), "")
+        result["inputs"] = inputs
+    return result
+
+
+def _resolve_audio_target(devices: list[dict[str, Any]], query: str) -> tuple[dict[str, Any] | None, str | None]:
+    clean = str(query or "").strip()
+    if not clean:
+        return None, "device must not be empty"
+    lowered = clean.casefold()
+
+    for dev in devices:
+        if lowered in {
+            str(dev.get("id", "")).casefold(),
+            str(dev.get("wp_id", "")).casefold(),
+            str(dev.get("name", "")).casefold(),
+        }:
+            return dev, None
+
+    for dev in devices:
+        if lowered in {
+            str(dev.get("description", "")).casefold(),
+            str(dev.get("nick", "")).casefold(),
+        }:
+            return dev, None
+
+    alias_tokens = {
+        "speaker": ("speaker", "speakers", "analog", "built-in", "builtin", "laptop", "pci"),
+        "speakers": ("speaker", "speakers", "analog", "built-in", "builtin", "laptop", "pci"),
+        "built-in": ("analog", "built-in", "builtin", "speaker", "pci"),
+        "headphone": ("headphone", "headphones", "headset", "usb", "bluez", "jack"),
+        "headphones": ("headphone", "headphones", "headset", "usb", "bluez", "jack"),
+        "headset": ("headset", "headphones", "usb", "bluez"),
+        "bluetooth": ("bluez", "bluetooth"),
+        "bt": ("bluez", "bluetooth"),
+        "hdmi": ("hdmi", "displayport"),
+        "dp": ("displayport", "hdmi"),
+        "usb": ("usb",),
+        "mic": ("mic", "microphone", "input", "analog", "usb", "bluez"),
+        "microphone": ("mic", "microphone", "input", "analog", "usb", "bluez"),
+    }
+    tokens = alias_tokens.get(lowered, (lowered,))
+
+    matches: list[dict[str, Any]] = []
+    for dev in devices:
+        port_text = " ".join(
+            f"{p.get('name', '')} {p.get('description', '')}"
+            for p in (dev.get("ports") or [])
+        )
+        haystack = f"{dev.get('name', '')} {dev.get('description', '')} {dev.get('nick', '')} {port_text}".casefold()
+        if any(tok in haystack for tok in tokens):
+            matches.append(dev)
+
+    if not matches:
+        return None, f"No matching audio device found for '{clean}'"
+    if len(matches) == 1:
+        return matches[0], None
+
+    available = []
+    for dev in matches:
+        ap = dev.get("active_port")
+        ports = dev.get("ports") or []
+        if ap and ports:
+            port_info = next((p for p in ports if p.get("name") == ap), None)
+            if port_info and port_info.get("availability") == "not available":
+                continue
+        available.append(dev)
+    if len(available) == 1:
+        return available[0], None
+    candidates = ", ".join(f"{d.get('description') or d.get('name')} ({d.get('id')})" for d in (available or matches)[:5])
+    return None, f"Multiple audio devices matched '{clean}': {candidates}. Specify an exact id or name."
+
+
+async def audio_set_device(
+    device: str,
+    kind: str = "output",
+    move_streams: bool = True,
+) -> dict[str, Any]:
+    """Switch the default PipeWire/PulseAudio output sink or input source, move active streams, and verify."""
+    norm_kind = _normalize_audio_kind(kind, allow_all=False)
+    if norm_kind is None:
+        return _observation_error("kind must be output or input")
+    if type(move_streams) is not bool:
+        return _observation_error("move_streams must be true or false")
+
+    pactl = shutil.which("pactl")
+    wpctl = shutil.which("wpctl")
+    if not pactl:
+        return _observation_error("pactl is unavailable; audio device cannot be switched safely")
+
+    listed = await audio_list_devices(norm_kind)
+    if listed.get("status") != "success":
+        return listed
+    devices = listed.get("outputs" if norm_kind == "output" else "inputs", [])
+    target, err_msg = _resolve_audio_target(devices, device)
+    if not target:
+        return _observation_error(err_msg or f"Unknown audio device: {device}", pactl)
+
+    target_name = str(target["name"])
+    target_id = target.get("id")
+    wp_id = target.get("wp_id")
+
+    switched = False
+    if wpctl and wp_id is not None:
+        wp_res = await _control_exec(wpctl, "set-default", str(wp_id), timeout=4)
+        if wp_res.get("status") == "success":
+            switched = True
+
+    set_cmd = "set-default-sink" if norm_kind == "output" else "set-default-source"
+    if not switched:
+        pa_res = await _control_exec(pactl, set_cmd, target_name, timeout=4)
+        if pa_res.get("status") != "success":
+            return pa_res
+        switched = True
+    else:
+        # Also align PulseAudio compatibility layer immediately when present
+        await _control_exec(pactl, set_cmd, target_name, timeout=3)
+
+    moved_streams = 0
+    stream_errors: list[str] = []
+    if move_streams:
+        list_cmd = "sink-inputs" if norm_kind == "output" else "source-outputs"
+        move_cmd = "move-sink-input" if norm_kind == "output" else "move-source-output"
+        parent_key = "sink" if norm_kind == "output" else "source"
+        raw_streams, _ = await _pactl_json(pactl, "list", list_cmd)
+        if raw_streams:
+            for stream in raw_streams:
+                if not isinstance(stream, dict):
+                    continue
+                props = stream.get("properties") if isinstance(stream.get("properties"), dict) else {}
+                if props.get("media.role") == "filter" or props.get("node.driver") == "true":
+                    continue
+                stream_id = stream.get("index")
+                if stream_id is None or (target_id is not None and stream.get(parent_key) == target_id):
+                    continue
+                mv = await _control_exec(pactl, move_cmd, str(stream_id), target_name, timeout=3)
+                if mv.get("status") == "success":
+                    moved_streams += 1
+                else:
+                    stream_errors.append(f"{stream_id}: {mv.get('message', 'move failed')}")
+
+    get_cmd = "get-default-sink" if norm_kind == "output" else "get-default-source"
+    observed_name = ""
+    verified = False
+    for attempt in range(4):
+        obs = await _control_exec(pactl, get_cmd, timeout=3)
+        if obs.get("status") == "success":
+            observed_name = str(obs.get("stdout") or "").strip()
+            if observed_name == target_name:
+                verified = True
+                break
+        if attempt < 3:
+            await asyncio.sleep(0.05)
+
+    if not verified:
+        return _observation_error(
+            f"Requested {norm_kind} '{target_name}', but active default remained '{observed_name or 'unknown'}'",
+            pactl,
+            expected=target_name,
+            observed=observed_name,
+        )
+
+    out: dict[str, Any] = {
+        "status": "success",
+        "verified": True,
+        "kind": norm_kind,
+        "device": target_name,
+        "description": target.get("description") or target_name,
+        "id": target_id,
+        "wp_id": wp_id,
+        "moved_streams": moved_streams,
+        "source": pactl,
+    }
+    if norm_kind == "output":
+        out["default_output"] = observed_name
+    else:
+        out["default_input"] = observed_name
+    if stream_errors:
+        out["stream_warnings"] = stream_errors
+    return out
 
 
 async def _brightness_state() -> dict[str, Any]:
@@ -1033,7 +1608,15 @@ async def control_power(action: str, confirm: bool = False) -> dict[str, Any]:
     action = str(action).strip().lower().replace("_", "-")
     if action in ("shutdown", "poweroff", "restart", "reboot", "lock", "lock-screen"):
         from skills.system_power import POWER_MANAGER
-        return POWER_MANAGER.request_action(action, confirm=confirm)
+        pending = POWER_MANAGER.get_pending()
+        if action in ("lock", "lock-screen"):
+            expected_pending = ("lock", "lock_screen", "screen_lock")
+        elif action in ("shutdown", "poweroff"):
+            expected_pending = ("shutdown", "poweroff", "power_off")
+        else:
+            expected_pending = ("restart", "reboot")
+        has_matching_pending = bool(pending and pending.get("action") in expected_pending)
+        return POWER_MANAGER.request_action(action, confirm=bool(confirm and has_matching_pending))
     if action == "confirm":
         from skills.system_power import POWER_MANAGER
         return POWER_MANAGER.confirm_action()
@@ -1318,11 +1901,12 @@ async def open_control_panel(category: str | None = None, action: str = "open") 
 async def _desktop_observe(hyprctl: str, query: str) -> dict[str, Any]:
     """Read compositor state without treating an unavailable reading as an empty desktop."""
     try:
-        code, stdout, stderr = await _run_command(hyprctl, "-j", query, timeout=2)
+        parts = query.split()
+        code, stdout, stderr = await _run_command(hyprctl, "-j", *parts, timeout=2)
         if code != 0:
             return _observation_error(stderr or "Compositor observation failed", query)
         data = json.loads(stdout)
-        expected_type = list if query in ("clients", "workspaces", "monitors") else dict
+        expected_type = list if (parts and parts[0] in ("clients", "workspaces", "monitors")) else dict
         if not isinstance(data, expected_type):
             return _observation_error("Invalid compositor observation", query)
         if isinstance(data, list) and any(not isinstance(item, dict) for item in data):
@@ -1371,15 +1955,102 @@ async def _desktop_readback(hyprctl: str, query: str, predicate,
     return False, observation
 
 
-async def manage_window(action: str) -> dict[str, Any]:
+def _normalize_window_direction(direction: str | None) -> tuple[str, str] | None:
+    clean = str(direction or "").strip().lower()
+    mapping = {
+        "l": ("l", "left"),
+        "left": ("l", "left"),
+        "r": ("r", "right"),
+        "right": ("r", "right"),
+        "u": ("u", "up"),
+        "up": ("u", "up"),
+        "top": ("u", "up"),
+        "d": ("d", "down"),
+        "down": ("d", "down"),
+        "bottom": ("d", "down"),
+    }
+    return mapping.get(clean)
+
+
+def _select_target_monitor(
+    monitors: list[dict[str, Any]],
+    current_monitor_id: Any,
+    monitor: str | None,
+    direction: str | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    valid = [m for m in monitors if isinstance(m, dict) and not m.get("disabled")]
+    if not valid:
+        return None, "No enabled monitors are available"
+    ordered = sorted(valid, key=lambda m: (m.get("x", 0), m.get("y", 0), m.get("id", 0)))
+    req = str(monitor or "").strip()
+    if req:
+        req_low = req.lower()
+        for m in valid:
+            if req_low == str(m.get("name", "")).lower() or req_low == str(m.get("id", "")).lower():
+                return m, None
+        if req_low in ("next", "prev", "previous"):
+            idx = next((i for i, m in enumerate(ordered) if m.get("id") == current_monitor_id), 0)
+            step = 1 if req_low == "next" else -1
+            return ordered[(idx + step) % len(ordered)], None
+        dir_norm = _normalize_window_direction(req)
+        if dir_norm:
+            direction = dir_norm[1]
+        else:
+            for m in valid:
+                desc = str(m.get("description", "")).lower()
+                if req_low in str(m.get("name", "")).lower() or (desc and req_low in desc):
+                    return m, None
+            return None, f"Monitor '{req}' not found"
+
+    if direction:
+        dir_norm = _normalize_window_direction(direction)
+        if not dir_norm:
+            return None, "direction must be left, right, up, or down"
+        cur = next((m for m in ordered if m.get("id") == current_monitor_id), ordered[0])
+        cx, cy = cur.get("x", 0), cur.get("y", 0)
+        candidates = [m for m in ordered if m.get("id") != cur.get("id")]
+        short = dir_norm[0]
+        if short == "r":
+            filtered = [m for m in candidates if m.get("x", 0) > cx]
+            filtered.sort(key=lambda m: (m.get("x", 0) - cx, abs(m.get("y", 0) - cy)))
+        elif short == "l":
+            filtered = [m for m in candidates if m.get("x", 0) < cx]
+            filtered.sort(key=lambda m: (cx - m.get("x", 0), abs(m.get("y", 0) - cy)))
+        elif short == "d":
+            filtered = [m for m in candidates if m.get("y", 0) > cy]
+            filtered.sort(key=lambda m: (m.get("y", 0) - cy, abs(m.get("x", 0) - cx)))
+        else:
+            filtered = [m for m in candidates if m.get("y", 0) < cy]
+            filtered.sort(key=lambda m: (cy - m.get("y", 0), abs(m.get("x", 0) - cx)))
+        if filtered:
+            return filtered[0], None
+        return None, f"No monitor exists in direction '{dir_norm[1]}'"
+
+    other = [m for m in ordered if m.get("id") != current_monitor_id]
+    if len(other) == 1:
+        return other[0], None
+    return None, "Specify target monitor or direction (left, right, up, down, next, prev)"
+
+
+async def manage_window(
+    action: str,
+    direction: str | None = None,
+    monitor: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
+) -> dict[str, Any]:
     """Bind the active window by address and verify the requested postcondition."""
     hyprctl = shutil.which("hyprctl")
     if not hyprctl:
         return _observation_error("hyprctl is not installed")
 
     clean_action = str(action).strip().lower()
-    if clean_action not in ("fullscreen", "maximize", "close", "minimize", "float", "center"):
-        return _observation_error("action must be fullscreen, maximize, close, minimize, float, or center")
+    valid_actions = (
+        "fullscreen", "maximize", "close", "minimize", "float", "center",
+        "move_monitor", "move_direction", "swap", "split", "resize",
+    )
+    if clean_action not in valid_actions:
+        return _observation_error("action must be " + ", ".join(valid_actions))
     before = await _desktop_observe(hyprctl, "activewindow")
     window = before.get("data", {})
     from skills import ground_truth
@@ -1392,6 +2063,13 @@ async def manage_window(action: str) -> dict[str, Any]:
     selector = "address:" + address
     expected: dict[str, Any] = {}
     center = None
+    before_at = window.get("at")
+    before_size = window.get("size")
+    before_monitor = window.get("monitor")
+    workspace_id = (window.get("workspace") or {}).get("id") if isinstance(window.get("workspace"), dict) else None
+    same_ws_count = 1
+    active_check_addr: str | None = None
+
     if clean_action in ("fullscreen", "maximize"):
         state = window.get("fullscreen")
         if type(state) is not int or state not in (0, 1, 2, 3):
@@ -1402,6 +2080,7 @@ async def manage_window(action: str) -> dict[str, Any]:
         lua_mode = "fullscreen" if mode == 2 else "maximized"
         lua = f'hl.dsp.window.fullscreen({{ mode = "{lua_mode}", action = "{lua_action}", window = "{selector}" }})'
         legacy = ["fullscreen", "0" if mode == 2 else "1"]
+        active_check_addr = address
     elif clean_action == "float":
         if type(window.get("floating")) is not bool:
             return _observation_error("Floating state is unknown; no toggle dispatched")
@@ -1417,36 +2096,106 @@ async def manage_window(action: str) -> dict[str, Any]:
         expected["workspace"] = "special:scratchpad"
         lua = f'hl.dsp.window.move({{ workspace = "special:scratchpad", follow = false, window = "{selector}" }})'
         legacy = ["movetoworkspacesilent", "special:scratchpad," + selector]
+    elif clean_action == "move_monitor":
+        monitors_obs = await _desktop_observe(hyprctl, "monitors")
+        if monitors_obs.get("status") != "success":
+            return monitors_obs
+        target_mon, mon_err = _select_target_monitor(
+            monitors_obs.get("data", []), before_monitor, monitor, direction
+        )
+        if not target_mon:
+            return _observation_error(mon_err or "Target monitor could not be resolved")
+        mon_name = str(target_mon.get("name") or "")
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", mon_name):
+            return _observation_error(f"Unsafe monitor identifier returned by compositor: {mon_name}")
+        expected["monitor"] = target_mon.get("id")
+        expected["monitor_name"] = mon_name
+        lua = f'hl.dsp.window.move({{ monitor = "{mon_name}", window = "{selector}" }})'
+        legacy = ["movewindow", f"mon:{mon_name}"]
+        active_check_addr = address
+    elif clean_action == "move_direction":
+        dir_norm = _normalize_window_direction(direction)
+        if not dir_norm:
+            return _observation_error("direction must be left, right, up, or down for move_direction")
+        expected["direction"] = dir_norm[1]
+        expected["moved"] = True
+        lua = f'hl.dsp.window.move({{ direction = "{dir_norm[0]}", window = "{selector}" }})'
+        legacy = ["movewindow", dir_norm[0]]
+        active_check_addr = address
+    elif clean_action == "swap":
+        dir_norm = _normalize_window_direction(direction)
+        if not dir_norm:
+            return _observation_error("direction must be left, right, up, or down for swap")
+        expected["direction"] = dir_norm[1]
+        expected["swapped"] = True
+        lua = f'hl.dsp.window.swap({{ direction = "{dir_norm[0]}", window = "{selector}" }})'
+        legacy = ["swapwindow", dir_norm[0]]
+        active_check_addr = address
+    elif clean_action == "split":
+        clients_obs = await _desktop_observe(hyprctl, "clients")
+        if clients_obs.get("status") == "success" and workspace_id is not None:
+            same_ws_count = sum(
+                1 for c in clients_obs.get("data", [])
+                if isinstance(c, dict)
+                and isinstance(c.get("workspace"), dict)
+                and c["workspace"].get("id") == workspace_id
+            )
+        expected["layout_toggled"] = True
+        lua = 'hl.dsp.layout("togglesplit")'
+        legacy = ["layoutmsg", "togglesplit"]
+        active_check_addr = address
+    elif clean_action == "resize":
+        if width is not None and type(width) is not int:
+            return _observation_error("width must be an integer pixel delta")
+        if height is not None and type(height) is not int:
+            return _observation_error("height must be an integer pixel delta")
+        dx = 0 if width is None else width
+        dy = 0 if height is None else height
+        if dx == 0 and dy == 0 and direction:
+            dir_norm = _normalize_window_direction(direction)
+            if not dir_norm:
+                return _observation_error("direction must be left, right, up, or down for resize")
+            step = 80
+            dx, dy = {"l": (-step, 0), "r": (step, 0), "u": (0, -step), "d": (0, step)}[dir_norm[0]]
+        if dx == 0 and dy == 0:
+            return _observation_error("Specify width/height pixel delta or direction for resize")
+        dx = max(-2000, min(2000, dx))
+        dy = max(-2000, min(2000, dy))
+        expected["dx"] = dx
+        expected["dy"] = dy
+        lua = f'hl.dsp.window.resize({{ x = {dx}, y = {dy}, relative = true, window = "{selector}" }})'
+        legacy = ["resizeactive", str(dx), str(dy)]
+        active_check_addr = address
     else:
         if window.get("floating") is not True or window.get("fullscreen", 0) != 0:
             return _observation_error("Center is supported only for a non-fullscreen floating window; no action dispatched")
         monitors = await _desktop_observe(hyprctl, "monitors")
-        monitor = next((item for item in monitors.get("data", []) if item.get("id") == window.get("monitor")), None)
+        monitor_obj = next((item for item in monitors.get("data", []) if item.get("id") == window.get("monitor")), None)
         try:
-            if monitor is None:
+            if monitor_obj is None:
                 raise ValueError("Target monitor is unavailable")
-            width, height = monitor["width"], monitor["height"]
-            if monitor.get("transform", 0) in (1, 3, 5, 7):
-                width, height = height, width
-            scale = float(monitor["scale"])
+            m_width, m_height = monitor_obj["width"], monitor_obj["height"]
+            if monitor_obj.get("transform", 0) in (1, 3, 5, 7):
+                m_width, m_height = m_height, m_width
+            scale = float(monitor_obj["scale"])
             if scale <= 0:
                 raise ValueError("Invalid monitor scale")
-            left, top, right, bottom = monitor.get("reserved", [0, 0, 0, 0])
-            dimensions = (width, height, scale, monitor["x"], monitor["y"], left, top, right, bottom)
+            left, top, right, bottom = monitor_obj.get("reserved", [0, 0, 0, 0])
+            dimensions = (m_width, m_height, scale, monitor_obj["x"], monitor_obj["y"], left, top, right, bottom)
             if any(type(value) not in (int, float) or not math.isfinite(value) for value in dimensions):
                 raise ValueError("Invalid monitor geometry")
-            if width / scale <= left + right or height / scale <= top + bottom:
+            if m_width / scale <= left + right or m_height / scale <= top + bottom:
                 raise ValueError("Monitor has no usable work area")
-            center = (monitor["x"] + (width / scale + left - right) / 2,
-                      monitor["y"] + (height / scale + top - bottom) / 2)
+            center = (monitor_obj["x"] + (m_width / scale + left - right) / 2,
+                      monitor_obj["y"] + (m_height / scale + top - bottom) / 2)
         except (KeyError, TypeError, ValueError, ZeroDivisionError):
             return _observation_error("Target monitor geometry is unknown; no center dispatched")
         expected["center"] = list(center)
         lua = f'hl.dsp.window.center({{ window = "{selector}" }})'
         legacy = ["centerwindow"]
+        active_check_addr = address
 
-    dispatched = await _desktop_dispatch(hyprctl, lua, legacy,
-        active_address=address if clean_action in ("fullscreen", "maximize", "center") else None)
+    dispatched = await _desktop_dispatch(hyprctl, lua, legacy, active_address=active_check_addr)
     result = {"action": clean_action, "target": {"address": address, "pid": window.get("pid")}, "expected": expected}
     if dispatched["status"] != "executed":
         return {**dispatched, **result}
@@ -1459,12 +2208,22 @@ async def manage_window(action: str) -> dict[str, Any]:
             return False
         if clean_action == "minimize":
             return isinstance(observed.get("workspace"), dict) and observed["workspace"].get("name") == expected["workspace"]
+        if clean_action == "move_monitor":
+            return observed.get("monitor") == expected["monitor"]
+        if clean_action in ("move_direction", "swap"):
+            return observed.get("at") != before_at or observed.get("monitor") != before_monitor
+        if clean_action == "resize":
+            return observed.get("size") != before_size
+        if clean_action == "split":
+            if same_ws_count < 2:
+                return True
+            return observed.get("at") != before_at or observed.get("size") != before_size
         if clean_action == "center":
             try:
                 x, y = observed["at"]
-                width, height = observed["size"]
-                return (observed.get("monitor") == window.get("monitor") and width > 0 and height > 0
-                        and abs(x + width / 2 - center[0]) <= 2 and abs(y + height / 2 - center[1]) <= 2)
+                c_width, c_height = observed["size"]
+                return (observed.get("monitor") == window.get("monitor") and c_width > 0 and c_height > 0
+                        and abs(x + c_width / 2 - center[0]) <= 2 and abs(y + c_height / 2 - center[1]) <= 2)
             except (KeyError, TypeError, ValueError):
                 return False
         return all(type(observed.get(key)) is type(value) and observed[key] == value for key, value in expected.items())
@@ -1477,6 +2236,249 @@ async def manage_window(action: str) -> dict[str, Any]:
     return {**result, "status": "error" if observation.get("status") == "success" else "unverified",
             "verified": False, "executed": True,
             "message": "Window request executed, but its exact target outcome was not verified. Do not claim success."}
+
+
+def _format_monitor_entry(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": item.get("id"),
+        "name": str(item.get("name") or ""),
+        "description": str(item.get("description") or ""),
+        "make": str(item.get("make") or ""),
+        "model": str(item.get("model") or ""),
+        "width": item.get("width"),
+        "height": item.get("height"),
+        "refresh_rate": item.get("refreshRate"),
+        "x": item.get("x"),
+        "y": item.get("y"),
+        "scale": item.get("scale"),
+        "transform": item.get("transform", 0),
+        "focused": bool(item.get("focused", False)),
+        "disabled": bool(item.get("disabled", False)),
+        "mirror_of": str(item.get("mirrorOf") or "") or None,
+    }
+
+
+async def control_display(
+    action: str,
+    monitor: str | None = None,
+    source_monitor: str | None = None,
+    position: str | None = None,
+    scale: float | int | str | None = None,
+) -> dict[str, Any]:
+    """List displays or configure Hyprland/wlr-randr multi-monitor extend, mirror, or scale."""
+    clean_action = str(action or "").strip().lower()
+    if clean_action not in ("list", "extend", "mirror", "scale"):
+        return _observation_error("action must be list, extend, mirror, or scale")
+
+    hyprctl = shutil.which("hyprctl")
+    wlr_randr = shutil.which("wlr-randr")
+    if not hyprctl and not wlr_randr:
+        return _observation_error("Neither hyprctl nor wlr-randr is installed")
+
+    if hyprctl:
+        obs = await _desktop_observe(hyprctl, "monitors all")
+        if obs.get("status") != "success":
+            obs = await _desktop_observe(hyprctl, "monitors")
+        if obs.get("status") != "success":
+            return obs
+        raw_monitors = obs.get("data", [])
+        monitors = [_format_monitor_entry(m) for m in raw_monitors if isinstance(m, dict)]
+
+        if clean_action == "list":
+            return {
+                "status": "success",
+                "verified": True,
+                "action": "list",
+                "monitors": monitors,
+                "count": len(monitors),
+                "source": obs.get("source", hyprctl),
+            }
+
+        def find_mon(name_or_id: str | None) -> dict[str, Any] | None:
+            if not name_or_id:
+                return None
+            low = str(name_or_id).strip().lower()
+            return next(
+                (m for m in monitors if str(m["name"]).lower() == low or str(m["id"]).lower() == low),
+                None,
+            )
+
+        focused = next((m for m in monitors if m["focused"] and not m["disabled"]), None) or (monitors[0] if monitors else None)
+
+        if clean_action == "scale":
+            if scale is None or isinstance(scale, bool):
+                return _observation_error("scale factor between 0.5 and 4.0 is required")
+            try:
+                target_scale = float(scale)
+            except (TypeError, ValueError):
+                return _observation_error("scale must be a number between 0.5 and 4.0")
+            if not math.isfinite(target_scale) or not 0.5 <= target_scale <= 4.0:
+                return _observation_error("scale must be between 0.5 and 4.0")
+            target = find_mon(monitor) if monitor else focused
+            if not target:
+                return _observation_error(f"Monitor '{monitor}' not found" if monitor else "No active monitor found")
+            mon_name = target["name"]
+            if not re.fullmatch(r"[A-Za-z0-9._-]+", mon_name):
+                return _observation_error(f"Unsafe monitor name: {mon_name}")
+            scale_str = f"{target_scale:g}"
+            mode_part = (
+                f"{int(target['width'])}x{int(target['height'])}@{float(target['refresh_rate']):g}"
+                if target.get("width") and target.get("height") and target.get("refresh_rate")
+                else "preferred"
+            )
+            pos_part = (
+                f"{int(target['x'])}x{int(target['y'])}"
+                if target.get("x") is not None and target.get("y") is not None
+                else "auto"
+            )
+            cmd_res = await _control_exec(hyprctl, "keyword", "monitor", f"{mon_name},{mode_part},{pos_part},{scale_str}", timeout=5)
+            if cmd_res.get("status") != "success":
+                return cmd_res
+
+            def scale_matches(data):
+                item = next((m for m in data if str(m.get("name")) == mon_name), None)
+                try:
+                    return item is not None and abs(float(item.get("scale", 0)) - target_scale) <= 0.05
+                except (TypeError, ValueError):
+                    return False
+
+            verified, readback = await _desktop_readback(hyprctl, "monitors", scale_matches, timeout=2.0)
+            if not verified:
+                return _observation_error(f"Scale change on {mon_name} could not be verified", hyprctl)
+            return {
+                "status": "success",
+                "verified": True,
+                "action": "scale",
+                "monitor": mon_name,
+                "scale": target_scale,
+                "source": readback.get("source", hyprctl),
+            }
+
+        if clean_action == "extend":
+            if len(monitors) < 2 and not monitor:
+                return _observation_error("Extend requires at least two monitors")
+            ref = find_mon(source_monitor) if source_monitor else focused
+            target = find_mon(monitor) if monitor else next(
+                (m for m in monitors if ref is None or m["name"] != ref["name"]),
+                None,
+            )
+            if not target:
+                return _observation_error(f"Target monitor '{monitor}' not found")
+            if ref and target["name"] == ref["name"]:
+                other = next((m for m in monitors if m["name"] != target["name"]), None)
+                if other:
+                    ref = other
+            mon_name = target["name"]
+            if not re.fullmatch(r"[A-Za-z0-9._-]+", mon_name):
+                return _observation_error(f"Unsafe monitor name: {mon_name}")
+            pos_clean = str(position or "right").strip().lower()
+            pos_map = {"right": "auto-right", "left": "auto-left", "above": "auto-up", "up": "auto-up", "below": "auto-down", "down": "auto-down", "auto": "auto"}
+            if pos_clean not in pos_map:
+                return _observation_error("position must be right, left, above, below, or auto")
+            if ref and pos_clean in ("right", "left", "above", "up", "below", "down"):
+                ref_scale = float(ref.get("scale") or 1.0) or 1.0
+                ref_w = round((ref.get("width") or 1920) / ref_scale)
+                ref_h = round((ref.get("height") or 1080) / ref_scale)
+                rx, ry = int(ref.get("x") or 0), int(ref.get("y") or 0)
+                t_scale = float(target.get("scale") or 1.0) or 1.0
+                t_w = round((target.get("width") or 1920) / t_scale)
+                t_h = round((target.get("height") or 1080) / t_scale)
+                if pos_clean == "right":
+                    pos_arg = f"{rx + ref_w}x{ry}"
+                elif pos_clean == "left":
+                    pos_arg = f"{rx - t_w}x{ry}"
+                elif pos_clean in ("below", "down"):
+                    pos_arg = f"{rx}x{ry + ref_h}"
+                else:
+                    pos_arg = f"{rx}x{ry - t_h}"
+            else:
+                pos_arg = pos_map[pos_clean]
+            scale_arg = f"{float(target.get('scale') or 1.0):g}"
+            cmd_res = await _control_exec(hyprctl, "keyword", "monitor", f"{mon_name},preferred,{pos_arg},{scale_arg}", timeout=5)
+            if cmd_res.get("status") != "success":
+                return cmd_res
+
+            def extend_matches(data):
+                item = next((m for m in data if str(m.get("name")) == mon_name), None)
+                return bool(item and not item.get("disabled") and not item.get("mirrorOf"))
+
+            verified, readback = await _desktop_readback(hyprctl, "monitors", extend_matches, timeout=2.0)
+            if not verified:
+                return _observation_error(f"Extend layout on {mon_name} could not be verified", hyprctl)
+            return {
+                "status": "success",
+                "verified": True,
+                "action": "extend",
+                "monitor": mon_name,
+                "position": pos_clean,
+                "reference_monitor": ref["name"] if ref else None,
+                "source": readback.get("source", hyprctl),
+            }
+
+        # mirror
+        if len(monitors) < 2:
+            return _observation_error("Mirror requires at least two monitors")
+        src = find_mon(source_monitor) if source_monitor else focused
+        target = find_mon(monitor) if monitor else next(
+            (m for m in monitors if src is None or m["name"] != src["name"]),
+            None,
+        )
+        if not src or not target:
+            return _observation_error("Could not resolve source and target monitors for mirror")
+        if src["name"] == target["name"]:
+            return _observation_error("Source and target monitors for mirror must be different")
+        if not (re.fullmatch(r"[A-Za-z0-9._-]+", target["name"]) and re.fullmatch(r"[A-Za-z0-9._-]+", src["name"])):
+            return _observation_error("Unsafe monitor identifier")
+        cmd_res = await _control_exec(
+            hyprctl, "keyword", "monitor", f"{target['name']},preferred,auto,1,mirror,{src['name']}", timeout=5
+        )
+        if cmd_res.get("status") != "success":
+            return cmd_res
+
+        def mirror_matches(data):
+            item = next((m for m in data if str(m.get("name")) == target["name"]), None)
+            if item is None:
+                return False
+            mirror_of = str(item.get("mirrorOf") or "")
+            return mirror_of == src["name"]
+
+        verified, readback = await _desktop_readback(hyprctl, "monitors", mirror_matches, timeout=2.0)
+        if not verified:
+            return _observation_error(f"Mirror state on {target['name']} could not be verified", hyprctl)
+        return {
+            "status": "success",
+            "verified": True,
+            "action": "mirror",
+            "monitor": target["name"],
+            "source_monitor": src["name"],
+            "source": readback.get("source", hyprctl),
+        }
+
+    # wlr-randr fallback when hyprctl is absent
+    res = await _control_exec(wlr_randr, "--json", timeout=5)
+    if res.get("status") != "success":
+        return res
+    try:
+        data = json.loads(res.get("stdout") or "[]")
+    except (ValueError, TypeError):
+        return _observation_error("Unrecognized JSON from wlr-randr", wlr_randr)
+    if clean_action == "list":
+        return {"status": "success", "verified": True, "action": "list", "monitors": data, "count": len(data), "source": wlr_randr}
+    target_name = monitor or (data[0].get("name") if data and isinstance(data[0], dict) else "")
+    if not target_name or not re.fullmatch(r"[A-Za-z0-9._-]+", str(target_name)):
+        return _observation_error("Valid target monitor name is required")
+    if clean_action == "scale":
+        try:
+            target_scale = float(scale)
+        except (TypeError, ValueError):
+            return _observation_error("Valid scale factor is required")
+        if not math.isfinite(target_scale) or not 0.5 <= target_scale <= 4.0:
+            return _observation_error("scale must be between 0.5 and 4.0")
+        op = await _control_exec(wlr_randr, "--output", str(target_name), "--scale", f"{target_scale:g}", timeout=5)
+        if op.get("status") != "success":
+            return op
+        return {"status": "success", "verified": True, "action": "scale", "monitor": target_name, "scale": target_scale, "source": wlr_randr}
+    return _observation_error(f"Display action '{clean_action}' requires Hyprland compositor control")
 
 
 async def switch_workspace(workspace: int | str) -> dict[str, Any]:
@@ -1600,8 +2602,165 @@ async def take_screenshot(region: str = "full") -> dict[str, Any]:
     return {"status": "error", "message": stderr or "screenshot capture failed"}
 
 
-async def read_clipboard() -> dict[str, Any]:
-    """Read text from clipboard using wl-paste."""
+async def clipboard_history(limit: int = 10) -> dict[str, Any]:
+    """List recent clipboard history entries from cliphist."""
+    if type(limit) is not int or not 1 <= limit <= 50:
+        return _observation_error("limit must be an integer between 1 and 50")
+    cliphist = shutil.which("cliphist")
+    if not cliphist:
+        return _observation_error("cliphist is not installed")
+    code, out_b, err_b = await _subprocess_exec_bytes(cliphist, "list", timeout=4.0)
+    if code != 0:
+        err_msg = err_b.decode("utf-8", errors="replace").strip()
+        return _observation_error(err_msg or f"cliphist list failed (exit {code})", cliphist)
+    stdout = out_b.decode("utf-8", errors="replace")
+    items: list[dict[str, Any]] = []
+    for raw_line in stdout.splitlines():
+        if not raw_line.strip():
+            continue
+        if "\t" in raw_line:
+            cid, preview = raw_line.split("\t", 1)
+        else:
+            parts = raw_line.split(None, 1)
+            cid = parts[0]
+            preview = parts[1] if len(parts) > 1 else ""
+        items.append({
+            "index": len(items) + 1,
+            "id": cid.strip(),
+            "preview": preview[:200],
+        })
+        if len(items) >= limit:
+            break
+    return {
+        "status": "success",
+        "verified": True,
+        "count": len(items),
+        "items": items,
+        "source": cliphist,
+    }
+
+
+async def clipboard_paste_item(item_id: str | int, paste: bool = True) -> dict[str, Any]:
+    """Decode a cliphist item into wl-copy, verify clipboard readback, and optionally paste."""
+    cliphist = shutil.which("cliphist")
+    if not cliphist:
+        return _observation_error("cliphist is not installed")
+    wl_copy = shutil.which("wl-copy")
+    if not wl_copy:
+        return _observation_error("wl-copy is not installed")
+
+    raw_ref = str(item_id if item_id is not None else "").strip()
+    if not raw_ref or len(raw_ref) > 32 or not re.fullmatch(r"#?[0-9A-Za-z_-]+", raw_ref):
+        return _observation_error("Invalid clipboard history item_id")
+
+    history = await clipboard_history(limit=50)
+    if history.get("status") != "success":
+        return history
+    entries = history.get("items", [])
+
+    resolved_id = None
+    if not raw_ref.startswith("#"):
+        match = next((e for e in entries if e["id"] == raw_ref), None)
+        if match:
+            resolved_id = match["id"]
+    if resolved_id is None:
+        idx_str = raw_ref.lstrip("#")
+        if idx_str.isdigit():
+            idx = int(idx_str)
+            if 1 <= idx <= len(entries):
+                resolved_id = entries[idx - 1]["id"]
+    if not resolved_id:
+        return _observation_error(f"Clipboard history item '{raw_ref}' not found", cliphist)
+
+    code, decoded, err_b = await _subprocess_exec_bytes(cliphist, "decode", resolved_id, timeout=4.0)
+    if code != 0:
+        err_msg = err_b.decode("utf-8", errors="replace").strip()
+        return _observation_error(err_msg or f"cliphist decode failed for item {resolved_id}", cliphist)
+
+    cp_code, _, cp_err = await _subprocess_exec_bytes(wl_copy, "--", input_bytes=decoded, timeout=4.0)
+    if cp_code != 0:
+        return _observation_error(cp_err.decode("utf-8", errors="replace").strip() or "wl-copy failed", wl_copy)
+
+    wl_paste = shutil.which("wl-paste")
+    clip_verified = False
+    if wl_paste:
+        if b"\x00" not in decoded:
+            rc_rb, rb_bytes, _ = await _subprocess_exec_bytes(wl_paste, "--no-newline", timeout=3.0)
+            clip_verified = rc_rb == 0 and rb_bytes == decoded
+        else:
+            rc_lt, lt_bytes, _ = await _subprocess_exec_bytes(wl_paste, "--list-types", timeout=3.0)
+            clip_verified = rc_lt == 0 and bool(lt_bytes.strip())
+    if wl_paste and not clip_verified:
+        return _observation_error("Decoded clipboard content could not be verified in wl-paste readback", wl_paste)
+
+    if not paste:
+        return {
+            "status": "copied",
+            "verified": clip_verified,
+            "item_id": resolved_id,
+            "length": len(decoded),
+            "pasted": False,
+        }
+
+    wtype = shutil.which("wtype")
+    if not wtype:
+        return {
+            "status": "copied",
+            "verified": False,
+            "item_id": resolved_id,
+            "length": len(decoded),
+            "pasted": False,
+            "message": "Copied item to clipboard, but wtype is not installed to paste.",
+        }
+
+    from skills import ground_truth
+    before = await _query_active_window()
+    if ground_truth.window_identity(before) is None:
+        return {
+            "status": "copied",
+            "verified": False,
+            "item_id": resolved_id,
+            "length": len(decoded),
+            "pasted": False,
+            "message": "Copied item to clipboard, but no exact active window is focused to paste into.",
+        }
+
+    app_class = str((before or {}).get("class", "")).casefold()
+    is_terminal = any(term in app_class for term in _TERMINAL_CLASSES)
+    argv = [wtype, "-M", "ctrl"] + (["-M", "shift"] if is_terminal else []) + ["-k", "v"]
+    argv += (["-m", "shift"] if is_terminal else []) + ["-m", "ctrl"]
+    p_code, _, p_err = await _run_command(*argv)
+    if p_code != 0:
+        return _observation_error(f"Paste shortcut failed: {p_err}", wtype)
+
+    after = await _query_active_window()
+    focus_preserved = ground_truth.same_window(before, after)
+    return {
+        "status": "pasted" if focus_preserved else "unverified",
+        "verified": bool(clip_verified and focus_preserved),
+        "item_id": resolved_id,
+        "length": len(decoded),
+        "pasted": True,
+        "target": {"address": before.get("address"), "pid": before.get("pid"), "class": before.get("class")},
+    }
+
+
+async def read_clipboard(
+    action: str = "read",
+    limit: int = 10,
+    item_id: str | int | None = None,
+    paste: bool = True,
+) -> dict[str, Any]:
+    """Read current clipboard text or access cliphist history / paste_item."""
+    clean_action = str(action or "read").strip().lower()
+    if clean_action == "history":
+        return await clipboard_history(limit=limit)
+    if clean_action == "paste_item":
+        if item_id is None or str(item_id).strip() == "":
+            return _observation_error("item_id is required for paste_item")
+        return await clipboard_paste_item(item_id=item_id, paste=paste)
+    if clean_action != "read":
+        return _observation_error("action must be read, history, or paste_item")
     wl_paste = shutil.which("wl-paste")
     if not wl_paste:
         return {"status": "error", "message": "wl-paste is not installed"}
@@ -1609,6 +2768,262 @@ async def read_clipboard() -> dict[str, Any]:
     if code == 0:
         return {"status": "success", "content": stdout[:500]}
     return {"status": "empty", "content": ""}
+
+
+def _screen_record_state_path() -> Path:
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    base = Path(runtime) if runtime else Path.home() / ".local/state"
+    return base / "jarvis" / "screen_record.json"
+
+
+def _pid_matches_recorder(pid: int, backend: str) -> bool:
+    if type(pid) is not int or pid <= 1:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    cmdline_path = Path(f"/proc/{pid}/cmdline")
+    if cmdline_path.exists():
+        try:
+            cmdline = cmdline_path.read_bytes().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+            if backend and backend not in cmdline and "gpu-screen-recorder" not in cmdline and "wf-recorder" not in cmdline:
+                return False
+        except OSError:
+            pass
+    return True
+
+
+def _read_screen_record_state() -> dict[str, Any] | None:
+    path = _screen_record_state_path()
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _write_screen_record_state(state: dict[str, Any] | None) -> None:
+    path = _screen_record_state_path()
+    if state is None:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(state))
+
+
+async def screen_record(
+    action: str,
+    region: str = "full",
+    with_audio: bool = False,
+    output_path: str | None = None,
+) -> dict[str, Any]:
+    """Start, stop, or inspect Wayland screen recording via gpu-screen-recorder or wf-recorder."""
+    clean_action = str(action or "").strip().lower()
+    if clean_action not in ("start", "stop", "status"):
+        return _observation_error("action must be start, stop, or status")
+
+    clean_region = str(region or "full").strip().lower()
+    if clean_region not in ("full", "active", "portal"):
+        return _observation_error("region must be full, active, or portal")
+    if type(with_audio) is not bool:
+        return _observation_error("with_audio must be true or false")
+
+    state = _read_screen_record_state()
+    if state is not None and not _pid_matches_recorder(state.get("pid", 0), str(state.get("backend", ""))):
+        _write_screen_record_state(None)
+        state = None
+
+    if clean_action == "status":
+        if state is None:
+            return {
+                "status": "idle",
+                "recording": False,
+                "verified": True,
+            }
+        out_file = Path(str(state.get("output_path", "")))
+        return {
+            "status": "recording",
+            "recording": True,
+            "verified": True,
+            "pid": state.get("pid"),
+            "backend": state.get("backend"),
+            "region": state.get("region"),
+            "with_audio": bool(state.get("with_audio")),
+            "output_path": str(out_file),
+            "started_at": state.get("started_at"),
+            "file_exists": out_file.is_file(),
+            "file_size_bytes": out_file.stat().st_size if out_file.is_file() else 0,
+        }
+
+    if clean_action == "start":
+        if state is not None:
+            return _observation_error(
+                f"Screen recording is already running (pid {state.get('pid')}, file {state.get('output_path')})"
+            )
+
+        gsr = shutil.which("gpu-screen-recorder")
+        wf = shutil.which("wf-recorder")
+        if not gsr and not wf:
+            return _observation_error("Neither gpu-screen-recorder nor wf-recorder is installed")
+
+        if output_path and str(output_path).strip():
+            import filesystem.filesystem as fs
+            try:
+                dest = fs.path_for(output_path)
+            except fs.FileOperationError as err:
+                return _observation_error(str(err))
+            if dest.suffix.lower() not in (".mp4", ".mkv", ".webm"):
+                dest = dest.with_suffix(".mp4")
+            dest.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            videos_dir = os.environ.get("OMARCHY_SCREENRECORD_DIR") or os.path.join(
+                os.environ.get("XDG_VIDEOS_DIR", str(Path.home() / "Videos")),
+                "Screencasts",
+            )
+            Path(videos_dir).mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            dest = Path(videos_dir) / f"screenrecording-{stamp}.mp4"
+
+        hyprctl = shutil.which("hyprctl")
+        active_win = None
+        focused_mon = None
+        if hyprctl:
+            if clean_region == "active":
+                obs_w = await _desktop_observe(hyprctl, "activewindow")
+                if obs_w.get("status") == "success":
+                    active_win = obs_w.get("data")
+            obs_m = await _desktop_observe(hyprctl, "monitors")
+            if obs_m.get("status") == "success":
+                mons = obs_m.get("data", [])
+                focused_mon = next((m for m in mons if isinstance(m, dict) and m.get("focused") and not m.get("disabled")), None)
+                if not focused_mon and mons:
+                    focused_mon = next((m for m in mons if isinstance(m, dict) and not m.get("disabled")), None)
+
+        if gsr:
+            backend = "gpu-screen-recorder"
+            cmd = [gsr]
+            if clean_region == "portal":
+                cmd.extend(["-w", "portal"])
+            elif clean_region == "active" and isinstance(active_win, dict) and isinstance(active_win.get("at"), list) and isinstance(active_win.get("size"), list):
+                x, y = int(active_win["at"][0]), int(active_win["at"][1])
+                w, h = int(active_win["size"][0]), int(active_win["size"][1])
+                if w > 0 and h > 0:
+                    cmd.extend(["-w", "region", "-region", f"{w}x{h}+{x}+{y}"])
+                else:
+                    cmd.extend(["-w", "focused"])
+            elif clean_region == "active":
+                cmd.extend(["-w", "focused"])
+            elif focused_mon and re.fullmatch(r"[A-Za-z0-9._-]+", str(focused_mon.get("name", ""))):
+                cmd.extend(["-w", str(focused_mon["name"])])
+            else:
+                cmd.extend(["-w", "screen"])
+            cmd.extend(["-f", "60", "-fallback-cpu-encoding", "yes"])
+            if with_audio:
+                cmd.extend(["-a", "default_output"])
+            cmd.extend(["-o", str(dest)])
+        else:
+            backend = "wf-recorder"
+            cmd = [wf]
+            if clean_region == "active" and isinstance(active_win, dict) and isinstance(active_win.get("at"), list) and isinstance(active_win.get("size"), list):
+                x, y = int(active_win["at"][0]), int(active_win["at"][1])
+                w, h = int(active_win["size"][0]), int(active_win["size"][1])
+                if w > 0 and h > 0:
+                    cmd.extend(["-g", f"{x},{y} {w}x{h}"])
+            elif focused_mon and re.fullmatch(r"[A-Za-z0-9._-]+", str(focused_mon.get("name", ""))):
+                cmd.extend(["-o", str(focused_mon["name"])])
+            if with_audio:
+                cmd.append("-a")
+            cmd.extend(["-f", str(dest)])
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+            env=_desktop_env(),
+            start_new_session=True,
+        )
+        await asyncio.sleep(0.35)
+        if proc.returncode is not None:
+            err_msg = ""
+            if proc.stderr is not None:
+                try:
+                    err_bytes = await asyncio.wait_for(proc.stderr.read(), timeout=1.0)
+                    err_msg = err_bytes.decode("utf-8", errors="replace").strip()
+                except (asyncio.TimeoutError, OSError):
+                    pass
+            return _observation_error(err_msg or f"{backend} exited immediately (code {proc.returncode})", cmd[0])
+
+        new_state = {
+            "pid": proc.pid,
+            "backend": backend,
+            "region": clean_region,
+            "with_audio": with_audio,
+            "output_path": str(dest),
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _write_screen_record_state(new_state)
+        return {
+            "status": "recording",
+            "recording": True,
+            "verified": _pid_matches_recorder(proc.pid, backend),
+            **new_state,
+        }
+
+    # stop
+    if state is None:
+        return _observation_error("No active screen recording was found")
+    pid = int(state["pid"])
+    backend = str(state.get("backend") or "recorder")
+    out_file = Path(str(state.get("output_path") or ""))
+    try:
+        os.kill(pid, signal.SIGINT)
+    except OSError as err:
+        _write_screen_record_state(None)
+        return _observation_error(f"Could not stop recorder pid {pid}: {err}")
+
+    stopped = False
+    for _ in range(50):
+        await asyncio.sleep(0.1)
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            stopped = True
+            break
+    if not stopped:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+        for _ in range(15):
+            await asyncio.sleep(0.1)
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                stopped = True
+                break
+
+    _write_screen_record_state(None)
+    size_bytes = out_file.stat().st_size if out_file.is_file() else 0
+    file_verified = stopped and out_file.is_file() and size_bytes > 0
+    return {
+        "status": "stopped" if stopped else "unverified",
+        "recording": False,
+        "verified": file_verified,
+        "pid": pid,
+        "backend": backend,
+        "output_path": str(out_file),
+        "file_exists": out_file.is_file(),
+        "size_bytes": size_bytes,
+    }
 
 
 async def write_clipboard(content: str) -> dict[str, Any]:

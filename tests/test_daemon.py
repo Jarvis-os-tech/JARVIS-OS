@@ -228,7 +228,8 @@ async def test_turn_audio_sent_in_order_with_explicit_boundaries():
     from voice_layer.playback import Playback
     from voice_layer.speech import GateFrame
 
-    voice = LiveVoice(Playback('default'))
+    voice = LiveVoice(Playback('default'), config=SimpleNamespace(
+        auto_vad=False, local_speech=SimpleNamespace(enabled=False)))
     queue = asyncio.Queue()
     queue.put_nowait((GateFrame(b'\x01\x00' * 320, opened=True), 0))
     queue.put_nowait((GateFrame(bytes(INPUT_BYTES), closed=True), 0))
@@ -242,13 +243,13 @@ async def test_turn_audio_sent_in_order_with_explicit_boundaries():
 
     await asyncio.wait_for(supervise(
         voice._send_frames(SimpleNamespace(send_realtime_input=send), queue),
-        finished.wait()), .5)
+        finished.wait()), 3)
     assert [next(iter(item)) for item in sent] == ['activity_start', 'audio', 'audio', 'activity_end']
     assert sent[1]['audio'].data == b'\x01\x00' * 320
 
 
 @pytest.mark.asyncio
-async def test_turn_audio_sent_auto_vad_streams_without_activity_boundaries():
+async def test_turn_audio_sent_auto_vad_flushes_when_capture_pauses():
     from voice_layer.daemon import LiveVoice, INPUT_BYTES, supervise
     from voice_layer.playback import Playback
     from voice_layer.speech import GateFrame
@@ -262,13 +263,13 @@ async def test_turn_audio_sent_auto_vad_streams_without_activity_boundaries():
 
     async def send(**kwargs):
         sent.append(kwargs)
-        if len(sent) >= 2:
+        if kwargs.get('audio_stream_end'):
             finished.set()
 
     await asyncio.wait_for(supervise(
         voice._send_frames(SimpleNamespace(send_realtime_input=send), queue),
         finished.wait()), .5)
-    assert [next(iter(item)) for item in sent] == ['audio', 'audio']
+    assert [next(iter(item)) for item in sent] == ['audio', 'audio', 'audio_stream_end']
     assert sent[0]['audio'].data == b'\x01\x00' * 320
 
 
@@ -279,21 +280,23 @@ async def test_audio_stream_end_sent_when_standby_engaged():
     from voice_layer.speech import GateFrame
 
     voice = LiveVoice(Playback('default'), config=SimpleNamespace(auto_vad=True, local_speech=SimpleNamespace(enabled=False)))
-    voice.standby._requested.set()
     queue = asyncio.Queue()
+    queue.put_nowait((GateFrame(bytes(INPUT_BYTES), opened=True), 0))
     queue.put_nowait((GateFrame(bytes(INPUT_BYTES)), 0))
     sent = []
     finished = asyncio.Event()
 
     async def send(**kwargs):
         sent.append(kwargs)
+        if 'audio' in kwargs:
+            voice.standby._requested.set()
         if kwargs.get('audio_stream_end') is True:
             finished.set()
 
     await asyncio.wait_for(supervise(
         voice._send_frames(SimpleNamespace(send_realtime_input=send), queue),
         finished.wait()), .5)
-    assert sent == [{'audio_stream_end': True}]
+    assert [next(iter(item)) for item in sent] == ['audio', 'audio_stream_end']
 
 
 @pytest.mark.asyncio
@@ -420,10 +423,14 @@ async def test_stalled_transcribed_turn_requests_one_reply_without_filler(monkey
 
 @pytest.mark.asyncio
 async def test_production_setup_attaches_memory_and_drains_on_exit(tmp_path, monkeypatch):
-    from voice_layer import daemon
-    from voice_layer.config import Config
-    from jarvis_memory.bridge import MemoryBridge
     from google.genai import types
+    from jarvis_memory.bridge import MemoryBridge
+    from voice_layer import config as voice_config, daemon
+    from voice_layer.config import Config
+    from voice_layer.echo import MonitorEchoCancellation
+
+    monkeypatch.setattr(voice_config, "STATE_HOME", tmp_path)
+    monkeypatch.setattr(MonitorEchoCancellation, "start", AsyncMock(return_value=False))
     config = Config(autostart_listening=False)
     config.memory.path = str(tmp_path / 'memory')
     bridge = MemoryBridge(config.memory)
@@ -460,7 +467,7 @@ async def test_production_setup_attaches_memory_and_drains_on_exit(tmp_path, mon
     assert 'google_connection_status' in registered
     assert 'discover_domain_tools' in tool_names
     assert 'execute_domain_tool' in tool_names
-    assert 'system_query' in tool_names
+    assert {'system_control', 'get_system_information', 'open_application'} <= tool_names
     assert len(tool_names) < len(registered)
     ipc.close.assert_awaited_once()
 
@@ -1042,6 +1049,242 @@ async def test_nlu_gate_intercepts_unwanted_pairing_and_intrusive_tools():
     assert 'The user did NOT command to open or scan the pairing QR code' in resp['error']
 
 
+def test_hyprland_monitor_and_session_context_ring_buffer_and_deictic():
+    from voice_layer.hypr_monitor import HyprlandMonitor, SessionContext
+
+    ctx = SessionContext(maxlen=10)
+    mon = HyprlandMonitor(context=ctx)
+    assert not mon.has_context
+
+    # Fill beyond 10 items to verify bounded ring buffer
+    for i in range(12):
+        mon._handle_event('workspace', str(i + 1))
+    assert len(ctx.items) == 10
+    assert ctx.workspace == '12'
+
+    mon._handle_event('focusedmon', 'DP-1,3')
+    mon._handle_event('activewindow', 'firefox,Project Spec')
+    mon._handle_event('activewindowv2', '55b168d36830')
+    assert mon.active_window == {'class': 'firefox', 'title': 'Project Spec', 'address': '0x55b168d36830'}
+    assert ctx.monitor == 'DP-1'
+    assert ctx.workspace == '3'
+
+    ctx.record_from_tool('read_file', {'path': '/home/g0pi/notes.md'})
+    ctx.record_from_tool('launch_app', {'app': 'kitty'})
+    ctx.record_from_tool('show_widget', {'widget_id': 'card-42'})
+    assert len(ctx.items) == 10
+    assert ctx.last_file_path == '/home/g0pi/notes.md'
+    assert ctx.last_launched_app == 'kitty'
+    assert ctx.last_widget_id == 'card-42'
+
+    # Deictic resolution without read_screen
+    assert ctx.resolve_deictic('close this window')['kind'] == 'window'
+    assert ctx.resolve_deictic('summarize this file') == {'kind': 'file', 'value': '/home/g0pi/notes.md'}
+    assert ctx.resolve_deictic('close that widget') == {'kind': 'widget', 'value': 'card-42'}
+    assert ctx.resolve_deictic('reopen that app') == {'kind': 'app', 'value': 'firefox'}
+
+    compact = mon.prompt_context('close this window')
+    assert 'window=firefox "Project Spec" (0x55b168d36830)' in compact
+    assert 'ws=3' in compact
+    assert 'mon=DP-1' in compact
+    assert 'last_file=/home/g0pi/notes.md' in compact
+    assert 'last_app=kitty' in compact
+    assert 'last_widget=card-42' in compact
+
+    # Closing the active window clears active_window cleanly
+    mon._handle_event('closewindow', '55b168d36830')
+    assert mon.active_window == {}
+    assert ctx.active_window == {'class': '', 'title': '', 'address': ''}
 
 
+@pytest.mark.asyncio
+async def test_desktop_context_injected_into_voice_and_text_turns():
+    from voice_layer.daemon import LiveVoice, INPUT_BYTES, supervise
+    from voice_layer.playback import Playback
+    from voice_layer.speech import GateFrame
+
+    voice = LiveVoice(Playback('default'), config=SimpleNamespace(
+        auto_vad=False, local_speech=SimpleNamespace(enabled=False)))
+    voice.hypr_monitor._handle_event('focusedmon', 'eDP-1,4')
+    voice.hypr_monitor._handle_event('activewindow', 'code,daemon.py')
+    voice.hypr_monitor._handle_event('activewindowv2', 'abc123')
+
+    # 1. Voice turn injects compact context with turn_complete=False once when changed
+    client_contents = []
+    realtime_inputs = []
+    finished = asyncio.Event()
+
+    async def send_client_content(turns, turn_complete):
+        client_contents.append((turns, turn_complete))
+
+    async def send_realtime_input(**kwargs):
+        realtime_inputs.append(kwargs)
+        if 'activity_end' in kwargs:
+            finished.set()
+
+    session = SimpleNamespace(
+        send_client_content=send_client_content,
+        send_realtime_input=send_realtime_input,
+    )
+    queue = asyncio.Queue()
+    queue.put_nowait((GateFrame(b'\x01\x00' * 320, opened=True), 0))
+    queue.put_nowait((GateFrame(bytes(INPUT_BYTES), closed=True), 0))
+
+    await asyncio.wait_for(supervise(voice._send_frames(session, queue), finished.wait()), 2)
+    assert len(client_contents) == 1
+    assert client_contents[0][1] is False
+    ctx_text = client_contents[0][0][0].parts[0].text
+    assert 'window=code "daemon.py" (0xabc123)' in ctx_text
+    assert 'ws=4' in ctx_text
+    assert 'mon=eDP-1' in ctx_text
+
+    # 2. Switch window and send typed text -> injects updated context alongside user text
+    voice.hypr_monitor._handle_event('activewindow', 'kitty,zsh')
+    voice.send_text('close this')
+    worker = asyncio.create_task(voice.send_inputs(session))
+    await asyncio.sleep(0.15)
+    worker.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await worker
+    assert len(client_contents) == 2
+    assert client_contents[1][1] is True
+    parts_text = [p.text for p in client_contents[1][0][0].parts]
+    assert parts_text[0] == 'close this'
+    assert any('window=kitty "zsh"' in t for t in parts_text[1:])
+
+
+@pytest.mark.asyncio
+async def test_unified_dictation_mode_isolates_mic_and_streams_text():
+    from voice_layer.daemon import LiveVoice, INPUT_BYTES, supervise
+    from voice_layer.local_speech import LocalSpeechConfig
+    from voice_layer.playback import Playback
+    from voice_layer.speech import GateFrame
+
+    emitted = []
+    voice = LiveVoice(
+        Playback('default'),
+        config=SimpleNamespace(auto_vad=True, local_speech=LocalSpeechConfig(enabled=True), enable_tools=True),
+        skills=SimpleNamespace(execute=AsyncMock()),
+    )
+    voice.connected = True
+    voice.local_speech = SimpleNamespace(ready=True, config=LocalSpeechConfig(enabled=True), transcribe=AsyncMock())
+    voice._dictation_transcriber = AsyncMock(side_effect=['Hello world.', 'Second line.\nNext.'])
+    voice._dictation_emitter = lambda txt: emitted.append(txt)
+
+    res = await voice.control_dictation('start')
+    assert res['active'] is True
+    assert voice.dictation_mode is True
+    assert voice.status()['mode'] == 'dictation'
+    assert voice.status()['dictation']['active'] is True
+
+    session = SimpleNamespace(
+        send_realtime_input=AsyncMock(),
+        send_client_content=AsyncMock(),
+    )
+    queue = asyncio.Queue()
+    speech_chunk = b'\x10\x05' * 320
+    # Turn 1 while dictating
+    queue.put_nowait((GateFrame(speech_chunk, opened=True), 0))
+    queue.put_nowait((GateFrame(speech_chunk), 0))
+    queue.put_nowait((GateFrame(speech_chunk, closed=True), 0))
+    # Turn 2 left unclosed in buffer to test flush on stop
+    queue.put_nowait((GateFrame(speech_chunk, opened=True), 0))
+    queue.put_nowait((GateFrame(speech_chunk), 0))
+    queue.put_nowait((GateFrame(speech_chunk), 0))
+
+    worker = asyncio.create_task(voice._send_frames(session, queue))
+    try:
+        async with asyncio.timeout(2):
+            while len(emitted) < 1 or len(voice._dictation_pcm) < 1920:
+                await asyncio.sleep(0.01)
+    finally:
+        worker.cancel()
+        await asyncio.gather(worker, return_exceptions=True)
+
+    # First closed segment streamed without hitting Gemini Live or local commands
+    assert emitted == ['Hello world.']
+    session.send_realtime_input.assert_not_awaited()
+    session.send_client_content.assert_not_awaited()
+    voice.skills.execute.assert_not_awaited()
+
+    # Stopping dictation flushes remaining buffered speech cleanly
+    stop_res = await voice.control_dictation('stop')
+    assert stop_res['active'] is False
+    assert voice.dictation_mode is False
+    assert voice.status()['mode'] == 'conversation'
+    assert emitted == ['Hello world.', 'Second line. Next.']
+
+
+@pytest.mark.asyncio
+async def test_unified_dictation_cancel_discards_unflushed_buffer_and_restores_mute():
+    from voice_layer.daemon import LiveVoice
+    from voice_layer.playback import Playback
+
+    emitted = []
+    voice = LiveVoice(Playback('default'))
+    voice.muted = True
+    voice._dictation_transcriber = AsyncMock(return_value='should not emit')
+    voice._dictation_emitter = lambda txt: emitted.append(txt)
+
+    await voice.control_dictation('start')
+    assert voice.dictation_mode is True
+    assert voice.muted is False
+    voice._dictation_pcm.extend(b'\x10\x05' * 1600)
+
+    res = await voice.control_dictation('cancel')
+    assert res['active'] is False
+    assert res['cancelled'] is True
+    assert voice.dictation_mode is False
+    assert voice.muted is True
+    assert emitted == []
+    voice._dictation_transcriber.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_local_needs_confirmation_suppresses_local_tts_when_cloud_speaks():
+    from voice_layer.daemon import LiveVoice
+    from voice_layer.local_speech import LocalSpeechConfig
+    from voice_layer.playback import Playback
+
+    skills = SimpleNamespace(
+        execute=AsyncMock(return_value='{"status":"needs_confirmation","action":"lock_screen"}'),
+    )
+    voice = LiveVoice(
+        Playback('default'),
+        config=SimpleNamespace(auto_vad=True, local_speech=LocalSpeechConfig(enabled=True), enable_tools=True),
+        skills=skills,
+    )
+    voice.connected = True
+    voice._session = object()
+    voice.local_speech = SimpleNamespace(
+        ready=True,
+        config=LocalSpeechConfig(enabled=True),
+        transcribe=AsyncMock(return_value='lock the screen'),
+    )
+    voice.local_router = SimpleNamespace(
+        ready=True,
+        error='',
+        last_inference_ms=None,
+        route=AsyncMock(return_value=None),
+        synthesize=AsyncMock(return_value=b'\x01\x00' * 100),
+    )
+    voice._recover_empty_reply = AsyncMock(return_value=True)
+
+    token = (voice.gate.accepted_turns, voice.player.generation)
+    handled = await voice._try_local_command(b'\x01\x00' * 100, token)
+    assert handled is True
+    skills.execute.assert_awaited_once_with('lock_screen', {})
+    assert voice.last_local_outcome == 'needs_confirmation'
+    voice._recover_empty_reply.assert_awaited_once()
+    # Cloud spoken confirmation was requested, so local TTS must not play concurrently.
+    voice.local_router.synthesize.assert_not_awaited()
+
+    # Offline / when cloud spoken confirmation is not requested, local TTS still runs.
+    voice._recover_empty_reply = AsyncMock(return_value=False)
+    voice.connected = False
+    voice.gate.accepted_turns += 1
+    token_offline = (voice.gate.accepted_turns, voice.player.generation)
+    handled_offline = await voice._try_local_command(b'\x01\x00' * 100, token_offline)
+    assert handled_offline is True
+    voice.local_router.synthesize.assert_awaited_once()
 

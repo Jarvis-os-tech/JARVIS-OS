@@ -37,6 +37,7 @@ else
         --exclude='__pycache__' --exclude='.pytest_cache' --exclude='.venv' \
         --exclude='.env' --exclude='.env.*' --exclude='*.bak' --exclude='*.pyc' \
         --exclude='*.db' --exclude='*.db-*' --exclude='*.sqlite*' --exclude='*.log' \
+        --exclude='packaging/dist' --exclude='*.raw' \
         -cf - "${runtime_packages[@]}" | tar -C "$INSTALL_DIR" -xf -
     cp "$REPO_DIR/agent.py" "$REPO_DIR/agent_orchestrator.py" "$REPO_DIR/task_runner.py" "$INSTALL_DIR/"
     cp "$REPO_DIR/requirements.txt" "$REPO_DIR/requirements-dev.txt" "$REPO_DIR/config.toml.example" "$INSTALL_DIR/"

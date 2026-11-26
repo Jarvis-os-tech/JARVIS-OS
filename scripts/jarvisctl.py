@@ -144,6 +144,10 @@ async def run_async(argv: list[str]) -> int:
     p_sub = subparsers.add_parser("subscribe", help="Stream real-time daemon state events")
     p_sub.add_argument("--max-events", type=int, default=None, help="Stop after N events")
 
+    # heal
+    p_heal = subparsers.add_parser("heal", help="Scan and automatically heal JARVIS OS services, audio, and runtime anomalies")
+    p_heal.add_argument("--json", action="store_true", help="Output healing report as JSON")
+
     # systemctl
     p_systemctl = subparsers.add_parser("systemctl", help="Inspect or control JARVIS OS systemd services")
     p_systemctl.add_argument("service_or_action", help="Service name (jarvis, healer, hyprland) or systemctl action (status, start, stop, restart)")
@@ -186,6 +190,28 @@ async def run_async(argv: list[str]) -> int:
 
         proc = subprocess.run(cmd)
         return proc.returncode
+
+    if args.subcommand == "heal":
+        try:
+            from core.self_healer import AutoHealer
+        except ImportError:
+            sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+            from core.self_healer import AutoHealer
+
+        results = AutoHealer.scan_and_heal()
+        if getattr(args, "json", False):
+            print(json.dumps([r.to_dict() for r in results], indent=2))
+        else:
+            print("=== JARVIS OS Autonomous Self-Healing Report ===")
+            if not results:
+                print("✓ All subsystems healthy; no anomalies detected.")
+            else:
+                for r in results:
+                    mark = "✓" if r.success else "✗"
+                    print(f"[{mark}] [{r.subsystem.upper()}] {r.issue} -> {r.action_taken}")
+                    if r.details:
+                        print(f"    Details: {r.details}")
+        return 0
 
     if args.subcommand in ("start", "stop", "restart", "enable", "disable"):
         action = args.subcommand

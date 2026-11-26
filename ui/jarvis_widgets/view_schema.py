@@ -7,9 +7,11 @@ OPS = {"add", "subtract", "multiply", "divide", "min", "max", "round"}
 NODE_FIELDS = {
     "column": {"children"}, "row": {"children"},
     "text": {"text", "tone"}, "heading": {"text"}, "metric": {"label", "value"},
-    "input": {"label", "bind"}, "slider": {"label", "bind", "min", "max", "step"},
+    "input": {"label", "bind", "placeholder", "required"}, "slider": {"label", "bind", "min", "max", "step"},
     "toggle": {"label", "bind"}, "select": {"label", "bind", "options"},
-    "button": {"label", "prompt"}, "canvas": {"height", "shapes"},
+    "button": {"label", "prompt"}, "choice": {"index", "label", "detail", "value", "prompt"},
+    "canvas": {"height", "shapes"},
+    "entry": {"label", "detail", "style", "number", "prompt"},
     "divider": set(),
 }
 
@@ -62,6 +64,7 @@ def validate_view(spec):
     for key, value in computed.items(): expr(value, visiting=(key,))
     count = 0
     ids = set()
+    choice_indices = set()
 
     def node(item, depth=0):
         nonlocal count
@@ -76,8 +79,28 @@ def validate_view(spec):
         for field in ("text", "label", "prompt"):
             if field in item: string(item[field])
         if kind in {"text", "heading"}: string(item.get("text"))
-        if kind in {"metric", "button", "input", "slider", "select", "toggle"}: string(item.get("label"), 160)
+        if kind in {"metric", "button", "input", "slider", "select", "toggle", "choice"}: string(item.get("label"), 160)
+        if kind == "input":
+            string(item.get("placeholder", ""))
+            if type(item.get("required", False)) is not bool: raise ValueError("Required must be boolean")
         if kind == "button": string(item.get("prompt"))
+        if kind == "choice":
+            idx = item.get("index")
+            if type(idx) is not int or not 1 <= idx <= 9 or idx in choice_indices:
+                raise ValueError("Choice index must be a unique integer 1–9")
+            choice_indices.add(idx)
+            if not string(item.get("label"), 160).strip():
+                raise ValueError("Choice label cannot be blank")
+            if "detail" in item: string(item["detail"], 300)
+            if "value" in item: string(item["value"], 500)
+            if not string(item.get("prompt"), 500).strip():
+                raise ValueError("Choice prompt cannot be blank")
+        if kind == "entry":
+            string(item.get("label"))
+            string(item.get("detail", ""))
+            if "prompt" in item: string(item["prompt"])
+            if item.get("style") not in {"files", "ideas", "plan"}: raise ValueError("Invalid entry style")
+            if type(item.get("number")) is not int or not 1 <= item["number"] <= 64: raise ValueError("Invalid entry number")
         if kind == "metric": expr(item.get("value"))
         if kind == "text" and item.get("tone", "normal") not in {"normal", "muted", "accent"}: raise ValueError("Invalid text tone")
         if kind in {"row", "column"}:
@@ -138,4 +161,17 @@ def describe():
             "text_bindings": "Text/labels/prompts support {{state_or_computed_key}}. Controls update local state immediately. Button prompt is sent to JARVIS with widget ID and current state.",
             "canvas": "Shapes: rect,circle,line,text; x,y,w,h,x2,y2,r,width are expressions in a 0..1000 coordinate space; fill/stroke are #RRGGBB. Text supports bindings.",
             "lifecycle": "Default floating; same widget_id updates layout. manage_widget handles latest or explicit ID, pin, move (x,y integer percentages 0..100), dismiss, state. clear_all removes all widgets. No Esc/desktop-return controls. Never invent source data or claim button effects before tool receipts.",
+            "workspace": {"kind": "workspace", "identity": "Reuse widget_id (max 64 chars); increasing data.revision; full snapshots replace omitted sections. reopen:true only for explicit reopening, with revision strictly newer than dismissal.",
+                "data": {"revision": 1, "brief": "Project summary", "files": [{"id": "notes", "label": "Notes", "path": "/path/to/notes.md"}], "ideas": ["Direction"], "plan": ["First step"], "tasks": [{"id": "review", "label": "Review result", "done": False}]},
+                "limits": "Five panels, up to 64 entries per section and 30 tasks; 48 KiB total. status returns mounted state. Task controls save a local draft; Apply requests the owning tool and is not proof of a source save."},
+            "native_cards": {
+                "metric": {"value": 24, "unit": "%", "detail": "CPU"},
+                "list": {"items": [{"label": "Review", "detail": "Check result", "done": False}]},
+                "actions": {"buttons": [{"id": "refresh", "label": "Refresh"}]},
+                "form": {"fields": [{"id": "topic", "label": "Topic", "placeholder": "Research topic", "required": True}], "submit": "Research"},
+                "choices": {"prompt": "Multiple matches found. Say 1-2 or press 1-2.", "target_kind": "file", "items": [
+                    {"id": "first", "label": "notes-final.md", "detail": "~/Documents", "value": "/home/user/Documents/notes-final.md"},
+                    {"id": "second", "label": "notes-draft.md", "detail": "~/Downloads", "value": "/home/user/Downloads/notes-draft.md"}
+                ]},
+                "chart": {"mode": "line", "points": [{"label": "A", "value": -2}, {"label": "B", "value": 3}]}},
             "example": EXAMPLE}

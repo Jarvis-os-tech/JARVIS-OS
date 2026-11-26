@@ -38,7 +38,6 @@
         "additionalProperties": false
       }
     },
-
     {
       "name": "switch_workspace",
       "description": "Switch to a numbered, next, or previous Omarchy workspace.",
@@ -174,6 +173,23 @@
       "description": "Move an Omarchy Todo task to backlog, ongoing, or complete by exact title or id.",
       "adapter": "todo.move",
       "parameters_json_schema": {"type":"object","properties":{"task":{"type":"string"},"status":{"type":"string","enum":["backlog","ongoing","complete"]}},"required":["task","status"],"additionalProperties":false}
+    },
+    {
+      "name": "open_todo_panel",
+      "description": "Open the Omarchy Todo List widget panel in the top bar (dejan94.todos). Shows the visual todo interface with drag-and-drop, tabs for backlog/ongoing/complete, and quick actions.",
+      "adapter": "shell.bar_open",
+      "parameters_json_schema": {
+        "type": "object",
+        "properties": {
+          "panel_id": {
+            "type": "string",
+            "enum": ["dejan94.todos"],
+            "description": "Plugin ID for the todo widget."
+          }
+        },
+        "required": ["panel_id"],
+        "additionalProperties": false
+      }
     }
   ]
 }

@@ -12,17 +12,19 @@ Button {
     contentItem: Text {
         id: label
         text: button.text
+        textFormat: Text.PlainText
+        elide: Text.ElideRight
         font.pixelSize: 13
-        font.family: "sans-serif"
-        color: !button.enabled ? "#8E9BAD" : button.primary ? "#09222A" : "#F2F5FA"
+        font.family: "Inter"
+        color: !button.enabled ? "#8E9BAD" : button.primary ? "#A1FFF8" : "#C4E3DF"
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }
     background: Rectangle {
-        radius: 14
-        color: button.primary ? "#55DDEA" : button.down ? "#34465A" : button.hovered ? "#26384A" : "#1B2938"
+        radius: 6
+        color: button.down ? "#125458" : button.hovered ? "#0B4548" : button.primary ? "#093438" : "#031C20"
         border.width: button.visualFocus ? 2 : 1
-        border.color: button.visualFocus ? "#55DDEA" : "#47596B"
+        border.color: button.visualFocus ? "#A1FFF8" : button.hovered || button.primary ? "#59BDB6" : "#305552"
         opacity: button.enabled ? 1 : 0.6
     }
 }

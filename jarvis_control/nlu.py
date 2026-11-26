@@ -108,6 +108,27 @@ class NLUEngine:
         'restart': r'\b(restart|reboot|restart the (pc|computer|system)|reboot the (pc|computer|system))\b',
     }
 
+    # Extended system control triggers — WiFi, Bluetooth, screenshots, processes
+    EXTENSION_TRIGGERS = {
+        'wifi_scan': r'\b(scan (for )?wifi|wifi scan|search (for )?wifi|available (wifi|networks)|nearby (wifi|networks))\b',
+        'wifi_connect': r'\b(connect (to )?wifi|join (the )?wifi|wifi connect)\b',
+        'wifi_disconnect': r'\b(disconnect (from )?wifi|wifi disconnect|leave wifi)\b',
+        'wifi_forget': r'\b(forget (the |this )?wifi|remove (the |this )?wifi)\b',
+        'wifi_saved': r'\b(saved (wifi|networks)|my wifi networks|known (wifi|networks))\b',
+        'wifi_status': r"\b(wifi status|what('?| i)s my wifi|which wifi|current wifi|wifi info|network status)\b",
+        'bt_scan': r'\b(scan (for )?bluetooth|bluetooth scan|find (bluetooth )?devices|nearby bluetooth)\b',
+        'bt_connect': r'\b(connect (my |the )?(headphones|earbuds|earphones|speaker|airdopes|airpods|bluetooth))\b',
+        'bt_disconnect': r'\b(disconnect (my |the )?(headphones|earbuds|earphones|speaker|airdopes|airpods|bluetooth))\b',
+        'bt_pair': r'\b(pair (my |the |a )?(headphones|earbuds|earphones|speaker|device|airdopes|airpods)|bluetooth pair)\b',
+        'bt_status': r'\b(bluetooth status|bluetooth info|bluetooth devices|my (bluetooth )?devices)\b',
+        'bt_audio_route': r'\b(route audio|switch audio|audio (to|through)|play (through|on))\b',
+        'screenshot_full': r'\b(take (a )?screenshot|full screenshot|capture (the )?screen|screen capture)\b',
+        'screenshot_region': r'\b(region screenshot|screenshot (a )?region|capture (a )?region|select (and )?screenshot)\b',
+        'screenshot_window': r'\b(window screenshot|screenshot (this |active |current )?window|capture (this |active |current )?window)\b',
+        'process_list': r"\b(list processes|top processes|running processes|show processes|what('?| i)s running)\b",
+        'process_kill': r'\b(kill (the )?process|stop (the )?process|end (the )?process|terminate (the )?process|force quit)\b',
+    }
+
     # Conversational statement / troubleshooting / status check patterns
     CONVERSATIONAL_INQUIRY_PATTERNS = [
         r'^(why|how|what|when|where|who|is|are|can you explain|tell me|could you)\b',
@@ -342,7 +363,18 @@ class NLUEngine:
                 is_conversational_inquiry=True,
             )
 
-        # 5. Check System Control Triggers
+        # 5. Check Extended System Control Triggers (WiFi, BT, Screenshots, Processes)
+        for action, pattern in cls.EXTENSION_TRIGGERS.items():
+            if re.search(pattern, lower):
+                return NLUResult(
+                    raw_text=text,
+                    normalized_text=normalized,
+                    category=IntentCategory.SYSTEM_CONTROL,
+                    confidence=0.90,
+                    suggested_action=action,
+                )
+
+        # 6. Check System Control Triggers
         for action, pattern in cls.SYSTEM_CONTROL_TRIGGERS.items():
             if re.search(pattern, lower):
                 return NLUResult(

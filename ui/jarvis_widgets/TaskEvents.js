@@ -52,11 +52,14 @@ function apply(items, state, batch, now) {
     if (!batch || batch.schema_version !== 1 || !/^[a-f0-9]{32}$/.test(batch.stream_id || "") ||
         !Number.isSafeInteger(batch.cursor) || batch.cursor < 0 || !Array.isArray(batch.events) || batch.events.length > 24)
         throw Error("Invalid task snapshot");
-    if (state.stream_id && state.stream_id !== batch.stream_id) throw Error("Task stream changed; reconnect the view");
     batch.events.forEach(event => {
         validate(event);
         if (event.stream_id !== batch.stream_id || event.sequence > batch.cursor) throw Error("Task snapshot identity mismatch");
     });
+    if (state.stream_id && state.stream_id !== batch.stream_id) {
+        state = Object.assign(initial(), {hidden: state.hidden});
+        items = items.filter(item => !item.task);
+    }
     if (batch.cursor < state.cursor) return {items: items, state: state, accepted: 0};
     const next = Object.assign({}, state, {stream_id: batch.stream_id,
         cursor: batch.cursor, revisions: Object.assign({}, state.revisions), hidden: Object.assign({}, state.hidden), pending: {}});

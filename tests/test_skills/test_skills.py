@@ -373,8 +373,13 @@ class DynamicManifestTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('lock the screen', unconfirmed['prompt'])
         skills._run.assert_not_called()
 
-        # Confirmed execution locks the session
-        result = await skills.execute('lock_screen', {'confirm': True})
+        # Direct confirm=True cannot bypass the confirmation gate
+        with self.assertRaises(SkillError):
+            await skills.execute('lock_screen', {'confirm': True})
+        skills._run.assert_not_called()
+
+        # Confirmed execution via confirm_system_action locks the session
+        result = await skills.execute('confirm_system_action', {'heard_phrase': 'yes'})
         self.assertEqual(result['status'], 'locked')
         skills._run.assert_awaited_once_with(skills._commands['loginctl'], 'lock-session')
 

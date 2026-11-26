@@ -8,7 +8,7 @@ import queue
 import secrets
 import threading
 
-MAX_BODY = 12 * 1024 * 1024
+MAX_BODY = 45 * 1024 * 1024
 PAGE = b'''<!doctype html>
 <html lang="en">
 <head>
@@ -193,10 +193,10 @@ html, body {
     <span id="chip-name" class="chip-name"></span>
     <button id="chip-rm" class="chip-rm" type="button" title="Remove attachment">&times;</button>
   </div>
-  <label id="btn-attach" for="f" class="btn-attach" title="Attach file (10MB max)">
+  <label id="btn-attach" for="f" class="btn-attach" title="Attach media or document (30MB max)">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
   </label>
-  <input id="f" type="file" style="display:none">
+  <input id="f" type="file" accept="image/*,video/*,audio/*,.pdf,.docx,.pptx,.xlsx,.odt,.txt,.md,.py,.json,.yaml,.csv" style="display:none">
   <button id="s" class="btn-send" title="Send (Enter)">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
     <span>SEND</span>
@@ -230,7 +230,7 @@ function setFile(file) {
     f.value = '';
     return;
   }
-  if (file.size > 10485760) {
+  if (file.size > 31457280) {
     setBadge('err', 'TOO LARGE');
     setTimeout(() => setBadge('', 'JARVIS'), 2500);
     return;
@@ -373,8 +373,9 @@ class TestBar:
                     value=json.loads(self.rfile.read(length)); text=value.get('text',''); encoded=value.get('file')
                     if not isinstance(text,str) or len(text)>100000: raise ValueError('invalid text')
                     data=base64.b64decode(encoded, validate=True) if encoded else b''
-                    if len(data)>10*1024*1024 or (not text.strip() and not data): raise ValueError('empty input')
-                    owner.items.put_nowait({'text':text.strip(),'data':data,'mime':str(value.get('mime',''))[:200],'name':str(value.get('name',''))[:255]})
+                    name=str(value.get('name','')).strip()
+                    if len(data)>30*1024*1024 or (not text.strip() and not data and not name): raise ValueError('empty input')
+                    owner.items.put_nowait({'text':text.strip(),'data':data,'mime':str(value.get('mime',''))[:200],'name':name[:255]})
                     self._json(202, {'status':'queued'})
                 except (ValueError, TypeError, json.JSONDecodeError, queue.Full): self._json(400, {'error':'invalid or full'})
             def _json(self, code, value):

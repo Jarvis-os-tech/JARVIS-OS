@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -eu
+base=/opt/voice-os
+export JARVIS_ADA_SAMPLE=0 JARVIS_SETTINGS_FILE="$HOME/.config/jarvis-ada/settings.json"
+mkdir -p "$(dirname "$JARVIS_SETTINGS_FILE")"
+if ! curl -fsS http://127.0.0.1:8899/ -o /dev/null; then
+    python "$base/ada/desktop.py" --serve-only >/dev/null 2>&1 &
+    for i in {1..30}; do curl -fsS http://127.0.0.1:8899/ -o /dev/null 2>/dev/null && break; sleep 0.1; done
+fi
+exec env LD_LIBRARY_PATH="$base/browser-libs" "$base/chromium/chromium" --password-store=basic --ozone-platform=wayland --app=http://127.0.0.1:8899/

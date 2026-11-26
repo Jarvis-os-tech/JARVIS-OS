@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#020809">
+  <meta name="description" content="ADA Jarvis — a live voice companion.">
+  <title>ADA · Voice companion</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css?v=9">
+  <link rel="stylesheet" href="/static/workspace.css?v=9">
+  <link rel="stylesheet" href="/static/constellation.css?v=10">
+  <link rel="stylesheet" href="/static/inventory.css?v=12">
+  <link rel="stylesheet" href="/static/cad.css?v=1">
+  <link rel="stylesheet" href="/static/printing.css?v=1">
+  <link rel="stylesheet" href="/static/gestures.css?v=1">
+  <script defer src="/static/boot.js?v=12"></script>
+</head>
+<body data-state="connecting">
+  <main class="stage" aria-label="Voice companion">
+    <canvas id="orb" role="img" aria-label="Spherical vocalizer with a rotating core and particle halo. Activate anywhere on the screen to enable browser audio if needed."></canvas>
+  </main>
+  <div class="connection-info">
+  <p id="apiConnection" class="api-connection" data-state="connecting" role="status" aria-live="polite" aria-atomic="true" title="Gemini Live API connection">
+    <span class="api-connection-dot" aria-hidden="true"></span><span id="apiConnectionLabel">API connecting…</span>
+  </p>
+  <p id="status" class="conversation-status" role="status" aria-live="polite" aria-atomic="true">Connecting.</p>
+  <p id="micMutedNotice" class="mic-muted-notice" role="status" hidden>Microphone muted</p>
+  <button id="stopSpeaking" class="stop-speaking" type="button" hidden>Stop speaking</button>
+  </div>
+  <button id="exitButton" class="exit-button" type="button" aria-label="Exit voice companion">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M6.3 5.8a8 8 0 1 0 11.4 0"/></svg>
+    <span>Exit</span>
+  </button>
+  <button id="settingsButton" class="settings-button" type="button" aria-label="Settings" aria-controls="settingsPanel" aria-expanded="false" title="Settings">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="m13 3-.7 4-2.1 1.2-3.8-1.4-3 5.2 3.1 2.6v2.8l-3.1 2.6 3 5.2 3.8-1.4 2.1 1.2.7 4h6l.7-4 2.1-1.2 3.8 1.4 3-5.2-3.1-2.6v-2.8l3.1-2.6-3-5.2-3.8 1.4L19.7 7 19 3Z"/><circle cx="16" cy="16" r="4"/></svg>
+  </button>
+  <aside id="settingsPanel" class="settings-panel" aria-labelledby="settingsTitle" hidden>
+    <header><h2 id="settingsTitle">Settings</h2><button id="settingsPanelClose" type="button" aria-label="Close settings">×</button></header>
+    <section class="settings-section gesture-controls" aria-labelledby="gestureTitle">
+      <h3 id="gestureTitle">Hand control</h3>
+      <label class="speaker-mode"><input id="gestureToggle" type="checkbox">Enable hand control</label>
+      <p class="settings-help">Raspberry Pi ribbon camera · Hailo-8. Move an open hand to point. Close and reopen your fist to click. Hold a fist and move over CAD to rotate; open to release. Escape pauses hand control.</p>
+      <p id="gestureStatus" role="status" aria-live="polite">Hand control is off.</p>
+      <details id="gestureDetails"><summary>Tracking preview and calibration</summary>
+      <canvas id="gesturePreview" width="320" height="240" aria-label="Hand tracking skeleton and calibrated reach"></canvas>
+      <p id="gesturePerformance"></p>
+      <label for="gestureHand">Control hand</label><select id="gestureHand"><option value="any">Either hand</option><option value="right">Right hand</option><option value="left">Left hand</option></select>
+      <label class="speaker-mode"><input id="gestureMirror" type="checkbox" checked>Mirror hand movement</label>
+      <label for="gestureRotation">Camera orientation</label><select id="gestureRotation"><option value="0">Upright</option><option value="90">90° clockwise</option><option value="180">Upside down</option><option value="270">90° counterclockwise</option></select>
+      <label for="gestureSensitivity">Movement sensitivity</label><div class="mic-volume-slider"><input id="gestureSensitivity" type="range" min="0.6" max="1.8" step="0.1" value="1"><output id="gestureSensitivityValue" for="gestureSensitivity">1.0×</output></div>
+      <div class="gesture-buttons"><button id="gestureCalibrate" type="button">Calibrate reach</button><button id="gestureReset" type="button">Reset reach</button><button id="gestureRetry" type="button">Retry camera</button></div>
+      </details>
+    </section>
+    <section class="settings-section" aria-labelledby="voiceSettingsTitle">
+      <h3 id="voiceSettingsTitle">Voice</h3>
+      <label class="voice-label" for="voiceSelect">Speaking voice</label>
+      <select id="voiceSelect" aria-describedby="voiceHelp voiceStatus" disabled><option>Loading voices…</option></select>
+      <p id="voiceHelp" class="settings-help">Say “Change your voice to Zephyr.” Saved on this Pi; a voice change starts a new conversation.</p>
+      <p id="voiceStatus" role="status" aria-live="polite"></p>
+    </section>
+    <section class="settings-section" aria-labelledby="microphoneSettingsTitle">
+      <h3 id="microphoneSettingsTitle">Microphone</h3>
+      <label class="mic-volume-label" for="micVolume">Microphone volume</label>
+      <div class="mic-volume-slider"><input id="micVolume" type="range" min="0" max="200" step="5" value="100" aria-valuetext="100%" aria-describedby="micVolumeHelp"><output id="micVolumeValue" for="micVolume">100%</output></div>
+      <button id="micMute" class="mic-mute-button" type="button" aria-pressed="false">Mute microphone</button>
+      <p id="micVolumeHelp" class="settings-help">Say “Set my microphone level to 120 percent” or “Pause listening for 15 seconds.” A timed pause resumes automatically.</p>
+      <label class="speaker-mode"><input id="pauseWhileSpeaking" type="checkbox" disabled aria-describedby="speakerModeHelp speakerModeStatus">Pause listening while Ada speaks</label>
+      <p id="speakerModeHelp" class="settings-help">Prevents Ada from hearing her own speakers. Listening resumes automatically after each reply. Use Stop speaking to cut in.</p>
+      <p id="speakerModeStatus" role="status" aria-live="polite"></p>
+    </section>
+    <section class="settings-section" aria-labelledby="instructionsTitle">
+      <h3 id="instructionsTitle">System instructions</h3>
+      <form id="instructionsForm">
+        <label class="voice-label" for="instructionsInput">Instructions for Gemini</label>
+        <p id="instructionsHelp" class="settings-help">Tell Ada how you want her to behave and she can update these instructions. Project tools and context are added automatically.</p>
+        <textarea id="instructionsInput" rows="10" maxlength="8000" required disabled aria-describedby="instructionsHelp instructionsStatus" placeholder="Loading instructions…"></textarea>
+        <button id="instructionsSave" type="submit" disabled>Save instructions</button>
+        <div class="instructions-default-actions">
+          <button id="instructionsReset" type="button" disabled>Reset to default</button>
+          <button id="instructionsDefault" type="button" disabled>Save as default</button>
+        </div>
+        <p class="settings-help">Reset restores your saved default. Save as default applies the text above and replaces that default. Changing the active instructions starts a new conversation.</p>
+        <p id="instructionsStatus" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+  </aside>
+  <p id="gestureBadge" hidden aria-live="off"></p>
+  <div id="gestureOverlay" popover="manual" aria-hidden="true"><div id="gestureCursor" hidden></div></div>
+  <dialog id="gestureChoices" class="workspace-dialog" aria-label="Choose an option"><header><h2>Choose an option</h2><button id="gestureChoicesClose" type="button" aria-label="Close options">×</button></header><div id="gestureChoiceList"></div></dialog>
+  <section id="startupPanel" class="startup-panel" role="status" aria-live="polite">
+    <strong id="startupTitle">Starting…</strong>
+    <p id="startupDetail">Loading the visualizer. If this message stays here, restart with ./start.sh --debug and check data/logs/startup.log.</p>
+  </section>
+</body>
+</html>

@@ -48,7 +48,7 @@ Item {
         try {
             const widget = Model.validate(JSON.parse(payloadJson));
             widgets = Model.upsert(widgets, widget);
-            widgetStates = Object.assign({}, widgetStates, {[widget.id]: widget.data.state || {}});
+            widgetStates = Object.assign({}, widgetStates, {[widget.id]: Model.retainedState(widget.data.state, widgetStates[widget.id])});
             lastActive = widget.id;
             if (!widget.floating) mode = "canvas";
             return receipt({status: "accepted", id: widget.id, title: widget.title, kind: widget.kind});
@@ -59,6 +59,35 @@ Item {
             const request = JSON.parse(payloadJson);
             const id = request.id || (widgets.some(w => w.id === lastActive) ? lastActive : widgets.length ? widgets[widgets.length - 1].id : "");
             if (!widgets.some(w => w.id === id)) throw Error("Widget not found");
+            if (request.action === "select") {
+                const widget = widgets.find(w => w.id === id);
+                if (!widget || widget.kind !== "view") throw Error("Selectable view widget not found");
+                const index = request.index;
+                if (typeof index !== "number" || !Number.isInteger(index) || index < 1 || index > 9)
+                    throw Error("Choice index must be an integer 1–9");
+                const choice = Model.findChoice(widget.data && widget.data.layout, index);
+                if (!choice) throw Error("Choice not found");
+                const nextState = Model.choiceSelectionState(widgetStates[id] || widget.data.state, choice);
+                widgetStates = Object.assign({}, widgetStates, {[id]: nextState});
+                if (request.dismiss === true) {
+                    if (widget.task) taskState = TaskEvents.hide(taskState, id);
+                    widgets = Model.manage(widgets, id, "dismiss");
+                }
+                trimState();
+                return receipt({
+                    id: id,
+                    action: "select",
+                    selected: {
+                        index: choice.index,
+                        id: choice.id || ("choice_" + choice.index),
+                        label: choice.label,
+                        detail: choice.detail || "",
+                        value: choice.value !== undefined ? choice.value : choice.label,
+                        prompt: choice.prompt
+                    },
+                    state: nextState
+                });
+            }
             if (request.action === "dismiss" && widgets.some(w => w.id === id && w.task)) taskState = TaskEvents.hide(taskState, id);
             if (request.action === "move") {
                 if (typeof request.x !== "number" || typeof request.y !== "number" || !isFinite(request.x) || !isFinite(request.y) || request.x < 0 || request.x > 1 || request.y < 0 || request.y > 1) throw Error("Position must be normalized 0–1");
@@ -162,9 +191,9 @@ Item {
         id: canvas
         visible: root.mode === "canvas" && root.canvasWidgets.length > 0
         anchors { top: true; right: true }
-        margins { top: 90; right: 24 }
-        implicitWidth: Math.min(1020, screen.width - 48)
-        implicitHeight: Math.min(screen.height - 130, grid.implicitHeight + 8)
+        margins { top: 184; right: 24 }
+        implicitWidth: Math.min(root.canvasWidgets.length > 1 ? 940 : 460, screen.width - 48)
+        implicitHeight: Math.min(screen.height - 224, grid.implicitHeight + 8)
         color: "transparent"; exclusionMode: ExclusionMode.Ignore
         WlrLayershell.namespace: "jarvis-task-canvas"
         WlrLayershell.layer: WlrLayer.Overlay
@@ -182,6 +211,7 @@ Item {
                     WidgetCard {
                         required property var modelData
                         Layout.fillWidth: true; Layout.preferredWidth: 440; Layout.preferredHeight: implicitHeight
+                        savedState: root.widgetStates[modelData.id] || ({})
                         widget: modelData; activeMedia: canvas.visible
                         requestBusy: root.sending
                         requestError: root.pendingWidget === modelData.id ? root.inputError : ""
@@ -237,6 +267,7 @@ Item {
             WidgetCard {
                 id: floatingCard
                 anchors.fill: parent
+                savedState: root.widgetStates[floating.modelData] || ({})
                 widget: floating.widgetValue; inCanvas: false
                 requestBusy: root.sending
                 requestError: root.pendingWidget === floating.modelData ? root.inputError : ""

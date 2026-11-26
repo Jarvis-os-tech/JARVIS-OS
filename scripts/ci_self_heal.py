@@ -392,6 +392,15 @@ def self_heal_pipeline(
         return 0
 
     print(f"❌ Initial verification failed with exit code {code} ({duration:.2f}s). Entering Self-Healing Loop...")
+    initial_info = FailureParser.parse_pytest_output(output)
+    if initial_info["failed_tests"]:
+        print("\n[Identified Failures]")
+        for ft in initial_info["failed_tests"]:
+            print(f"  ❌ {ft}")
+    if initial_info["error_messages"]:
+        print("\n[Diagnostic Errors]")
+        for em in initial_info["error_messages"][:6]:
+            print(f"  • {em}")
 
     attempt = 1
     current_output = output
@@ -445,6 +454,13 @@ def self_heal_pipeline(
         attempt += 1
 
     print(f"\n🛑 Max healing attempts ({max_attempts}) reached without resolution.")
+    if not ai_healer.is_available():
+        print("ℹ️ Note: GEMINI_API_KEY was not configured in the environment / repository secrets.")
+        print("   Configure GEMINI_API_KEY to enable full autonomous multi-file LLM repairs.")
+    print("\n--- Failure Output Diagnostic Log (Last 40 lines) ---")
+    lines = current_output.splitlines()
+    print("\n".join(lines[-40:] if len(lines) > 40 else lines))
+    print("-------------------------------------------------------")
     report_data["status"] = "FAILED_EXHAUSTED"
     report_data["final_exit_code"] = 1
     if report_path:

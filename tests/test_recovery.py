@@ -85,3 +85,52 @@ def test_successful_session_resets_failures():
     )
     # After a long session, failures should be reset
     assert decision.delay <= 2.0
+
+def test_1008_on_resume_enforces_minimum_6s_delay_and_fresh_session():
+    """1008 on resumed session must enforce minimum 6s backoff and fresh session reset."""
+    recovery = ConnectionRecovery(retry_budget=5)
+    decision = recovery.decide(
+        FakeError(1008),
+        attempted_resume='handle-xyz',
+        session_opened=False,
+    )
+    assert decision.fresh_session is True
+    assert decision.delay >= 6.0
+    assert not decision.fatal
+    assert decision.code == 1008
+
+def test_1008_without_resume_enforces_minimum_6s_delay_and_fresh_session():
+    """1008 without resume must also enforce minimum 6s backoff and fresh session reset."""
+    recovery = ConnectionRecovery(retry_budget=5)
+    decision = recovery.decide(
+        FakeError(1008),
+        attempted_resume=None,
+        session_opened=False,
+    )
+    assert decision.fresh_session is True
+    assert decision.delay >= 6.0
+    assert not decision.fatal
+    assert decision.code == 1008
+
+def test_already_connected_error_message_enforces_6s_and_fresh():
+    """Error message containing 'session is already connected to an existing client' triggers 6s backoff and fresh reset."""
+    recovery = ConnectionRecovery(retry_budget=5)
+    err = RuntimeError("BidiGenerateContent: session is already connected to an existing client")
+    decision = recovery.decide(err, attempted_resume='handle-abc')
+    assert decision.fresh_session is True
+    assert decision.delay >= 6.0
+    assert not decision.fatal
+    assert decision.code == 1008
+
+def test_1008_exponential_backoff_scales_above_6s():
+    """Multiple consecutive 1008 errors scale exponential backoff above 6s floor."""
+    recovery = ConnectionRecovery(retry_budget=10)
+    delays = []
+    for _ in range(5):
+        d = recovery.decide(FakeError(1008))
+        delays.append(d.delay)
+    # Failures: 1->6.0, 2->6.0, 3->6.0, 4->8.0, 5->16.0
+    assert delays[0] >= 6.0
+    assert delays[3] == 8.0
+    assert delays[4] == 16.0
+

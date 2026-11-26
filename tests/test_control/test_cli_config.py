@@ -107,3 +107,54 @@ vision_enabled = false
     report = json.loads(output)
     assert report['checks']['voice credential']['detail'] == 'SYNTHETIC_VOICE_KEY'
     assert not report['tasks_enabled'] and not report['vision_enabled']
+
+
+def test_browser_command_cleans_up_prepared_pid_on_success_and_error(config_file, monkeypatch, capsys):
+    import os
+    import shutil
+    import signal
+    from unittest.mock import AsyncMock
+    from skills import browser_decision, gui_control
+
+    monkeypatch.setattr(shutil, 'which', lambda name: '/usr/bin/cua-driver' if name == 'cua-driver' else None)
+    kills = []
+    monkeypatch.setattr(os, 'kill', lambda pid, sig: kills.append((pid, sig)))
+
+    class FakeGui:
+        def __init__(self, exe):
+            self.browser_open_isolated = AsyncMock(return_value={'prepared_pid': 43210, 'window_id': 99})
+            self.browser_bind = AsyncMock(return_value={'target_id': 't1', 'tabs': [{'tab_id': 'tab1'}]})
+            self.browser_navigate = AsyncMock(return_value={'status': 'navigated'})
+
+    class FakeLoop:
+        def __init__(self, gui):
+            pass
+
+        async def run(self, *a):
+            return {'status': 'done'}
+
+    monkeypatch.setattr(gui_control, 'GuiControl', FakeGui)
+    monkeypatch.setattr(browser_decision, 'BrowserDecisionLoop', FakeLoop)
+
+    assert cli.main(['browser', 'read page', '--url', 'https://example.com']) == 0
+    assert kills == [(43210, signal.SIGTERM)]
+    capsys.readouterr()
+
+    # Error after browser_open_isolated still cleans up, and ProcessLookupError is ignored
+    kills.clear()
+
+    class FailingGui(FakeGui):
+        def __init__(self, exe):
+            super().__init__(exe)
+            self.browser_bind = AsyncMock(side_effect=gui_control.GuiControlError('bind failed'))
+
+    def kill_gone(pid, sig):
+        kills.append((pid, sig))
+        raise ProcessLookupError('no such process')
+
+    monkeypatch.setattr(gui_control, 'GuiControl', FailingGui)
+    monkeypatch.setattr(os, 'kill', kill_gone)
+
+    assert cli.main(['browser', 'read page', '--url', 'https://example.com']) == 1
+    assert kills == [(43210, signal.SIGTERM)]
+    assert 'bind failed' in capsys.readouterr().err

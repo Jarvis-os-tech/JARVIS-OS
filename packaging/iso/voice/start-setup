@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+base=/opt/voice-os
+export PYTHONPATH="$base/site:$base/runtime" PYTHONDONTWRITEBYTECODE=1
+exec "$base/python/bin/python3.13" "$base/setup.py" >>"$HOME/jarvis-setup.log" 2>&1

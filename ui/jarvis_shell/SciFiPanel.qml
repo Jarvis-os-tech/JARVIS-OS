@@ -87,6 +87,7 @@ Item {
 
             Text {
                 text: panel.title
+                textFormat: Text.PlainText
                 color: panel.titleColor
                 font.family: "JetBrainsMono Nerd Font, monospace"
                 font.pixelSize: 11

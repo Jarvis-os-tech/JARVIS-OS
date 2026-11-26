@@ -3,16 +3,18 @@
   "skills": [
     {
       "name": "show_widget",
-      "description": "Create a task-specific interactive widget over the existing desktop. Prefer kind=view: call widget_schema first, then generate its layout, controls, calculations and canvas shapes for this request. Reuse widget_id to refine it; inspect state before replacing user inputs. Default floating. Also supports text, QR, local media PiP, tables/charts/progress. Use real source data; never invent measurements or pairing credentials. JARVIS manages dismissal/placement; no Esc or navigation buttons.",
+      "description": "Show a native desktop widget. For project work use workspace and refresh the same widget_id with the current snapshot. For custom layouts call widget_schema and use view. Preserve user inputs and use real source data.",
       "adapter": "widgets.show",
       "parameters_json_schema": {
         "type": "object",
         "properties": {
-          "kind": {"type": "string", "enum": ["view", "text", "qr", "image", "pip", "table", "chart", "progress"]},
+          "kind": {"type": "string", "enum": ["workspace", "view", "text", "qr", "image", "pip", "table", "chart", "progress", "metric", "list", "actions", "form", "choices"]},
           "title": {"type": "string", "description": "Readable title, at most 160 characters."},
-          "data_json": {"type": "string", "description": "JSON ≤48 KiB. view: see widget_schema. text:{text}; qr:{content}; image/pip:{path,caption}; table:{columns,rows}; chart:{labels,values,unit}; progress:{text,value,maximum}. Omit unknown progress. Local media only."},
+          "data_json": {"type": "string", "description": "JSON ≤48 KiB. workspace: revision (increasing integer), brief, files/ideas/plan (text or {id,label,detail,prompt,path}), tasks ({id,label,done}); reopen:true only on explicit reopen. Same widget_id refreshes panels. Use widget_schema for details."},
           "widget_id": {"type": "string", "description": "Optional existing ID to update; 1–80 letters, digits, underscores or hyphens."},
           "presentation": {"type": "string", "enum": ["canvas", "floating"]},
+          "revision": {"type": "integer", "minimum": 0, "description": "Increasing revision for ordinary widget updates."},
+          "reopen": {"type": "boolean", "description": "Explicit reopen only; supply a strictly newer revision than its dismissal. Query manage_widget state for the last revision."},
           "expires_seconds": {"type": "integer", "minimum": 0, "maximum": 86400}
         },
         "required": ["kind", "title", "data_json"],
@@ -21,27 +23,45 @@
     },
     {
       "name": "manage_canvas",
-      "description": "Manage contextual views in the current desktop. status returns widget titles, IDs and current user input state. clear removes unpinned widgets; clear_all removes every widget (for clear the widgets). close hides views without cancelling tasks. input shows the native text bar. No separate GUI, island or modal desktop screen.",
+      "description": "Manage contextual views in the current desktop. status returns widget titles, IDs and current user input state. clear removes unpinned widgets; clear_all removes every widget (for clear the widgets). close hides views without cancelling tasks. input shows the native text bar. On the JARVIS desktop, system, audio, media, and devices open native cards with live service state.",
       "adapter": "widgets.canvas",
       "parameters_json_schema": {
         "type": "object",
-        "properties": {"action": {"type": "string", "enum": ["open", "close", "input", "clear", "clear_all", "status"]}},
+        "properties": {"action": {"type": "string", "enum": ["open", "close", "input", "clear", "clear_all", "status", "system", "audio", "media", "devices"]}},
         "required": ["action"], "additionalProperties": false
       }
     },
     {
       "name": "manage_widget",
-      "description": "Handle close that, keep this, move it and widget state through conversation. Omit widget_id for the last interacted/latest widget; use status for explicit targets. move uses integer x,y percentages 0..100 across usable screen. pin prevents expiry for this session. state reads current control values. Dismissal does not cancel underlying work.",
+      "description": "Remove all widgets with clear_all, including pinned ones. clear retains pins. dismiss removes one widget. Omit widget_id for the last interacted/latest widget; use status for explicit targets. move uses integer x,y percentages 0..100 across usable screen. pin prevents expiry for this session. state reads current control values. Dismissal does not cancel underlying work.",
       "adapter": "widgets.manage",
       "parameters_json_schema": {
         "type": "object",
         "properties": {
           "widget_id": {"type": "string", "description": "Known widget ID returned by show_widget or manage_canvas status."},
-          "action": {"type": "string", "enum": ["dismiss", "pin", "unpin", "float", "canvas", "move", "state"]},
+          "action": {"type": "string", "enum": ["clear", "clear_all", "status", "dismiss", "pin", "unpin", "focus", "float", "canvas", "move", "state", "select"]},
           "x": {"type": "integer", "minimum": 0, "maximum": 100},
-          "y": {"type": "integer", "minimum": 0, "maximum": 100}
+          "y": {"type": "integer", "minimum": 0, "maximum": 100},
+          "index": {"type": "integer", "minimum": 1, "maximum": 9, "description": "1-based choice index for action=select."},
+          "dismiss": {"type": "boolean", "description": "Dismiss choice widget after selecting (default true)."}
         },
         "required": ["action"], "additionalProperties": false
+      }
+    },
+    {
+      "name": "manage_app_stage",
+      "description": "Use the JARVIS desktop app stage. Search installed apps or list open windows before acting. Launch by returned app_id. Focus, park in the vault, or restore one explicitly selected window by its returned address. Park leaves the app running. A requested response only acknowledges dispatch. Check windows to verify the result.",
+      "adapter": "widgets.apps",
+      "parameters_json_schema": {
+        "type": "object",
+        "properties": {
+          "action": {"type": "string", "enum": ["applications", "windows", "launch", "focus", "park", "restore"]},
+          "query": {"type": "string", "description": "At most 160 characters."},
+          "app_id": {"type": "string", "description": "At most 160 characters."},
+          "address": {"type": "string", "description": "Live hexadecimal window address from windows."}
+        },
+        "required": ["action"],
+        "additionalProperties": false
       }
     },
     {

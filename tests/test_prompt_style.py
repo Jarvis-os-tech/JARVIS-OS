@@ -86,3 +86,12 @@ async def test_desktop_skills_format_agent_prompt():
     assert result['status'] == 'success'
     assert "Task\nBuild headless CLI utility" in result['formatted_prompt']
     assert "Zero-polling rule" in result['formatted_prompt']
+    assert "Strictly follow the JARVIS Prompt Style guide" in result['formatted_prompt']
+
+
+def test_harness2_prepare_prompt_with_role_normalization():
+    adapter = Harness2Adapter()
+    prompt = adapter.prepare_prompt("Review test coverage", agent="opencode", workspace="/tmp/workspace", role="Independent test engineer")
+    assert "Task\nReview test coverage" in prompt
+    assert "Independently verify and test the implementation" in prompt
+    assert "Strictly follow the JARVIS Prompt Style guide" in prompt

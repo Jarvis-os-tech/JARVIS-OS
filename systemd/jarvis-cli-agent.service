@@ -1,0 +1,17 @@
+[Unit]
+Description=JARVIS CLI Agent connection planning service
+After=network.target
+
+[Service]
+ExecStart=%h/.local/share/jarvis-runtime/venv/bin/python -B -m departments.cli_agent.service
+WorkingDirectory=%h/.local/share/jarvis-runtime/current
+Environment=XDG_RUNTIME_DIR=%t
+RuntimeDirectory=jarvis-cli-agent
+RuntimeDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

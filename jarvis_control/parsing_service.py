@@ -34,7 +34,7 @@ async def parse_command_values(text, language='en-US', include_temporal=True,
             stderr=asyncio.subprocess.DEVNULL, env=env,
         )
         try:
-            stdout, _ = await asyncio.wait_for(process.communicate(json.dumps(request).encode()), 10)
+            stdout, _ = await asyncio.wait_for(process.communicate(json.dumps(request).encode()), 25)
             if process.returncode != 0 or len(stdout) > 128 * 1024:
                 raise ValueError('Parser worker failed')
             result = json.loads(stdout)

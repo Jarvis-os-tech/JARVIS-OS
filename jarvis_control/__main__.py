@@ -70,6 +70,12 @@ def main(argv: list[str] | None = None) -> int:
     say.add_argument('text', nargs='+')
     say.add_argument('--dry-run', action='store_true')
     say.add_argument('--no-confirm', action='store_true', help='Leave gated actions unexecuted')
+    browser = subparsers.add_parser('browser', help='Run a bounded Gemini Decision browser task')
+    browser.add_argument('goal')
+    browser.add_argument('--url', default='about:blank')
+    browser.add_argument('--text', default='')
+    browser.add_argument('--max-steps', type=int, default=8)
+    browser.add_argument('--expected-heading', default='', help='Verify completion against this page heading')
 
     args = parser.parse_args(argv)
     try:
@@ -150,6 +156,49 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == 'say':
         from .cli import cmd_say
         return cmd_say(args, config)
+
+    elif args.command == 'browser':
+        import asyncio
+        import shutil
+        from skills.browser_decision import BrowserDecisionLoop
+        from skills.gui_control import GuiControl, GuiControlError
+
+        async def run_browser():
+            import os
+            import signal
+
+            executable = shutil.which('cua-driver')
+            if not executable:
+                raise GuiControlError('cua-driver is not installed')
+            gui = GuiControl(executable)
+            prepared_pid = None
+            try:
+                opened = await gui.browser_open_isolated()
+                prepared_pid = opened.get('prepared_pid') if isinstance(opened, dict) else None
+                if not prepared_pid or not opened.get('window_id'):
+                    raise GuiControlError('Could not open an isolated browser window')
+                bound = await gui.browser_bind(prepared_pid, opened['window_id'])
+                tabs = bound.get('tabs', [])
+                if not tabs or not isinstance(tabs[0], dict) or not tabs[0].get('tab_id'):
+                    raise GuiControlError('Could not bind an isolated browser tab')
+                target_id, tab_id = bound['target_id'], tabs[0]['tab_id']
+                navigation = await gui.browser_navigate(target_id, tab_id, args.url)
+                result = await BrowserDecisionLoop(gui).run(
+                    target_id, tab_id, args.goal, args.text, args.max_steps, args.expected_heading)
+                return {'navigation': navigation, **result}
+            finally:
+                if isinstance(prepared_pid, int) and not isinstance(prepared_pid, bool) and prepared_pid > 0:
+                    try:
+                        os.kill(prepared_pid, signal.SIGTERM)
+                    except (ProcessLookupError, OSError):
+                        pass
+
+        try:
+            print(json.dumps(asyncio.run(run_browser()), indent=2, default=str))
+            return 0
+        except (GuiControlError, ValueError, RuntimeError, OSError, TimeoutError) as error:
+            print(f'Browser: {error}', file=sys.stderr)
+            return 1
 
     parser.print_help()
     return 0

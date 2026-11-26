@@ -374,3 +374,63 @@ def test_notification_dismiss():
     res = execute(executor, 'notification_dismiss', target='battery')
     assert res.ok and "Dismissed notification matching 'battery' (verified)" in res.output
     assert executor._shell.call_args[0][0] == ['omarchy', 'notification', 'dismiss', 'battery']
+
+
+def test_window_to_vault_verifies_compositor_state():
+    active = json.dumps({'address': '0xabc', 'class': 'kitty', 'title': 'Terminal', 'workspace': {'name': '1'}})
+    clients_vault = json.dumps([{'address': '0xabc', 'workspace': 'special:vault'}])
+    clients_still_1 = json.dumps([{'address': '0xabc', 'workspace': '1'}])
+
+    # Verified via clients query
+    executor = Mock()
+    executor._shell.return_value = Result(True, '')
+    executor._tool_hypr_query.side_effect = [Result(True, active), Result(True, clients_vault)]
+    res = execute(executor, 'window_to_vault')
+    assert res.ok and 'Moved Terminal to vault workspace (verified)' in res.output
+
+    # Fails if window remains on original workspace
+    executor = Mock()
+    executor._shell.return_value = Result(True, '')
+    executor._tool_hypr_query.side_effect = [Result(True, active), Result(True, clients_still_1)]
+    res = execute(executor, 'window_to_vault')
+    assert not res.ok and 'could not be verified' in res.output
+
+    # Honest unverified when compositor state cannot be queried afterward
+    executor = Mock()
+    executor._shell.return_value = Result(True, '')
+    executor._tool_hypr_query.side_effect = [Result(True, active), Result(False, 'err'), Result(False, 'err')]
+    res = execute(executor, 'window_to_vault')
+    assert res.ok and 'Moved Terminal to vault workspace (unverified)' in res.output
+
+
+def test_vault_toggle_verifies_monitors_state():
+    closed = json.dumps([{'name': 'eDP-1', 'specialWorkspace': {'id': 0, 'name': ''}}])
+    opened = json.dumps([{'name': 'eDP-1', 'specialWorkspace': {'id': -98, 'name': 'special:vault'}}])
+
+    # Opened (verified)
+    executor = Mock()
+    executor._shell.return_value = Result(True, '')
+    executor._tool_hypr_query.side_effect = [Result(True, closed), Result(True, opened)]
+    res = execute(executor, 'vault_toggle')
+    assert res.ok and res.output == 'Vault workspace opened (verified).'
+
+    # Closed (verified)
+    executor = Mock()
+    executor._shell.return_value = Result(True, '')
+    executor._tool_hypr_query.side_effect = [Result(True, opened), Result(True, closed)]
+    res = execute(executor, 'vault_toggle')
+    assert res.ok and res.output == 'Vault workspace closed (verified).'
+
+    # Unchanged state fails verification
+    executor = Mock()
+    executor._shell.return_value = Result(True, '')
+    executor._tool_hypr_query.side_effect = [Result(True, closed), Result(True, closed)]
+    res = execute(executor, 'vault_toggle')
+    assert not res.ok and 'could not be verified' in res.output
+
+    # Unavailable monitor query reports honest unverified status
+    executor = Mock()
+    executor._shell.return_value = Result(True, '')
+    executor._tool_hypr_query.side_effect = [Result(False, 'err'), Result(False, 'err')]
+    res = execute(executor, 'vault_toggle')
+    assert res.ok and res.output == 'Toggled vault workspace (unverified).'

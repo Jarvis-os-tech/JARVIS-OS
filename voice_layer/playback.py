@@ -31,17 +31,28 @@ async def stop_process(process):
     """Terminate an owned audio process, escalating only if it will not exit."""
     if process is None:
         return
-    if process.returncode is None:
-        with contextlib.suppress(ProcessLookupError):
-            process.terminate()
-    if process.stdin is not None:
-        process.stdin.close()
-    try:
-        await asyncio.wait_for(process.wait(), 1)
-    except TimeoutError:
-        with contextlib.suppress(ProcessLookupError):
-            process.kill()
-        await process.wait()
+    if getattr(process, 'returncode', None) is None:
+        if hasattr(process, 'terminate'):
+            with contextlib.suppress(ProcessLookupError):
+                process.terminate()
+    if getattr(process, 'stdin', None) is not None:
+        if hasattr(process.stdin, 'close'):
+            with contextlib.suppress(Exception):
+                process.stdin.close()
+    if hasattr(process, 'wait'):
+        try:
+            wait_coro = process.wait()
+            if asyncio.iscoroutine(wait_coro):
+                await asyncio.wait_for(wait_coro, 1)
+        except (TimeoutError, asyncio.TimeoutError):
+            if hasattr(process, 'kill'):
+                with contextlib.suppress(ProcessLookupError):
+                    process.kill()
+            if hasattr(process, 'wait'):
+                with contextlib.suppress(Exception):
+                    wait_coro = process.wait()
+                    if asyncio.iscoroutine(wait_coro):
+                        await wait_coro
 
 
 def audio_environment():
@@ -65,6 +76,7 @@ class Playback:
         self.generation = 0
         self._epoch = 0
         self.process = None
+        self._spawned_processes = []
         self.playback_until = 0.0
         self._writing = False
         self._writing_generation = 0
@@ -145,6 +157,21 @@ class Playback:
         self._queued_filler_frames = 0
         self._arrival.set()
         process, self.process = self.process, None
+        if process is not None:
+            if process in self._spawned_processes:
+                self._spawned_processes.remove(process)
+            if getattr(process, 'stdin', None) is not None and hasattr(process.stdin, 'close'):
+                with contextlib.suppress(Exception):
+                    process.stdin.close()
+            if getattr(process, 'returncode', None) is None and hasattr(process, 'terminate'):
+                with contextlib.suppress(ProcessLookupError):
+                    process.terminate()
+            if hasattr(process, 'wait'):
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(stop_process(process))
+                except RuntimeError:
+                    pass
         return process
 
     def begin_reply(self):
@@ -173,6 +200,14 @@ class Playback:
     async def interrupt(self):
         process = self.cancel_pending()
         await stop_process(process)
+        lingering = list(self._spawned_processes)
+        self._spawned_processes.clear()
+        for p in lingering:
+            await stop_process(p)
+
+    async def close(self):
+        """Clean up audio sinks and terminate running player subprocesses."""
+        await self.interrupt()
 
     async def prepare(self, generation=None, epoch=None):
         """Open playback subprocess before first chunk to avoid startup latency."""
@@ -181,13 +216,17 @@ class Playback:
         async with self._spawn_lock:
             if generation != self.generation or epoch != self._epoch:
                 return False
-            if self.process is None:
+            if self.process is None or getattr(self.process, 'returncode', None) is not None:
                 process = await asyncio.create_subprocess_exec(
                     'pw-play', '--rate', '24000', '--channels', '1', '--format', 's16',
                     '--latency', PLAYBACK_LATENCY, '--target', self.sink, '-a', '-',
                     stdin=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
                     env=audio_environment())
+                if process not in self._spawned_processes:
+                    self._spawned_processes.append(process)
                 if generation != self.generation or epoch != self._epoch:
+                    if process in self._spawned_processes:
+                        self._spawned_processes.remove(process)
                     await stop_process(process)
                     return False
                 self.process = process
@@ -195,48 +234,51 @@ class Playback:
 
     async def run(self):
         """Main playback loop — Fix 6: stale generations silently discarded."""
-        while True:
-            generation, data = await self.queue.get()
-            epoch = self._epoch
-            self.queued_bytes -= len(data)
-            if self._queued_filler_frames:
-                self._queued_filler_frames -= 1
+        try:
+            while True:
+                generation, data = await self.queue.get()
+                epoch = self._epoch
+                self.queued_bytes -= len(data)
+                if self._queued_filler_frames:
+                    self._queued_filler_frames -= 1
 
-            # Fix 6: silently discard chunks from cancelled generations
-            if generation != self.generation or epoch != self._epoch:
-                continue
-
-            self._writing = True
-            self._writing_generation = generation
-            self._writing_epoch = epoch
-            try:
-                if self.first_write_at is None and not await self._prime(generation, epoch, len(data)):
-                    continue
-                if not await self.prepare(generation, epoch) or generation != self.generation or epoch != self._epoch:
-                    continue
-                process = self.process
-                if process.returncode is not None:
-                    raise RuntimeError(f'Audio output process exited (code={process.returncode})')
-                try:
-                    process.stdin.write(data)
-                    self.reference.add(data)
-                    await asyncio.wait_for(process.stdin.drain(), 2)
-                except TimeoutError as error:
-                    # Fix 6: check generation before raising
-                    if generation != self.generation or epoch != self._epoch:
-                        continue
-                    raise PlaybackBacklogError('PipeWire playback stopped accepting PCM') from error
-                except (BrokenPipeError, ConnectionResetError):
-                    if generation != self.generation or epoch != self._epoch:
-                        continue
-                    raise
+                # Fix 6: silently discard chunks from cancelled generations
                 if generation != self.generation or epoch != self._epoch:
                     continue
-                now = time.monotonic()
-                if self.first_write_at is None and self.first_enqueued_at is not None:
-                    self.first_write_at = now
-                    self.first_chunk_write_ms = round((now - self.first_enqueued_at) * 1000)
-                self.playback_until = max(self.playback_until, now) + len(data) / 48000
-            finally:
-                self._writing = False
-            await asyncio.sleep(max(0.0, self.playback_until - time.monotonic() - PLAYBACK_LEAD_SECONDS))
+
+                self._writing = True
+                self._writing_generation = generation
+                self._writing_epoch = epoch
+                try:
+                    if self.first_write_at is None and not await self._prime(generation, epoch, len(data)):
+                        continue
+                    if not await self.prepare(generation, epoch) or generation != self.generation or epoch != self._epoch:
+                        continue
+                    process = self.process
+                    if process.returncode is not None:
+                        raise RuntimeError(f'Audio output process exited (code={process.returncode})')
+                    try:
+                        process.stdin.write(data)
+                        self.reference.add(data)
+                        await asyncio.wait_for(process.stdin.drain(), 2)
+                    except TimeoutError as error:
+                        # Fix 6: check generation before raising
+                        if generation != self.generation or epoch != self._epoch:
+                            continue
+                        raise PlaybackBacklogError('PipeWire playback stopped accepting PCM') from error
+                    except (BrokenPipeError, ConnectionResetError):
+                        if generation != self.generation or epoch != self._epoch:
+                            continue
+                        raise
+                    if generation != self.generation or epoch != self._epoch:
+                        continue
+                    now = time.monotonic()
+                    if self.first_write_at is None and self.first_enqueued_at is not None:
+                        self.first_write_at = now
+                        self.first_chunk_write_ms = round((now - self.first_enqueued_at) * 1000)
+                    self.playback_until = max(self.playback_until, now) + len(data) / 48000
+                finally:
+                    self._writing = False
+                await asyncio.sleep(max(0.0, self.playback_until - time.monotonic() - PLAYBACK_LEAD_SECONDS))
+        finally:
+            await self.interrupt()

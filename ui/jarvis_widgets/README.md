@@ -4,6 +4,81 @@ This extension loads into the running Omarchy/Quickshell desktop. It reuses the
 existing Dynamic Island and voice service. It has no separate shell, island,
 dock or background GUI process. It starts hidden.
 
+## Native JARVIS engine · 2026-11-26
+
+The active JARVIS theme uses `ui/JarvisTheme.qml` and the `jarvis-hud-preview`
+controller. The older Omarchy plugin described below remains a separate fallback.
+The native engine renders validated QML; it does not embed ADA's browser UI.
+
+`show_widget(kind="workspace")` presents one atomic snapshot as separate brief,
+files, ideas, plan and next-step panels. Their accents and content rows follow the
+ADA workspace reference. There is no permanent title toolbar or global overflow
+list. Each panel has subtle footer pin/close controls, a drag grip and a resize
+corner. With keyboard focus, Alt+arrows moves; Alt+Shift+arrows resizes.
+
+```json
+{
+  "revision": 1,
+  "brief": "Current project summary from the source",
+  "files": [{"id": "notes", "label": "Project notes", "path": "/absolute/path/notes.md", "detail": "Notes"}],
+  "ideas": [{"id": "option-a", "label": "First direction", "detail": "Trade-offs"}],
+  "plan": [{"id": "review", "label": "Review sources", "detail": "Next step"}],
+  "tasks": [{"id": "verify", "label": "Verify the result", "done": false}]
+}
+```
+
+Send this through the existing `show_widget` tool with a stable `widget_id` and
+`expires_seconds: 0` for a lasting workspace. Workspace IDs are at most 64
+characters. Increment `data_json.revision` on source changes and send the full
+snapshot; omitted sections disappear. Empty sections do not create empty panels.
+Limits: five sections, 30 tasks, 64 entries in each other section, 48 KiB input.
+
+Ordinary widgets also accept top-level `revision`. Revision zero supports legacy
+unversioned callers until a positive revision is used. Older revisions are
+ignored; conflicting content at the same positive revision is rejected. All
+panels in a workspace validate before any are changed. Unchanged panels retain
+their content identity. Local edits survive compatible refreshes; changed source
+values produce review feedback and invalid old control values are discarded.
+
+Dismissal leaves a saved marker. A delayed update cannot reopen a dismissed
+widget or workspace. Explicit user reopening requires `reopen: true` (inside
+workspace data, at the tool's top level for ordinary widgets) and a revision
+strictly greater than the dismissed revision. Query `manage_widget state` for
+the last revision when needed. An identical reopen retry cannot undo a later close. `clear` retains
+pins; `clear_all` removes everything. Closing a view does not cancel its task.
+`manage_widget` accepts a whole workspace ID or one returned panel ID. `focus`
+brings an existing group forward. Status and create receipts expose `mounted` so
+callers can distinguish registered content from visible panels; pinned panels
+can occupy the five visible slots. Never report a hidden panel as visible.
+
+The native shell atomically saves ordinary widgets, workspace revisions,
+dismissals, compatible local input and panel geometry under
+`$XDG_STATE_HOME/jarvis/widget-session/session.json` (default `~/.local/state`).
+The directory is private. The saved file is bounded to 16 MiB when restored;
+unversioned transient records are reclaimed, while dismissal and positive-revision
+fences remain durable. `status.sessionSaved` and `status.sessionError` expose
+write outcomes. Corrupt or unsupported sessions are rejected without overwriting
+the file. Existing task event cursors/dismissals are retained; active task data
+continues to come from its owning service. Local image paths may become unavailable.
+
+File rows and explicit entry prompts submit requests through existing JARVIS
+tools. Task selections are local drafts until Apply sends them to the owning
+workflow. Feedback distinguishes sending, acceptance and failure; source updates
+clear pending feedback. Acceptance is not proof of a file edit, task completion or
+external mutation. ADA's project database, versioned file editor, upload, CAD,
+inventory and printing applications are not replaced by this renderer.
+
+Verified with Python and native QML tests plus live panel rendering, IPC removal,
+layout changes and shell restart recovery. Spoken end-to-end operation, reboot,
+KVM and external source mutation are separate checks and must not be inferred
+from those results.
+
+## Earlier plugin documentation
+
+The following installation notes describe the older plugin path. Their
+session-only persistence and control descriptions do not apply to the native
+JARVIS engine above.
+
 ## Available surfaces
 
 - Generated views: JARVIS composes a new layout for the task, including nested
@@ -127,3 +202,25 @@ calculation updates, action payloads, draft retention, pins and expiry. Latest
 results: 12 Python tests with 10 subtests and 14 Qt checks pass. Physical
 microphone-to-widget interaction still needs a spoken session check; no model
 generation or audible test was started during this installation.
+
+## Native card inputs
+
+The existing `show_widget` tool and `jarvis widgets show` command accept
+`metric`, `list`, `actions`, `form`, and `choices`. `widget_schema` returns their data
+examples under `native_cards`. These inputs compile to the existing QML view
+renderer. Checklist edits remain local until Apply sends the selections to
+JARVIS. Required form fields must contain non-whitespace text before submission.
+Buttons submit requests through the existing conversation handler.
+
+`choices` renders 1–9 numbered disambiguation cards (`choice` nodes) with `Text.PlainText`,
+keyboard shortcuts `1..9` and `Esc` (dismiss), click selection, and IPC selection via
+`manage({"id": ..., "action": "select", "index": 1..9, "dismiss": true|false})`.
+
+Charts accept the existing `labels`/`values` format or `points` containing
+`label` and `value`. Set `mode` to `line` for signed numeric series. Bar charts
+retain their non-negative value requirement. Reuse `widget_id` for updates.
+
+This adaptation uses the supplied native-shell prototype's card vocabulary.
+ADA's project-panel behavior was inspected at
+https://github.com/nazirlouis/ada-jarvis-public/blob/7697c32b929e762836291c83b070f51385ad793b/frontend/workspace.js .
+Rendering and interactions use JARVIS's existing native components.

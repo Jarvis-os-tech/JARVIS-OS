@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import "OrbitState.js" as OrbitState
 
 Item {
     id: root
@@ -14,35 +15,27 @@ Item {
     property real ramPercent: 0.0
     property real ramUsed: 0.0
 
-    readonly property string displayState: standby ? "standby"
-        : muted ? "disabled"
-        : voiceState === "ducked" || voiceState === "barged_in" ? "listening"
-        : voiceState
+    property var reaction: OrbitState.initial()
+    readonly property string displayState: reaction.state
+    signal reacted(string gesture)
+
+    function acceptStatus(payload) {
+        reaction = OrbitState.update(reaction, payload, Date.now());
+        micLevel = reaction.level;
+        muted = displayState === "disabled";
+        standby = displayState === "standby";
+        if (reaction.gesture) reacted(reaction.gesture);
+    }
 
     // 1. Live Voice State Polling (every 200ms)
     Process {
         id: stateProc
         command: ["sh", "-c", "cat ${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/jarvis/state.json 2>/dev/null || echo '{}'"]
         running: false
-        stdout: SplitParser {
-            onRead: function(line) {
-                try {
-                    var payload = JSON.parse(line || "{}");
-                    if (payload.state !== undefined)
-                        root.voiceState = String(payload.state || "offline").toLowerCase();
-                    if (payload.activity !== undefined)
-                        root.activityLabel = String(payload.activity || (root.voiceState === "idle" ? "Online" : root.voiceState));
-                    if (payload.standby !== undefined)
-                        root.standby = Boolean(payload.standby);
-                    if (payload.muted !== undefined)
-                        root.muted = Boolean(payload.muted);
-                    if (payload.microphone_rms !== undefined) {
-                        var rms = Number(payload.microphone_rms) || 0.0;
-                        root.micLevel = Math.min(1.0, rms * 25.0);
-                    }
-                } catch (error) {
-                    root.voiceState = "offline";
-                }
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { root.acceptStatus(JSON.parse(text)); }
+                catch (error) { root.acceptStatus(null); }
             }
         }
     }
@@ -121,6 +114,8 @@ Item {
                 right: 20
             }
 
+            property real dragStartTop: 56
+            property real dragStartRight: 20
             implicitWidth: 216
             implicitHeight: 112
 
@@ -196,6 +191,31 @@ Item {
                         height: 78
                         orbitState: root.displayState
                         level: root.micLevel
+                        scale: hover.hovered ? 1.08 : 1
+                        Behavior on scale { NumberAnimation { duration: 160 } }
+                        Connections {
+                            target: root
+                            function onReacted(gesture) {
+                                if (gesture === "roll") roll.restart();
+                                else if (gesture === "nod") nod.restart();
+                                else if (gesture === "recoil") recoil.restart();
+                            }
+                        }
+                        NumberAnimation { id: roll; target: aura; property: "rotation"; from: 0; to: 360; duration: 700; easing.type: Easing.InOutCubic }
+                        SequentialAnimation {
+                            id: nod
+                            NumberAnimation { target: aura; property: "translationY"; to: 5; duration: 110 }
+                            NumberAnimation { target: aura; property: "translationY"; to: 0; duration: 170 }
+                        }
+                        SequentialAnimation {
+                            id: recoil
+                            NumberAnimation { target: aura; property: "translationX"; to: -6; duration: 70 }
+                            NumberAnimation { target: aura; property: "translationX"; to: 5; duration: 90 }
+                            NumberAnimation { target: aura; property: "translationX"; to: 0; duration: 110 }
+                        }
+                        property real translationX: 0
+                        property real translationY: 0
+                        transform: Translate { x: aura.translationX; y: aura.translationY }
                     }
                 }
 
@@ -271,6 +291,10 @@ Item {
                             : root.displayState === "speaking" ? "SPEAKING"
                             : root.displayState === "thinking" ? "THINKING"
                             : root.displayState === "listening" ? "LISTENING"
+                            : root.displayState === "complete" ? "COMPLETE"
+                            : root.displayState === "alert" ? "ALERT"
+                            : root.displayState === "offline" ? "OFFLINE"
+                            : root.displayState === "connecting" ? "CONNECTING"
                             : "JARVIS LIVE"
                         color: root.muted ? "#ff8da1"
                              : root.displayState === "standby" ? "#94a3b8"
@@ -283,11 +307,22 @@ Item {
                 }
 
                 HoverHandler { id: hover }
+                DragHandler {
+                    target: null
+                    onActiveChanged: if (active) {
+                        panel.dragStartTop = panel.margins.top;
+                        panel.dragStartRight = panel.margins.right;
+                    }
+                    onTranslationChanged: {
+                        panel.margins.top = Math.max(0, Math.min(panel.screen.height - panel.height, panel.dragStartTop + translation.y));
+                        panel.margins.right = Math.max(0, Math.min(panel.screen.width - panel.width, panel.dragStartRight - translation.x));
+                    }
+                }
 
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onDoubleClicked: {
+                    onClicked: {
                         root.toggleMute();
                     }
                 }

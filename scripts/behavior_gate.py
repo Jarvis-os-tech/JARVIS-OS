@@ -18,27 +18,57 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "tests/behavior/contracts.json"
+IGNORED_DIGEST_PARTS = {'__pycache__', '.pytest_cache', '.venv', '.git', 'state', 'dist'}
+IGNORED_DIGEST_SUFFIXES = {
+    '.bak', '.pyc', '.db', '.db-shm', '.db-wal', '.sqlite', '.sqlite3', '.log',
+    '.raw', '.iso', '.img', '.qcow2', '.vmdk', '.ova',
+}
+MAX_DIGEST_FILE_BYTES = 64 * 1024 * 1024
+DIGEST_CHUNK_BYTES = 1024 * 1024
+
+
+def _file_digest(path: Path) -> bytes:
+    """Return a SHA-256 digest for path using bounded-memory streaming or stat metadata for huge files."""
+    stat = path.stat()
+    if stat.st_size > MAX_DIGEST_FILE_BYTES:
+        return hashlib.sha256(f"size={stat.st_size};mtime_ns={stat.st_mtime_ns}".encode()).digest()
+    file_hash = hashlib.sha256()
+    with path.open('rb') as handle:
+        while chunk := handle.read(DIGEST_CHUNK_BYTES):
+            file_hash.update(chunk)
+    return file_hash.digest()
 
 
 def source_digest():
-    """Fingerprint covered source and test inputs, excluding collected upstreams."""
+    """Fingerprint covered source and test inputs, excluding collected upstreams and build artifacts."""
     digest = hashlib.sha256()
     directories = ('audio', 'bin', 'core', 'connectors', 'departments', 'filesystem',
                    'jarvis_control', 'jarvis_memory', 'learning', 'voice_layer',
                    'orchestration', 'packaging', 'plugins', 'proactive', 'quickshell',
                    'skills', 'systemd', 'ui', 'widget_engine', 'scripts',
                    'skill_manifests', 'configs', 'contracts', 'tests')
-    ignored_parts = {'__pycache__', '.pytest_cache', '.venv', '.git', 'state'}
-    paths = [path for directory in directories for path in (ROOT / directory).rglob('*')
-             if path.is_file() and not ignored_parts.intersection(path.relative_to(ROOT).parts)
-             and not path.name.startswith('.env')
-             and path.suffix not in {'.bak', '.pyc', '.db', '.db-shm', '.db-wal', '.sqlite', '.sqlite3', '.log'}]
+    paths = []
+    for directory in directories:
+        base = ROOT / directory
+        if not base.is_dir():
+            continue
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = [name for name in dirnames if name not in IGNORED_DIGEST_PARTS]
+            current = Path(dirpath)
+            for filename in filenames:
+                if filename.startswith('.env'):
+                    continue
+                path = current / filename
+                if path.suffix.lower() in IGNORED_DIGEST_SUFFIXES:
+                    continue
+                if path.is_file():
+                    paths.append(path)
     paths.extend(path for pattern in ('*.py', '*.sh', '*.toml', '*.toml.example')
                  for path in ROOT.glob(pattern) if path.is_file())
     paths.extend(ROOT.glob('requirements*.txt'))
     for path in sorted(paths):
         digest.update(str(path.relative_to(ROOT)).encode() + b'\0')
-        digest.update(hashlib.sha256(path.read_bytes()).digest())
+        digest.update(_file_digest(path))
     return digest.hexdigest()
 
 

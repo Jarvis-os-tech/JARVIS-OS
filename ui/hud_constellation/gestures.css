@@ -1,0 +1,23 @@
+.gesture-controls label:not(.speaker-mode){display:block;margin:12px 0 7px;font-size:13px;color:#afdcd4}
+.gesture-controls select{width:100%;max-width:100%}
+.gesture-controls summary{padding:12px 0;color:#9bded4;cursor:pointer;font-size:13px}
+.gesture-controls .gesture-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.gesture-controls .gesture-buttons button{flex:1;font-size:12px;min-height:48px;padding:8px}
+#gesturePreview{display:block;width:100%;height:auto;max-height:210px;object-fit:contain;margin-top:12px;background:#041b20;border:1px solid #4fd9cf40;border-radius:10px}
+#gesturePerformance{font-size:10px;color:#789f99;font-variant-numeric:tabular-nums}
+#gestureBadge{position:fixed;left:24px;bottom:25px;z-index:8;padding:8px 12px;border:1px solid #4fd9cf40;border-radius:12px;background:#041416f2;color:#a8e6db;font-size:12px;pointer-events:none;max-width:calc(100vw - 130px)}
+#gestureOverlay{position:fixed;inset:0;width:100vw;height:100dvh;margin:0;padding:0;border:0;background:transparent;pointer-events:none;overflow:visible;z-index:2147483647}
+#gestureOverlay::backdrop{background:transparent;pointer-events:none}
+#gestureCursor{position:absolute;top:0;left:0;width:0;height:0;pointer-events:none;will-change:transform}
+#gestureCursor::before{content:'';position:absolute;width:24px;height:24px;left:-12px;top:-12px;border:2px solid #a5ffe8;border-radius:50%;background:#3bd7b42b;box-shadow:0 0 0 4px #06232180,0 0 15px #4fd9cf55}
+#gestureCursor::after{content:'';position:absolute;left:-2px;top:-2px;width:4px;height:4px;border-radius:50%;background:white}
+#gestureCursor[data-state=unarmed]::before{border-style:dashed;opacity:.6}
+#gestureCursor[data-state=pressed]::before{border-color:#efc28b;background:#efc28b66;transform:scale(.8)}
+#gestureCursor[data-state=dragging]::before{border-color:#d0b1ff;background:#a677d955;border-radius:7px}
+#gestureCursor[data-clicked=true]::before{box-shadow:0 0 0 9px #4fd9cf55}
+.gesture-hover{outline:2px solid #8bf9e0!important;outline-offset:3px}
+#gestureChoices{max-width:min(430px,90vw)}
+#gestureChoiceList{display:flex;flex-direction:column;gap:8px;padding:18px}
+#gestureChoiceList button{min-height:50px;padding:12px;color:#c9eee5;background:#0b2e30;border:1px solid #4fd9cf40;border-radius:10px;font:inherit}
+#gestureChoiceList button[aria-pressed=true]{border-color:#8bf9e0}
+@media(max-height:550px){#gestureBadge{bottom:10px;left:12px;font-size:10px}}

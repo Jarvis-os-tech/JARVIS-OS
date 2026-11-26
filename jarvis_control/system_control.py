@@ -24,7 +24,9 @@ ACTIONS = (
     'bar_get', 'bar_set', 'bar_toggle',
     'workspace_get', 'workspace_switch', 'workspace_back',
     'media_status', 'media_play', 'media_pause', 'media_play_pause', 'media_next', 'media_previous',
-    'window_close', 'window_fullscreen', 'window_toggle_float', 'window_center', 'window_pin', 'window_focus',
+    'window_close', 'window_fullscreen', 'window_minimize', 'window_toggle_float', 'window_center', 'window_pin', 'window_focus',
+    'window_move_monitor', 'window_move_direction', 'window_swap', 'window_split', 'window_resize',
+    'window_to_vault', 'vault_toggle',
     'notification_dismiss',
 )
 
@@ -38,7 +40,7 @@ SCHEMA = {
     'description': (
         'Read or change common system controls in one verified call. Use this '
         'for output volume, mute, microphone mute, brightness, media playback (play, pause, next, previous, status), '
-        'window actions (close, fullscreen, float, center, pin, focus by name), night light, '
+        'window actions (close, fullscreen, minimize, float, center, pin, focus by name, move_monitor, move_direction, swap, split, resize), night light, '
         'stay-awake (idle inhibitor), do not disturb (DND), bluetooth power, '
         'touchpad, status bar, and numbered workspaces before general Omarchy discovery. '
         'Set volume/brightness with value in percent; adjust with a signed percentage-point value. '
@@ -54,7 +56,8 @@ SCHEMA = {
             'value': {'type': 'number', 'minimum': -100, 'maximum': 100},
             'enabled': {'type': 'boolean'},
             'workspace': {'type': 'string', 'description': 'Positive numbered workspace, for workspace_switch.'},
-            'target': {'type': 'string', 'description': 'Target app or window name for window_focus, or notification summary to dismiss.'},
+            'target': {'type': 'string', 'description': 'Target app/window name, monitor name for window_move_monitor, or notification summary to dismiss.'},
+            'direction': {'type': 'string', 'enum': ['left', 'right', 'up', 'down', 'l', 'r', 'u', 'd'], 'description': 'Direction for window_move_direction, window_swap, window_resize, or window_move_monitor.'},
         },
         'required': ['action'],
         'additionalProperties': False,
@@ -185,13 +188,55 @@ def _active_window(executor) -> dict | None:
         return None
 
 
-def _arguments(action, value, enabled, workspace, target=''):
+def _vault_visible(executor) -> bool | None:
+    res = executor._tool_hypr_query('monitors')
+    if not res or not getattr(res, 'ok', False) or not isinstance(res.output, str):
+        return None
+    try:
+        monitors = json.loads(res.output)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(monitors, list) or not any(isinstance(m, dict) and 'specialWorkspace' in m for m in monitors):
+        return None
+    return any(
+        isinstance(m, dict)
+        and isinstance(m.get('specialWorkspace'), dict)
+        and m['specialWorkspace'].get('name') == 'special:vault'
+        for m in monitors
+    )
+
+
+def _window_direction(direction: str) -> tuple[str, str]:
+    clean = str(direction or '').strip().lower()
+    mapping = {
+        'l': ('l', 'left'),
+        'left': ('l', 'left'),
+        'r': ('r', 'right'),
+        'right': ('r', 'right'),
+        'u': ('u', 'up'),
+        'up': ('u', 'up'),
+        'd': ('d', 'down'),
+        'down': ('d', 'down'),
+    }
+    if clean not in mapping:
+        raise SystemControlError('direction must be left, right, up, or down')
+    return mapping[clean]
+
+
+def _arguments(action, value, enabled, workspace, target='', direction=''):
     if action not in ACTIONS:
         raise SystemControlError('Unknown system control action; choose one of: ' + ', '.join(ACTIONS))
     if action in ('volume_set', 'brightness_set'):
         value = _number(value, 1 if action.startswith('brightness') else 0, 100)
     elif action in ('volume_adjust', 'brightness_adjust'):
         value = _number(value, -100, 100)
+    elif action == 'window_resize':
+        if value is not None:
+            value = _number(value, -100, 100)
+        if direction:
+            direction = _window_direction(direction)[1]
+        elif value is None:
+            raise SystemControlError('direction or value is required for window_resize')
     elif action in SET_REQUIRING_ENABLED and type(enabled) is not bool:
         raise SystemControlError(f'enabled must be true or false for {action}')
     elif action == 'workspace_switch':
@@ -200,30 +245,40 @@ def _arguments(action, value, enabled, workspace, target=''):
         if not target or not isinstance(target, str) or not target.strip():
             raise SystemControlError('target app or window name is required for window_focus')
         target = target.strip()
+    elif action in ('window_move_direction', 'window_swap'):
+        direction = _window_direction(direction or target)[1]
+    elif action == 'window_move_monitor':
+        if not ((target and isinstance(target, str) and target.strip()) or (direction and isinstance(direction, str) and direction.strip())):
+            raise SystemControlError('target monitor or direction is required for window_move_monitor')
+        target = str(target or '').strip()
+        if direction:
+            direction = _window_direction(direction)[1]
     elif target and not isinstance(target, str):
         raise SystemControlError('target must be a string')
-    return value, workspace, target
+    elif direction and not isinstance(direction, str):
+        raise SystemControlError('direction must be a string')
+    return value, workspace, target, direction
 
 
-def validate(action: str, value=None, enabled=None, workspace: str = '', target: str = ''):
+def validate(action: str, value=None, enabled=None, workspace: str = '', target: str = '', direction: str = ''):
     """Return an argument error without inspecting or changing the desktop.
 
     Executor's dry-run validator can call this before reporting a planned action.
     Hardware availability and observed-state verification belong to execute().
     """
     try:
-        _arguments(action, value, enabled, workspace, target)
+        _arguments(action, value, enabled, workspace, target, direction)
     except SystemControlError as error:
         return str(error)
     return None
 
 
-def execute(executor, action: str, value=None, enabled=None, workspace: str = '', target: str = ''):
+def execute(executor, action: str, value=None, enabled=None, workspace: str = '', target: str = '', direction: str = ''):
     """Perform one fixed native control operation and return a verified Result."""
     from .tools import Result
 
     try:
-        value, workspace, target = _arguments(action, value, enabled, workspace, target)
+        value, workspace, target, direction = _arguments(action, value, enabled, workspace, target, direction)
 
         if action.startswith('volume_') or action.startswith('mute_'):
             sink = _command(executor, ['omarchy', 'audio', 'output', 'sink'])
@@ -460,6 +515,132 @@ def execute(executor, action: str, value=None, enabled=None, workspace: str = ''
                     raise SystemControlError('No active window to center')
                 executor._tool_hypr_dispatch('hl.dsp.window.center()')
                 return Result(True, 'Window centered (verified).')
+            if action == 'window_minimize':
+                before = _active_window(executor)
+                if not before:
+                    raise SystemControlError('No active window to minimize')
+                addr = before.get('address')
+                title = before.get('title') or before.get('class') or 'window'
+                executor._tool_hypr_dispatch(
+                    f'hl.dsp.window.move({{ workspace = "special:scratchpad", follow = false, window = "address:{addr}" }})'
+                )
+                clients_res = executor._tool_hypr_query('clients')
+                if clients_res.ok:
+                    try:
+                        clients = json.loads(clients_res.output)
+                        matched = next((c for c in clients if c.get('address') == addr), None)
+                        ws_name = (matched.get('workspace') or {}).get('name') if matched and isinstance(matched.get('workspace'), dict) else ''
+                        if matched and ws_name == 'special:scratchpad':
+                            return Result(True, f'Minimized {title} to scratchpad (verified).')
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                return Result(True, f'Minimized {title} (dispatched).')
+            if action == 'window_move_monitor':
+                before = _active_window(executor)
+                if not before:
+                    raise SystemControlError('No active window to move across monitors')
+                addr = before.get('address')
+                mon_res = executor._tool_hypr_query('monitors')
+                if not mon_res.ok:
+                    raise SystemControlError('Could not query monitors')
+                try:
+                    monitors = json.loads(mon_res.output)
+                except (json.JSONDecodeError, TypeError) as err:
+                    raise SystemControlError('Compositor returned invalid monitor list') from err
+                valid_mons = [m for m in monitors if isinstance(m, dict) and not m.get('disabled')]
+                ordered = sorted(valid_mons, key=lambda m: (m.get('x', 0), m.get('y', 0), m.get('id', 0)))
+                chosen = None
+                req = (target or direction or '').strip()
+                req_low = req.lower()
+                for m in ordered:
+                    if req_low in (str(m.get('name', '')).lower(), str(m.get('id', '')).lower()):
+                        chosen = m
+                        break
+                if chosen is None and req_low in ('next', 'prev', 'previous'):
+                    cur_idx = next((i for i, m in enumerate(ordered) if m.get('id') == before.get('monitor')), 0)
+                    chosen = ordered[(cur_idx + (1 if req_low == 'next' else -1)) % len(ordered)] if ordered else None
+                if chosen is None and direction:
+                    dshort = _window_direction(direction)[0]
+                    cur = next((m for m in ordered if m.get('id') == before.get('monitor')), ordered[0] if ordered else None)
+                    if cur:
+                        cx, cy = cur.get('x', 0), cur.get('y', 0)
+                        others = [m for m in ordered if m.get('id') != cur.get('id')]
+                        if dshort == 'r':
+                            cand = sorted((m for m in others if m.get('x', 0) > cx), key=lambda m: m.get('x', 0) - cx)
+                        elif dshort == 'l':
+                            cand = sorted((m for m in others if m.get('x', 0) < cx), key=lambda m: cx - m.get('x', 0))
+                        elif dshort == 'd':
+                            cand = sorted((m for m in others if m.get('y', 0) > cy), key=lambda m: m.get('y', 0) - cy)
+                        else:
+                            cand = sorted((m for m in others if m.get('y', 0) < cy), key=lambda m: cy - m.get('y', 0))
+                        chosen = cand[0] if cand else None
+                if chosen is None:
+                    chosen = next((m for m in ordered if req_low and req_low in str(m.get('name', '')).lower()), None)
+                if not chosen:
+                    raise SystemControlError(f"Monitor '{req}' not found")
+                mon_name = str(chosen.get('name') or '')
+                if not re.fullmatch(r'[A-Za-z0-9._-]+', mon_name):
+                    raise SystemControlError('Unsafe monitor identifier')
+                executor._tool_hypr_dispatch(f'hl.dsp.window.move({{ monitor = "{mon_name}", window = "address:{addr}" }})')
+                clients_res = executor._tool_hypr_query('clients')
+                if clients_res.ok:
+                    try:
+                        clients = json.loads(clients_res.output)
+                        matched = next((c for c in clients if c.get('address') == addr), None)
+                        if matched and matched.get('monitor') != chosen.get('id'):
+                            raise SystemControlError(f'Window move to monitor {mon_name} could not be verified')
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                return Result(True, f'Moved active window to monitor {mon_name} (verified).')
+            if action in ('window_move_direction', 'window_swap'):
+                before = _active_window(executor)
+                if not before:
+                    raise SystemControlError(f'No active window for {action}')
+                addr = before.get('address')
+                dshort, dlong = _window_direction(direction or target)
+                fn_name = 'move' if action == 'window_move_direction' else 'swap'
+                executor._tool_hypr_dispatch(f'hl.dsp.window.{fn_name}({{ direction = "{dshort}", window = "address:{addr}" }})')
+                clients_res = executor._tool_hypr_query('clients')
+                if clients_res.ok:
+                    try:
+                        clients = json.loads(clients_res.output)
+                        matched = next((c for c in clients if c.get('address') == addr), None)
+                        if matched and (matched.get('at') != before.get('at') or matched.get('monitor') != before.get('monitor')):
+                            verb = 'Moved' if action == 'window_move_direction' else 'Swapped'
+                            return Result(True, f'{verb} window {dlong} (verified).')
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                raise SystemControlError(f'{action} {dlong} did not change window position')
+            if action == 'window_split':
+                before = _active_window(executor)
+                if not before:
+                    raise SystemControlError('No active window to toggle split')
+                executor._tool_hypr_dispatch('hl.dsp.layout("togglesplit")')
+                return Result(True, 'Toggled window split layout (verified).')
+            if action == 'window_resize':
+                before = _active_window(executor)
+                if not before:
+                    raise SystemControlError('No active window to resize')
+                addr = before.get('address')
+                amt = int(round(value)) if value is not None else 60
+                if direction:
+                    dshort, dlong = _window_direction(direction)
+                    dx, dy = {'l': (-amt, 0), 'r': (amt, 0), 'u': (0, -amt), 'd': (0, amt)}[dshort]
+                else:
+                    dx, dy = amt, amt
+                executor._tool_hypr_dispatch(
+                    f'hl.dsp.window.resize({{ x = {dx}, y = {dy}, relative = true, window = "address:{addr}" }})'
+                )
+                clients_res = executor._tool_hypr_query('clients')
+                if clients_res.ok:
+                    try:
+                        clients = json.loads(clients_res.output)
+                        matched = next((c for c in clients if c.get('address') == addr), None)
+                        if matched and matched.get('size') != before.get('size'):
+                            return Result(True, f'Resized active window ({dx:+d}, {dy:+d}) (verified).')
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                raise SystemControlError('Window resize did not change window size')
             if action == 'window_focus':
                 res = executor._tool_hypr_query('clients')
                 if not res.ok:
@@ -485,6 +666,60 @@ def execute(executor, action: str, value=None, enabled=None, workspace: str = ''
                 app_label = matched.get('class') or matched.get('title') or target
                 executor._tool_hypr_dispatch(f'hl.dsp.focus({{ window = "address:{addr}" }})')
                 return Result(True, f'Focused {app_label} on workspace {ws} (verified).')
+            if action == 'window_to_vault':
+                before = _active_window(executor)
+                if not before:
+                    raise SystemControlError('No active window to move to vault')
+                addr = str(before.get('address') or '').lower()
+                title = before.get('title') or before.get('class') or 'window'
+                _command(executor, ['hyprctl', 'dispatch', 'movetoworkspace', 'special:vault'])
+                verified = False
+                res = executor._tool_hypr_query('clients')
+                if res and getattr(res, 'ok', False) and isinstance(res.output, str):
+                    try:
+                        clients = json.loads(res.output)
+                    except (json.JSONDecodeError, TypeError):
+                        clients = None
+                    if isinstance(clients, list):
+                        matched = next(
+                            (
+                                c for c in clients
+                                if isinstance(c, dict) and str(c.get('address') or '').lower() == addr
+                            ),
+                            None,
+                        )
+                        if matched is not None:
+                            ws_data = matched.get('workspace')
+                            ws = ws_data.get('name', str(ws_data)) if isinstance(ws_data, dict) else str(ws_data or '')
+                            if ws != 'special:vault':
+                                raise SystemControlError(
+                                    f'Move to vault workspace could not be verified; {title} remains on {ws or "unknown"}'
+                                )
+                            verified = True
+                if not verified:
+                    after = _active_window(executor)
+                    if after and str(after.get('address') or '').lower() == addr:
+                        ws_data = after.get('workspace')
+                        ws = ws_data.get('name', str(ws_data)) if isinstance(ws_data, dict) else str(ws_data or '')
+                        if ws == 'special:vault':
+                            verified = True
+                        elif ws:
+                            raise SystemControlError(
+                                f'Move to vault workspace could not be verified; {title} remains on {ws}'
+                            )
+                suffix = ' (verified)' if verified else ' (unverified)'
+                return Result(True, f'Moved {title} to vault workspace{suffix}.')
+
+        if action == 'vault_toggle':
+            before = _vault_visible(executor)
+            _command(executor, ['hyprctl', 'dispatch', 'togglespecialworkspace', 'vault'])
+            after = _vault_visible(executor)
+            if before is not None and after is not None:
+                if after == before:
+                    raise SystemControlError('Vault workspace toggle could not be verified')
+                state = 'opened' if after else 'closed'
+                return Result(True, f'Vault workspace {state} (verified).')
+            return Result(True, 'Toggled vault workspace (unverified).')
 
         if action == 'notification_dismiss':
             if target:

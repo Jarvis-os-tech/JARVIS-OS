@@ -1,0 +1,137 @@
+{
+  "bar": {
+    "background": "none",
+    "id": "omarchy.bar",
+    "layout": {
+      "center": [],
+      "centerBegin": [],
+      "centerEnd": [],
+      "left": [
+        {
+          "id": "omarchy.workspaces"
+        },
+        {
+          "id": "omyphone"
+        }
+      ],
+      "right": [
+        {
+          "id": "omarchy.tray"
+        },
+        {
+          "id": "dejan94.todos"
+        },
+        {
+          "id": "omarchy.clipboard"
+        },
+        {
+          "id": "omarchy.agents"
+        },
+        {
+          "id": "omarchy.network"
+        },
+        {
+          "id": "omarchy.bluetooth"
+        },
+        {
+          "id": "omarchy.audio"
+        },
+        {
+          "id": "omarchy.battery"
+        },
+        {
+          "format": "dddd h:mm AP",
+          "id": "omarchy.clock"
+        },
+        {
+          "id": "ac.control-panel"
+        }
+      ],
+      "tray": []
+    },
+    "position": "top"
+  },
+  "disabledPlugins": [
+    "omarchy.notifications",
+    "omarchy.osd",
+    "omarchy.dock",
+    "omarchy-ai.orbit",
+    "io.github.jeocrypto.glass-dock"
+  ],
+  "dock": {
+    "pinned": [
+      "org.gnome.Nautilus",
+      "foot",
+      "google-chrome",
+      "antigravity",
+      "chatgpt",
+      "hermes-desktop",
+      "goose-desktop",
+      "T3 Code"
+    ],
+    "position": "bottom"
+  },
+  "idle": {
+    "lock": 300,
+    "screensaver": 150
+  },
+  "plugins": [
+    {
+      "id": "io.github.jeocrypto.glass-dock"
+    },
+    {
+      "appearance": "black",
+      "background": "black",
+      "bluetooth": true,
+      "brightness": true,
+      "calendar": true,
+      "calendarLeadMinutes": 15,
+      "calendars": [],
+      "camera": true,
+      "charging": true,
+      "clockFormat": "h:mm AP",
+      "expandOnHover": true,
+      "glow": true,
+      "holidays": "auto",
+      "id": "omarchy-dynamic-island",
+      "idle": "pill",
+      "idleFace": "ticker",
+      "inbox": true,
+      "keybind": "SUPER + ALT + I",
+      "layer": "top",
+      "mediaLingerSeconds": 30,
+      "mic": false,
+      "monitor": "primary",
+      "notchHeight": 0,
+      "notchRadius": 0,
+      "notchWidth": 0,
+      "notifications": true,
+      "osd": true,
+      "ram": true,
+      "recording": true,
+      "reducedMotion": false,
+      "reserveSpace": true,
+      "scale": 1,
+      "style": "notch",
+      "textFont": "Inter",
+      "timerSound": true,
+      "topMargin": 10,
+      "trackChange": true,
+      "visualizerColor": "artwork",
+      "volume": true
+    },
+    {
+      "id": "omarchy-ai.vision-pip"
+    },
+    {
+      "id": "jarvis.widgets"
+    },
+    {
+      "id": "omarchy-ai.teaching"
+    },
+    {
+      "id": "omarchy-ai.orbit"
+    }
+  ],
+  "version": 1
+}

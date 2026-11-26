@@ -56,6 +56,7 @@ SciFiPanel {
 
                     Text {
                         text: modelData.icon
+                        textFormat: Text.PlainText
                         color: leftNav.activeIndex === index ? "#ffb020"
                              : hov.hovered ? "#00e5ff" : "#8aa2b3"
                         font.family: "JetBrainsMono Nerd Font"
@@ -64,6 +65,7 @@ SciFiPanel {
 
                     Text {
                         text: modelData.label
+                        textFormat: Text.PlainText
                         color: leftNav.activeIndex === index ? "#ffb020"
                              : hov.hovered ? "#ffffff" : "#d8f6ff"
                         font.family: "Inter, sans-serif"

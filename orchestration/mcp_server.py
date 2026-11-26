@@ -294,6 +294,12 @@ class OrchestratorMCP:
                        exit_code=result['exit_code'], output=sanitize(result['output'])['data'],
                        output_truncated=result['output_truncated'], verification=evidence,
                        summary='Worker returned; inspect output and verification scope. Functional success is not established.')
+            if result.get('auto_healed'):
+                job['auto_healed'] = True
+            if result.get('initial_agent') and result.get('agent') != result.get('initial_agent'):
+                job['effective_agent'] = result['agent']
+            if result.get('failover_history'):
+                job['failover_history'] = result['failover_history']
             self._save(job)
         except Exception as error:
             job = self._get(identity)

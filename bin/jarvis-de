@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# JARVIS Desktop Environment — Session Launcher for Arch Linux
-export XDG_CURRENT_DESKTOP="JARVIS-DE"
-export XDG_SESSION_DESKTOP="JARVIS-DE"
-export QT_QPA_PLATFORM="wayland"
-export GDK_BACKEND="wayland,x11"
-export SDL_VIDEODRIVER="wayland"
-export CLUTTER_BACKEND="wayland"
-
-# Ensure runtime directories exist
-mkdir -p "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/jarvis"
-
-# Start JARVIS Voice Core Daemon
-systemctl --user start jarvis-voice.service 2>/dev/null || true
-
-# Launch Hyprland compositor with JARVIS configuration
-exec Hyprland
+root="$(dirname -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
+if (( $# > 1 )); then echo 'Usage: jarvis-de [--commands | --check]' >&2; exit 2; fi
+case "${1:-}" in
+    ""|--commands|--check) ;;
+    *) echo 'Usage: jarvis-de [--commands | --check]' >&2; exit 2 ;;
+esac
+if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    if [[ -n "${1:-}" ]]; then echo 'A running Hyprland session is required.' >&2; exit 1; fi
+    "$root/bin/jarvis-theme-setup"
+    export XDG_SESSION_DESKTOP=JARVIS-DE
+    exec start-hyprland
+fi
+if [[ "${1:-}" != --check ]]; then
+    current=""
+    state="$HOME/.local/state/omarchy/current/theme.name"
+    if [[ -r "$state" ]]; then current=$(<"$state"); fi
+    [[ "$current" == jarvis ]] || omarchy theme set jarvis
+    systemctl --user start jarvis-shell.service
+fi
+case "${1:-}" in
+    --check) exec "$root/ui/jarvis_shell/launch.sh" ipc call jarvis-hud-preview status ;;
+    --commands) exec "$root/ui/jarvis_shell/launch.sh" ipc call jarvis-hud-preview input ;;
+esac

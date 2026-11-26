@@ -62,14 +62,21 @@ def app_names(rows):
 
 
 def command_for(text, apps):
-    from jarvis_control.command_values import parse_control_command, protected_ranges
+    from jarvis_control.command_values import number_slots, parse_control_command, protected_ranges
     if not isinstance(text, str) or protected_ranges(text):
         return None
     parsed = parse_control_command(text)
     if parsed:
         return parsed
+    raw_clean = normalize(text.replace("'", ""))
+    if re.search(
+        r'\b(dont|do not|not|never|avoid|except|unless|if|why|explain|what|how|whether|and|then|or|phone|mobile|android|smartphone)\b',
+        raw_clean,
+    ):
+        return None
     text = normalize(text)
     text = re.sub(r'^(?:(?:hey |okay |ok )?jarvis )', '', text)
+    text = re.sub(r'^(?:can|could|would|will) you ', '', text)
     text = re.sub(r'^please ', '', text)
     text = re.sub(r' please$', '', text)
     if text in ('stop', 'stop talking', 'stop speaking', 'be quiet'):
@@ -104,9 +111,98 @@ def command_for(text, apps):
         return ('drone_control', {'action': 'appear'})
     if text in ('toggle the drone', 'toggle drone', 'drone toggle') or (re.search(r'\btoggle\b', text) and 'drone' in text):
         return ('drone_control', {'action': 'toggle'})
+    if text in ('lock screen', 'lock the screen', 'lock pc', 'lock the pc',
+                'lock computer', 'lock the computer', 'lock session', 'lock my screen', 'screen lock'):
+        return ('lock_screen', {})
+    if text in ('take a screenshot', 'take screenshot', 'capture screenshot',
+                'capture screen', 'capture the screen', 'screenshot', 'screenshot screen',
+                'take a full screenshot', 'take full screenshot', 'take a fullscreen screenshot'):
+        return ('take_screenshot', {'region': 'full'})
+    if text in ('screenshot active window', 'screenshot the active window',
+                'screenshot this window', 'screenshot window', 'screenshot the window',
+                'take a screenshot of the window', 'take a screenshot of this window',
+                'take a screenshot of the active window', 'capture active window',
+                'capture this window', 'active window screenshot'):
+        return ('take_screenshot', {'region': 'active'})
+    if text in ('workspace back', 'previous workspace', 'prev workspace', 'last workspace',
+                'go back a workspace', 'switch back a workspace', 'go to previous workspace',
+                'go to the previous workspace', 'switch to previous workspace',
+                'switch to the previous workspace', 'back to previous workspace',
+                'back to last workspace', 'go back to previous workspace',
+                'go back to the previous workspace'):
+        return ('system_control', {'action': 'workspace_back'})
+    move_ws = re.fullmatch(
+        r'(?:move|send|put) (?:(?:the |this |that |active |current )?window|(?:this|that|it)) (?:to|on|onto) workspace (.+)',
+        text,
+    )
+    if move_ws:
+        fragment = move_ws[1].strip()
+        try:
+            slots = number_slots(fragment)
+        except (ImportError, ValueError, NotImplementedError):
+            slots = []
+        if len(slots) == 1 and slots[0]['start'] == 0 and slots[0]['end'] == len(fragment):
+            val = slots[0]['value']
+            if val == int(val) and 1 <= int(val) <= 10:
+                return ('move_window_to_workspace', {'workspace': int(val)})
+    if text in ('close window', 'close the window', 'close this window', 'close that window',
+                'close active window', 'close current window', 'close this', 'close that'):
+        return ('system_control', {'action': 'window_close'})
+    if text in ('fullscreen', 'full screen', 'toggle fullscreen', 'fullscreen window',
+                'fullscreen the window', 'fullscreen this', 'fullscreen this window',
+                'make this fullscreen', 'make window fullscreen', 'make the window fullscreen',
+                'enter fullscreen', 'exit fullscreen'):
+        return ('system_control', {'action': 'window_fullscreen'})
+    if text in ('minimize', 'minimise', 'minimize window', 'minimise window',
+                'minimize the window', 'minimise the window', 'minimize this',
+                'minimize this window', 'minimize that window', 'minimize active window',
+                'minimize current window'):
+        return ('system_control', {'action': 'window_minimize'})
+    if text in ('play', 'play music', 'play the music', 'play media', 'play audio',
+                'resume music', 'resume the music', 'resume media', 'resume playback', 'resume audio'):
+        return ('system_control', {'action': 'media_play'})
+    if text in ('pause', 'pause music', 'pause the music', 'pause media', 'pause playback', 'pause audio', 'pause video'):
+        return ('system_control', {'action': 'media_pause'})
+    if text in ('play pause', 'toggle playback', 'toggle media', 'toggle music'):
+        return ('system_control', {'action': 'media_play_pause'})
+    if text in ('next track', 'next song', 'skip track', 'skip the track', 'skip song', 'skip the song',
+                'next media', 'skip this song', 'skip this track', 'next'):
+        return ('system_control', {'action': 'media_next'})
+    if text in ('previous track', 'previous song', 'prev track', 'prev song',
+                'last song', 'last track', 'previous media', 'go back a track', 'go back a song'):
+        return ('system_control', {'action': 'media_previous'})
+    audio_in = re.fullmatch(
+        r'(?:switch|change|set) (?:the )?(?:mic|microphone|audio input|input)(?: device| source)? to (.+)',
+        text,
+    )
+    if audio_in and audio_in[1].strip():
+        return ('audio_set_device', {'device': audio_in[1].strip(), 'kind': 'input', 'move_streams': True})
+    audio_out = re.fullmatch(
+        r'(?:switch|change|set) (?:the )?(?:audio|sound|audio output|output|playback)(?: device| sink)? to (.+)',
+        text,
+    )
+    if audio_out and audio_out[1].strip() and 'volume' not in audio_out[1]:
+        return ('audio_set_device', {'device': audio_out[1].strip(), 'kind': 'output', 'move_streams': True})
+    audio_out_short = re.fullmatch(
+        r'switch (?:audio |sound )?to (?:the )?(.+? (?:speakers?|headphones?|headset|earbuds?|hdmi))',
+        text,
+    )
+    if audio_out_short and audio_out_short[1].strip():
+        return ('audio_set_device', {'device': audio_out_short[1].strip(), 'kind': 'output', 'move_streams': True})
     nav_match = re.fullmatch(r'(?:navigate to|go to|open|show) (?:the |my )?(downloads|documents|pictures|projects|videos|music|desktop)(?: folder| directory| section)?', text)
     if nav_match:
         return ('file_operation', {'action': 'navigate', 'path': nav_match[1].capitalize()})
+    focus_match = (
+        re.fullmatch(r'focus (?:on )?(?:the )?(.+?)(?: window)?', text)
+        or re.fullmatch(r'(?:switch to|bring up|activate) (?:the )?(.+?) window', text)
+    )
+    if focus_match:
+        target = focus_match[1].strip()
+        if target and target not in ('this', 'that', 'it', 'workspace'):
+            return ('system_control', {'action': 'window_focus', 'target': target})
+    switch_app = re.fullmatch(r'(?:switch to|focus) (?:the )?(.+)', text)
+    if switch_app and switch_app[1] in apps:
+        return ('system_control', {'action': 'window_focus', 'target': switch_app[1]})
     match = re.fullmatch(r'(?:open|launch|start) (.+)', text)
     if match and match[1] in apps:
         return ('launch_app', {'app': apps[match[1]]})
@@ -117,12 +213,17 @@ def could_be_command(text):
     """Release conversational audio early; partial text never executes tools."""
     text = normalize(text)
     text = re.sub(r'^(?:(?:hey |okay |ok )?jarvis(?: |$))', '', text)
+    text = re.sub(r'^(?:can|could|would|will) you(?: |$)', '', text)
     text = re.sub(r'^please(?: |$)', '', text)
     return bool(text and text.split()[0] in {
         'open', 'launch', 'start', 'volume', 'brightness', 'set', 'increase',
-        'decrease', 'turn', 'switch', 'workspace', 'go', 'stop', 'be',
-        'standby', 'stand', 'mute', 'unmute', 'navigate',
-        'drone', 'disappear', 'disapper', 'appear', 'hide', 'show', 'cloak', 'uncloak', 'deploy', 'dismiss', 'toggle', 'vanish', 'make', 'bring', 'close'})
+        'decrease', 'turn', 'switch', 'change', 'workspace', 'go', 'stop', 'be',
+        'standby', 'stand', 'mute', 'unmute', 'navigate', 'previous', 'prev', 'last',
+        'drone', 'disappear', 'disapper', 'appear', 'hide', 'show', 'cloak', 'uncloak',
+        'deploy', 'dismiss', 'toggle', 'vanish', 'make', 'bring', 'close', 'fullscreen',
+        'full', 'minimize', 'minimise', 'focus', 'activate', 'move', 'send', 'put',
+        'take', 'capture', 'screenshot', 'lock', 'screen', 'play', 'pause', 'resume',
+        'skip', 'next', 'audio', 'sound', 'media', 'music', 'window'})
 
 
 class WhistleClient:

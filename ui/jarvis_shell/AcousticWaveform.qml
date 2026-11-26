@@ -1,9 +1,12 @@
 import QtQuick
+import "style"
 
 Item {
     id: wave
     property real audioLevel: 0.1
-    property string voiceState: "listening" // listening | thinking | speaking | idle
+    property string voiceState: "idle" // listening | speaking | thinking | idle | standby
+    property bool muted: false
+    property bool reducedMotion: false
     property int barCount: 56
     property real barWidth: 4.5
     property real maxHeight: 84
@@ -17,7 +20,16 @@ Item {
     Timer {
         interval: 16
         repeat: true
-        running: true
+        running: wave.visible && !wave.muted && !wave.reducedMotion && !Style.reduceMotion
+            && (wave.voiceState === "listening" || wave.voiceState === "speaking")
+        onRunningChanged: {
+            if (!running) {
+                for (var i = 0; i < repeater.count; i++) {
+                    var item = repeater.itemAt(i);
+                    if (item) item.level = 0.1;
+                }
+            }
+        }
         onTriggered: {
             var speed = wave.voiceState === "speaking" ? 0.24
                       : wave.voiceState === "thinking" ? 0.14
@@ -83,7 +95,7 @@ Item {
                 }
 
                 Behavior on height {
-                    NumberAnimation { duration: 50; easing.type: Easing.OutQuad }
+                    NumberAnimation { duration: Style.duration(50); easing.type: Easing.OutCubic }
                 }
             }
         }

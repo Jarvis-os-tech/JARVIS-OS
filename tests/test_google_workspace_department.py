@@ -64,4 +64,4 @@ async def test_unified_jarvis_catalog_lists_google_workspace_department():
     assert {agent["name"] for agent in result["agents"] if agent.get("department") == "Google Workspace"} == {
         "Gmail Agent", "Calendar Agent", "Tasks Agent", "Drive Agent", "Docs Agent", "Sheets Agent",
     }
-    assert result["summary"].startswith("JARVIS has 38 registered agents.")
+    assert result["summary"].startswith("JARVIS has 62 registered agents.")

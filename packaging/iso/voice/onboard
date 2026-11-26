@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -eu
+umask 077
+base=/opt/voice-os
+speak() { pw-play "$base/prompts/$1.wav" || true; }
+settings="$HOME/.config/jarvis-voice"
+mkdir -p "$settings"
+if [[ ! -s "$settings/profile.json" || ! -s "$settings/env" ]]; then
+speak welcome
+echo "Welcome to JARVIS OS"
+echo "First, connect to the internet. Wired and VM connections usually connect automatically."
+while true; do
+    nmcli -t -f DEVICE,STATE device status || true
+    read -rp "Press Enter to check internet, or type setup to choose a network: " choice
+    if [[ "$choice" == setup ]]; then nmtui; continue; fi
+    if curl -fsS --max-time 12 https://aistudio.google.com/ -o /dev/null; then break; fi
+    echo "Google AI Studio could not be reached. Check the connection and retry."
+done
+if [[ ! -s "$settings/env" ]]; then
+    export JARVIS_SETUP_TEMP=$(mktemp "$settings/.key.XXXXXX")
+    trap 'rm -f -- "$JARVIS_SETUP_TEMP"' EXIT
+speak key
+    qs -p "$base/ui/KeySetup.qml"
+    test -s "$JARVIS_SETUP_TEMP" || exit 1
+    mv -- "$JARVIS_SETUP_TEMP" "$settings/env"
+    trap - EXIT
+fi
+if [[ ! -f "$settings/profile.json" ]]; then
+speak assistant
+    read -rp "What would you like to call me? [Jarvis] " assistant
+speak user
+    read -rp "What should I call you? " username
+    jq -n --arg assistant "${assistant:-Jarvis}" --arg user "$username" '{assistant:$assistant,user:$user}' > "$settings/profile.json"
+fi
+speak ready
+echo "Welcome to your own personal OS."
+fi
+cd "$base/runtime"
+export GOOGLE_GENAI_API_VERSION=v1beta
+export PYTHONPATH="$PWD:$base/site" PYTHONDONTWRITEBYTECODE=1
+exec "$base/python/bin/python3.13" -m voice_layer run

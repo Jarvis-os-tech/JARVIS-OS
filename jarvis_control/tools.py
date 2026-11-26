@@ -21,6 +21,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,7 @@ from . import capabilities, page_text
 from .config import Config
 from .keys import normalise_key, normalise_mods
 from .system_control import SCHEMA as SYSTEM_CONTROL_SCHEMA
+from .system_control_extension import SCHEMA as SYSTEM_CONTROL_EXTENSION_SCHEMA
 from .security import dispatch_literal_error, child_env
 
 QUERY_KINDS = {
@@ -573,6 +575,8 @@ TOOL_SCHEMAS = [
             "type": "object",
             "properties": {
                 "text": {"type": "string"},
+                "target_window": {"type": "string", "description": "Optional window/app name or title to focus before typing."},
+                "press_enter": {"type": "boolean", "description": "Optional flag to press Return after typing."},
             },
             "required": ["text"],
             "additionalProperties": False,
@@ -1013,16 +1017,18 @@ TOOL_SCHEMAS = [
     {
         "name": "clipboard",
         "description": (
-            "Read or write the system clipboard. Reading gives exact characters where "
-            "read_screen only guesses at pixels: have the application copy something "
-            "(CTRL+C, or CTRL+A then CTRL+C for a page) and read it here. Writing leaves "
-            "text for the user to paste."
+            "Read, write, inspect cliphist history, or paste a history item via the system clipboard. "
+            "Reading gives exact characters where read_screen only guesses at pixels. "
+            "Use action='history' to list recent cliphist items and action='paste_item' with item_id to restore and paste one."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["read", "write"]},
+                "action": {"type": "string", "enum": ["read", "write", "history", "paste_item"]},
                 "text": {"type": "string", "description": "What to copy (write only)."},
+                "item_id": {"type": "string", "description": "Cliphist entry id or 1-based index from history (paste_item only)."},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 50, "description": "Maximum history items to return (history only, default 10)."},
+                "paste": {"type": "boolean", "description": "Dispatch verified paste shortcut into focused window after copying (paste_item only, default true)."},
             },
             "required": ["action"],
             "additionalProperties": False,
@@ -1190,6 +1196,7 @@ SYSTEM_QUERIES["os"] = _os_report
 
 
 TOOL_SCHEMAS.append(SYSTEM_CONTROL_SCHEMA)
+TOOL_SCHEMAS.append(SYSTEM_CONTROL_EXTENSION_SCHEMA)
 from .phone_control import SCHEMA as PHONE_CONTROL_SCHEMA
 TOOL_SCHEMAS.append(PHONE_CONTROL_SCHEMA)
 from .mobile_pairing import SCHEMA as PHONE_PAIR_SCHEMA
@@ -1379,7 +1386,7 @@ SHOW_WIDGET_SCHEMA = {
     'description': (
         'Show an on-screen contextual widget card on the desktop. '
         'Use when the user explicitly asks to show, display, or view details, notes, summaries, tables, charts, images, or PiP. '
-        'Supports kinds: "text" (markdown text), "table", "chart", "qr", "image", "pip", "progress", or "view". '
+        'Use workspace for coordinated brief/files/ideas/plan/tasks panels; send increasing data revision and the same widget_id. '
         'Default presentation is "floating".'
     ),
     'input_schema': {
@@ -1387,7 +1394,7 @@ SHOW_WIDGET_SCHEMA = {
         'properties': {
             'kind': {
                 'type': 'string',
-                'enum': ['text', 'table', 'chart', 'qr', 'image', 'pip', 'progress', 'view'],
+                'enum': ['workspace', 'metric', 'list', 'actions', 'form', 'choices', 'text', 'table', 'chart', 'qr', 'image', 'pip', 'progress', 'view'],
                 'description': 'Type of widget card to render.'
             },
             'title': {
@@ -1407,6 +1414,8 @@ SHOW_WIDGET_SCHEMA = {
                 'enum': ['floating', 'canvas'],
                 'default': 'floating'
             },
+            'revision': {'type': 'integer', 'minimum': 0, 'description': 'Increasing source revision; older updates are ignored.'},
+            'reopen': {'type': 'boolean', 'description': 'True only for explicit user reopening after dismissal.'},
             'expires_seconds': {
                 'type': 'integer',
                 'description': 'Lifetime in seconds before auto-dismissal (default 60).',
@@ -1430,7 +1439,7 @@ MANAGE_WIDGET_SCHEMA = {
         'properties': {
             'action': {
                 'type': 'string',
-                'enum': ['dismiss', 'clear', 'clear_all', 'status', 'pin', 'unpin'],
+                'enum': ['dismiss', 'clear', 'clear_all', 'status', 'pin', 'unpin', 'focus'],
                 'description': 'Management action to perform.'
             },
             'widget_id': {
@@ -1498,12 +1507,14 @@ FILE_OPERATION_SCHEMA = {
         'properties': {
             'action': {
                 'type': 'string',
-                'enum': ['read', 'write', 'append', 'list', 'make_dir', 'copy', 'move', 'delete', 'search', 'grep', 'inspect', 'navigate']
+                'enum': ['read', 'write', 'append', 'list', 'make_dir', 'copy', 'move', 'delete', 'search', 'grep', 'inspect', 'navigate', 'recent']
             },
             'path': {'type': 'string', 'description': 'Target file or directory path'},
             'destination': {'type': 'string', 'description': 'Destination path for copy or move'},
             'content': {'type': 'string', 'description': 'Text content to write or append'},
             'query': {'type': 'string', 'description': 'Search pattern or text to grep'},
+            'extension': {'type': 'string', 'description': 'Optional file extension filter (e.g. pdf) for recent'},
+            'limit': {'type': 'integer', 'description': 'Maximum recent files to return (default 10)'},
             'overwrite': {'type': 'boolean', 'description': 'Overwrite existing file (default: false)'},
             'recursive': {'type': 'boolean', 'description': 'Recursive directory delete/search (default: false)'}
         },
@@ -1958,6 +1969,7 @@ class Executor:
         self.on_action = on_action or (lambda name, desc: None)
         self._pending: tuple[str, dict] | None = None
         self._pending_time: float | None = None
+        self._pending_id: str | None = None
         self.transcript: list[str] = []
         # The window the last web_search opened, so the next one can replace it.
         self._last_search_window: str | None = None
@@ -2099,6 +2111,12 @@ class Executor:
             )
         ) or (
             name == 'system_update' and args.get('action') in ('check', 'status')
+        ) or (
+            name == 'system_control_extension' and str(args.get('action', '')) in (
+                'network_status', 'wifi_scan', 'wifi_saved', 'vpn_list',
+                'bt_status', 'bt_scan', 'bt_devices', 'process_list',
+                'screenshot_full', 'screenshot_region', 'screenshot_window',
+            )
         )
         try:
             if not read_only:
@@ -2143,6 +2161,7 @@ class Executor:
                     held = self.describe(*self._pending)
                     self._pending = None
                     self._pending_time = None
+                    self._pending_id = None
                     self.transcript.append(f"EXPIRED {held}")
                     return None
             return self._pending
@@ -2152,6 +2171,27 @@ class Executor:
         with self._lock:
             self._pending = val
             self._pending_time = time.monotonic() if val is not None else None
+            self._pending_id = uuid.uuid4().hex if val is not None else None
+
+    def pending_approval(self) -> dict | None:
+        # Status runs on the voice loop while the worker can hold the execution lock.
+        if not self._lock.acquire(blocking=False):
+            return None
+        try:
+            item = self.pending
+            if item:
+                return {"id": self._pending_id, "description": self.describe(*item)}
+            return None
+        finally:
+            self._lock.release()
+
+    def resolve_approval(self, request_id: str, approve: bool) -> Result:
+        with self._lock:
+            if not self.pending or request_id != self._pending_id:
+                return Result(False, "This approval is no longer pending")
+            if approve:
+                return self.run_pending()
+            return Result(True, f"Cancelled: {self.drop_pending()}")
 
     def run_pending(self) -> Result:
         """Execute the action the user just confirmed out loud."""
@@ -2264,8 +2304,13 @@ class Executor:
         if name == "wait_for":
             return f'wait for {args.get("what", "")} {args.get("value", "")!r}'
         if name == "clipboard":
-            if args.get("action") == "write":
+            act = args.get("action")
+            if act == "write":
                 return f'copy to clipboard: {str(args.get("text", ""))[:60]!r}'
+            if act == "history":
+                return "list clipboard history"
+            if act == "paste_item":
+                return f'paste clipboard history item {args.get("item_id", "")}'
             return "read the clipboard"
         if name == "web_search":
             scope = args.get("scope", "web")
@@ -3429,26 +3474,123 @@ class Executor:
                         "Mention that only if the user asks why.")
         return Result(True, summary)
 
-    def _tool_type_text(self, text: str) -> Result:
+    def _tool_type_text(self, text: str, target_window: str = "", press_enter: bool = False) -> Result:
+        if target_window and str(target_window).strip():
+            focus_res = self._tool_system_control('window_focus', target=str(target_window).strip())
+            if not focus_res.ok:
+                return focus_res
+            time.sleep(0.08)
         window, why = self._window_geometry('activewindow')
         if window is None:
             return Result(False, why or 'No focused window was observed; text was not typed')
-        browser = (window or {}).get('class', '').lower()
-        if window and window.get('xwayland') and (browser.startswith('chrome-') or browser in {
-                'google-chrome', 'chromium', 'brave-browser', 'firefox'}):
-            address = window['address']
+        win_class = (window or {}).get('class', '').lower()
+        address = window['address']
+        terminal_classes = ('foot', 'kitty', 'alacritty', 'ghostty', 'wezterm', 'konsole', 'terminal', 'xterm', 'gnome-terminal', 'st')
+        paste_classes = (
+            'antigravity', 'code', 'cursor', 'electron', 'obsidian', 'discord', 'slack',
+            'google-chrome', 'chromium', 'brave-browser', 'brave', 'firefox', 'zen',
+            'vivaldi', 'opera', 'teams', 'spotify', 'jetbrains',
+        )
+        is_terminal = any(word in win_class for word in terminal_classes)
+        is_paste_target = (
+            win_class.startswith('chrome-')
+            or any(cls == win_class or cls in win_class for cls in paste_classes)
+        )
+
+        # Optional tmux pane snapshot before input (only when real tmux binary + matching pane exist)
+        tmux_bin = shutil.which('tmux')
+        pane_id = None
+        before_pane = None
+        if is_terminal and tmux_bin and Path(tmux_bin).name == 'tmux' and isinstance(window.get('pid'), int):
+            try:
+                panes_run = subprocess.run(
+                    [tmux_bin, 'list-panes', '-a', '-F', '#{pane_pid}\t#{pane_id}\t#{pane_active}'],
+                    capture_output=True, text=True, timeout=2, env=child_env(),
+                )
+                if panes_run.returncode == 0 and panes_run.stdout:
+                    term_pid = int(window['pid'])
+                    for line in panes_run.stdout.splitlines():
+                        parts = line.split('\t')
+                        if len(parts) < 2 or not parts[0].isdigit():
+                            continue
+                        cur = int(parts[0])
+                        matched_tree = False
+                        for _ in range(8):
+                            if cur == term_pid:
+                                matched_tree = True
+                                break
+                            if cur <= 1:
+                                break
+                            try:
+                                raw_stat = Path(f'/proc/{cur}/stat').read_text(encoding='utf-8', errors='ignore')
+                                rp = raw_stat.rfind(')')
+                                cur = int(raw_stat[rp + 2:].split()[1]) if rp != -1 else 0
+                            except (OSError, ValueError, IndexError):
+                                cur = 0
+                        if matched_tree:
+                            pane_id = parts[1].strip()
+                            if len(parts) > 2 and parts[2].strip() == '1':
+                                break
+                    if pane_id:
+                        cap = subprocess.run(
+                            [tmux_bin, 'capture-pane', '-p', '-t', pane_id, '-S', '-40'],
+                            capture_output=True, text=True, timeout=2, env=child_env(),
+                        )
+                        if cap.returncode == 0:
+                            before_pane = cap.stdout
+            except (OSError, subprocess.SubprocessError):
+                pane_id = None
+
+        def _maybe_enter_and_verify(delivery_msg: str) -> Result:
+            if press_enter:
+                cur_win, _ = self._window_geometry('activewindow')
+                if not cur_win or cur_win.get('address') != address or cur_win.get('pid') != window.get('pid'):
+                    return Result(True, json.dumps({
+                        'status': 'unknown', 'verified': False, 'dispatched': True, 'partial': True,
+                        'message': 'Focus changed before pressing Return; inspect the window before retrying.',
+                    }))
+                ret_res = self._tool_send_shortcut('', 'Return', 'address:' + address)
+                if not ret_res.ok:
+                    return Result(False, f'Typed text, but pressing Return failed: {ret_res.output}')
+            if pane_id and tmux_bin:
+                for delay in (0.06, 0.12):
+                    time.sleep(delay)
+                    try:
+                        after_cap = subprocess.run(
+                            [tmux_bin, 'capture-pane', '-p', '-t', pane_id, '-S', '-40'],
+                            capture_output=True, text=True, timeout=2, env=child_env(),
+                        )
+                        if after_cap.returncode == 0:
+                            lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+                            needle = re.sub(r'\s+', ' ', (lines[-1] if lines else text).strip()).casefold()[-48:]
+                            if len(needle) >= 2:
+                                before_n = re.sub(r'\s+', ' ', before_pane or '').casefold()
+                                after_n = re.sub(r'\s+', ' ', after_cap.stdout).casefold()
+                                if after_n.count(needle) > before_n.count(needle):
+                                    return Result(True, json.dumps({
+                                        'status': 'effect_observed', 'dispatched': True, 'verified': True,
+                                        'target': 'address:' + address, 'pid': window.get('pid'),
+                                        'message': delivery_msg + ' and observed in terminal buffer.',
+                                        'evidence': {'source': 'tmux_capture_pane', 'pane_id': pane_id},
+                                    }))
+                    except (OSError, subprocess.SubprocessError):
+                        break
+            return self._input_delivery(window, delivery_msg)
+
+        if is_paste_target:
             def focused():
                 current, _ = self._window_geometry('activewindow')
-                return bool(current and current.get('address') == address)
+                return bool(current and current.get('address') == address and current.get('pid') == window.get('pid'))
             def paste_shortcut():
                 result = self._tool_send_shortcut('CTRL', 'v', 'address:' + address)
                 if not result.ok:
                     raise RuntimeError(result.output)
             try:
                 page_text.paste_text(text, paste_shortcut, focused)
-                return self._input_delivery(window, 'Pasted text into the focused Xwayland browser')
+                return _maybe_enter_and_verify('Pasted text into the focused window')
             except (OSError, RuntimeError, page_text.SelectionError) as exc:
                 return Result(False, str(exc))
+
         # A stable full map keeps literal characters off physical Escape, Tab
         # and Return codes. Tiny injector maps can trigger focus/navigation in
         # real clients even when their process reports success.
@@ -3456,18 +3598,16 @@ class Executor:
                               '--text'], input_text=text)
         if not result.ok:
             if result.output.startswith('Unsupported literal text:'):
-                address = window['address']
                 def focused():
                     current, _ = self._window_geometry('activewindow')
                     return bool(current and current.get('address') == address and current.get('pid') == window.get('pid'))
                 def paste():
-                    terminal = any(word in browser for word in ('foot', 'kitty', 'alacritty', 'ghostty', 'terminal'))
-                    receipt = self._tool_send_shortcut('CTRL SHIFT' if terminal else 'CTRL', 'v', 'address:'+address)
+                    receipt = self._tool_send_shortcut('CTRL SHIFT' if is_terminal else 'CTRL', 'v', 'address:' + address)
                     if not receipt.ok:
                         raise RuntimeError(receipt.output)
                 try:
                     page_text.paste_text(text, paste, focused)
-                    return self._input_delivery(window, 'Literal content pasted into the focused window')
+                    return _maybe_enter_and_verify('Literal content pasted into the focused window')
                 except (OSError, RuntimeError, page_text.SelectionError) as error:
                     return Result(False, str(error))
             return result
@@ -3475,7 +3615,7 @@ class Executor:
         if not current or current.get('address') != window.get('address') or current.get('pid') != window.get('pid'):
             return Result(True, json.dumps({'status': 'unknown', 'verified': False, 'dispatched': True,
                 'message': 'Focus changed during typing; inspect the application before retrying.'}))
-        return self._input_delivery(window, 'Text delivered to the focused window')
+        return _maybe_enter_and_verify('Text delivered to the focused window')
 
     def _tool_run_shell(self, command: str) -> Result:
         if not self.config.allow_shell:
@@ -4237,16 +4377,141 @@ class Executor:
             time.sleep(gap)
 
     # -- exact text: the clipboard ------------------------------------------
-    def _validate_clipboard(self, action: str, text: str = "") -> str | None:
-        if action not in ("read", "write"):
-            return 'action must be "read" or "write"'
+    def _validate_clipboard(self, action: str, text: str = "", item_id: str = "",
+                            limit: int = 10, paste: bool = True) -> str | None:
+        if action not in ("read", "write", "history", "paste_item"):
+            return 'action must be "read", "write", "history", or "paste_item"'
         if action == "write" and not (text or "").strip():
             return "text is required to write to the clipboard"
+        if action == "history":
+            if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 50:
+                return "limit must be an integer between 1 and 50"
+        if action == "paste_item":
+            clean_id = str(item_id or "").strip()
+            if not clean_id or len(clean_id) > 32 or not re.fullmatch(r"#?[0-9A-Za-z_-]+", clean_id):
+                return "valid item_id is required for paste_item"
+            if type(paste) is not bool:
+                return "paste must be true or false"
         return None
 
-    def _tool_clipboard(self, action: str, text: str = "") -> Result:
-        if error := self._validate_clipboard(action, text):
+    def _tool_clipboard(self, action: str, text: str = "", item_id: str = "",
+                        limit: int = 10, paste: bool = True) -> Result:
+        if error := self._validate_clipboard(action, text, item_id=item_id, limit=limit, paste=paste):
             return Result(False, error)
+        if action == "history":
+            if not shutil.which("cliphist"):
+                return Result(False, "cliphist is not installed")
+            try:
+                listed = subprocess.run(["cliphist", "list"], capture_output=True, text=True,
+                                        timeout=5, env=child_env())
+            except (OSError, subprocess.SubprocessError) as exc:
+                return Result(False, f"could not read clipboard history: {exc}")
+            if listed.returncode != 0:
+                return Result(False, listed.stderr.strip() or "cliphist list failed")
+            items = []
+            for raw_line in listed.stdout.splitlines():
+                if not raw_line.strip():
+                    continue
+                if "\t" in raw_line:
+                    cid, preview = raw_line.split("\t", 1)
+                else:
+                    parts = raw_line.split(None, 1)
+                    cid = parts[0]
+                    preview = parts[1] if len(parts) > 1 else ""
+                items.append({"index": len(items) + 1, "id": cid.strip(), "preview": preview[:200]})
+                if len(items) >= limit:
+                    break
+            return Result(True, json.dumps({"status": "success", "verified": True, "count": len(items), "items": items}, ensure_ascii=False))
+
+        if action == "paste_item":
+            if not shutil.which("cliphist"):
+                return Result(False, "cliphist is not installed")
+            if not shutil.which("wl-copy"):
+                return Result(False, "wl-copy is not installed (pacman -S wl-clipboard)")
+            try:
+                listed = subprocess.run(["cliphist", "list"], capture_output=True, text=True,
+                                        timeout=5, env=child_env())
+            except (OSError, subprocess.SubprocessError) as exc:
+                return Result(False, f"could not query clipboard history: {exc}")
+            if listed.returncode != 0:
+                return Result(False, listed.stderr.strip() or "cliphist list failed")
+            entries = []
+            for raw_line in listed.stdout.splitlines():
+                if not raw_line.strip():
+                    continue
+                cid = raw_line.split("\t", 1)[0].strip() if "\t" in raw_line else raw_line.split(None, 1)[0].strip()
+                entries.append(cid)
+            clean_ref = str(item_id).strip()
+            resolved_id = clean_ref if (not clean_ref.startswith("#") and clean_ref in entries) else None
+            if resolved_id is None:
+                idx_str = clean_ref.lstrip("#")
+                if idx_str.isdigit():
+                    idx = int(idx_str)
+                    if 1 <= idx <= len(entries):
+                        resolved_id = entries[idx - 1]
+            if not resolved_id:
+                return Result(False, f"Clipboard history item '{clean_ref}' was not found")
+
+            try:
+                dec = subprocess.run(["cliphist", "decode", resolved_id], capture_output=True,
+                                     timeout=5, env=child_env())
+            except (OSError, subprocess.SubprocessError) as exc:
+                return Result(False, f"could not decode clipboard item: {exc}")
+            if dec.returncode != 0:
+                return Result(False, dec.stderr.decode(errors="replace").strip() or "cliphist decode failed")
+            decoded = dec.stdout
+
+            with tempfile.TemporaryFile() as errors:
+                try:
+                    done = subprocess.run(["wl-copy", "--"], input=decoded,
+                                          stdout=subprocess.DEVNULL, stderr=errors,
+                                          timeout=10, env=child_env())
+                except (OSError, subprocess.SubprocessError) as exc:
+                    return Result(False, f"could not write decoded item to clipboard: {exc}")
+                if done.returncode != 0:
+                    errors.seek(0)
+                    return Result(False, errors.read().decode(errors="replace").strip() or "wl-copy failed")
+
+            verified = False
+            if shutil.which("wl-paste"):
+                try:
+                    if b"\x00" not in decoded:
+                        rb = subprocess.run(["wl-paste", "--no-newline"], capture_output=True, timeout=3, env=child_env())
+                        verified = rb.returncode == 0 and rb.stdout == decoded
+                    else:
+                        rb = subprocess.run(["wl-paste", "--list-types"], capture_output=True, timeout=3, env=child_env())
+                        verified = rb.returncode == 0 and bool(rb.stdout.strip())
+                except (OSError, subprocess.SubprocessError):
+                    pass
+                if not verified:
+                    return Result(False, "Decoded clipboard item could not be read back from wl-paste")
+
+            if not paste:
+                return Result(True, json.dumps({"status": "copied", "verified": verified, "item_id": resolved_id,
+                                                "length": len(decoded), "pasted": False}))
+
+            window, why = self._window_geometry("activewindow")
+            if window is None:
+                return Result(True, json.dumps({"status": "copied", "verified": False, "item_id": resolved_id,
+                                                "length": len(decoded), "pasted": False,
+                                                "message": why or "Copied item to clipboard, but no focused window to paste into."}))
+            address = window["address"]
+            win_class = str(window.get("class") or "").lower()
+            is_terminal = any(word in win_class for word in ("foot", "kitty", "alacritty", "ghostty", "wezterm", "konsole", "terminal", "xterm", "gnome-terminal", "st"))
+            sc_res = self._tool_send_shortcut("CTRL SHIFT" if is_terminal else "CTRL", "v", "address:" + address)
+            if not sc_res.ok:
+                return Result(False, f"Copied clipboard item {resolved_id}, but paste shortcut failed: {sc_res.output}")
+            after, _ = self._window_geometry("activewindow")
+            focus_ok = bool(after and after.get("address") == address and after.get("pid") == window.get("pid"))
+            return Result(True, json.dumps({
+                "status": "pasted" if (verified and focus_ok) else "unverified",
+                "verified": bool(verified and focus_ok),
+                "item_id": resolved_id,
+                "length": len(decoded),
+                "pasted": True,
+                "target": "address:" + address,
+            }))
+
         if action == "write":
             if not shutil.which("wl-copy"):
                 return Result(False, "wl-copy is not installed (pacman -S wl-clipboard)")
@@ -4298,13 +4563,21 @@ class Executor:
         return got
 
     # -- the machine about itself -------------------------------------------
-    def _validate_system_control(self, action, value=None, enabled=None, workspace='', target=''):
+    def _validate_system_control(self, action, value=None, enabled=None, workspace='', target='', direction=''):
         from .system_control import validate
-        return validate(action, value, enabled, workspace, target=target)
+        return validate(action, value, enabled, workspace, target=target, direction=direction)
 
-    def _tool_system_control(self, action, value=None, enabled=None, workspace='', target=''):
+    def _tool_system_control(self, action, value=None, enabled=None, workspace='', target='', direction=''):
         from .system_control import execute
-        return execute(self, action, value, enabled, workspace, target=target)
+        return execute(self, action, value, enabled, workspace, target=target, direction=direction)
+
+    def _validate_system_control_extension(self, action, target='', password=''):
+        from .system_control_extension import validate
+        return validate(action, target, password)
+
+    def _tool_system_control_extension(self, action, target='', password=''):
+        from .system_control_extension import execute
+        return execute(self, action, target, password)
 
     def _tool_system_update(self, action: str = "check") -> Result:
         try:
@@ -4397,12 +4670,12 @@ class Executor:
         return Result(True, res.get("message", "Action cancelled."))
 
     def _tool_show_widget(self, kind: str, title: str, data_json: str, widget_id: str = "",
-                           presentation: str = "floating", expires_seconds: int = 60) -> Result:
+                           presentation: str = "floating", expires_seconds: int = 60, revision: int = 0, reopen: bool = False) -> Result:
         from ui.jarvis_widgets import backend
         try:
             data = json.loads(data_json) if isinstance(data_json, str) else data_json
             widget = backend.make_widget(kind, title, data, widget_id=widget_id,
-                                         presentation=presentation, expires_seconds=expires_seconds)
+                                         presentation=presentation, expires_seconds=expires_seconds, revision=revision, reopen=reopen)
             res = backend.shell_call("present", widget)
             return Result(True, json.dumps(res, ensure_ascii=False))
         except Exception as e:
@@ -4636,10 +4909,10 @@ class Executor:
 
     def _tool_file_operation(self, action: str, path: str = "", destination: str = "",
                              content: str = "", query: str = "", overwrite: bool = False,
-                             recursive: bool = False) -> Result:
+                             recursive: bool = False, extension: str = "", limit: int = 10) -> Result:
         import filesystem.filesystem as fs
         logging.getLogger(__name__).info('File operation action=%s',
-            action if action in {'read', 'write', 'append', 'list', 'make_dir', 'copy', 'move', 'delete', 'search', 'grep', 'inspect', 'navigate'} else 'invalid')
+            action if action in {'read', 'write', 'append', 'list', 'make_dir', 'copy', 'move', 'delete', 'search', 'grep', 'inspect', 'navigate', 'recent'} else 'invalid')
         try:
             if action == 'read':
                 res = fs.read_text(path)
@@ -4673,6 +4946,14 @@ class Executor:
                 return Result(True, json.dumps(res, ensure_ascii=False))
             elif action == 'inspect':
                 res = fs.inspect_path(path)
+                return Result(True, json.dumps(res, ensure_ascii=False))
+            elif action == 'recent':
+                res = fs.recent_files(
+                    path or None,
+                    extension=extension or None,
+                    limit=limit or 10,
+                    query=query or None,
+                )
                 return Result(True, json.dumps(res, ensure_ascii=False))
             elif action == 'navigate':
                 import re, os

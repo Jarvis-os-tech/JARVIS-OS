@@ -346,9 +346,19 @@ async def test_task_runner_plan_validation():
     with pytest.raises(TaskPlanError, match="must contain tool and args"):
         runner.start("test", json.dumps([{"tool": "write_file"}]))
 
-    # Unsupported tool
+    # Tools unavailable in the live registry are rejected by its validator.
+    unavailable_runner = TaskRunner(execute=lambda t, a: None,
+                                    validate=lambda tool, args: tool != 'unsupported_shell')
     with pytest.raises(TaskPlanError, match="unavailable tool or invalid arguments"):
-        runner.start("test", json.dumps([{"tool": "unsupported_shell", "args": {}}]))
+        unavailable_runner.start("test", json.dumps([{"tool": "unsupported_shell", "args": {}}]))
+
+    # Any enabled tool can participate, while recursion and confirmation-gated actions cannot.
+    accepted = runner.start("test", json.dumps([{"tool": "memory_status", "args": {}}]))
+    assert accepted['total_steps'] == 1
+    with pytest.raises(TaskPlanError, match="unavailable tool or invalid arguments"):
+        runner.start("test", json.dumps([{"tool": "start_task", "args": {}}]))
+    with pytest.raises(TaskPlanError, match="unavailable tool or invalid arguments"):
+        runner.start("test", json.dumps([{"tool": "shutdown_system", "args": {"confirm": True}}]))
 
     # Validator rejection
     strict_runner = TaskRunner(execute=lambda t, a: None, validate=lambda t, a: False)
@@ -356,6 +366,7 @@ async def test_task_runner_plan_validation():
         strict_runner.start("test", json.dumps([{"tool": "write_file", "args": {"path": "a"}}]))
 
     await runner.close()
+    await unavailable_runner.close()
     await strict_runner.close()
 
 
@@ -634,3 +645,53 @@ async def test_desktop_skills_task_runner_flow(tmp_path: Path):
     # list_tasks
     task_list = await skills.execute("list_tasks", {})
     assert any(t["id"] == task_id for t in task_list["tasks"])
+
+
+@pytest.mark.asyncio
+async def test_recent_files_downloads_alias_extension_and_sorting(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.delenv("XDG_DOWNLOAD_DIR", raising=False)
+    downloads = tmp_path / "Downloads"
+    sub = downloads / "nested"
+    sub.mkdir(parents=True)
+
+    old_pdf = downloads / "old_report.pdf"
+    new_pdf = sub / "latest_invoice.pdf"
+    newer_txt = downloads / "notes.txt"
+
+    old_pdf.write_text("old", encoding="utf-8")
+    new_pdf.write_text("new", encoding="utf-8")
+    newer_txt.write_text("txt", encoding="utf-8")
+
+    os.utime(old_pdf, (1_700_000_000, 1_700_000_000))
+    os.utime(new_pdf, (1_700_000_100, 1_700_000_100))
+    os.utime(newer_txt, (1_700_000_200, 1_700_000_200))
+
+    res = fs.recent_files("Downloads", extension="pdf", limit=5)
+    assert res["status"] == "ok"
+    assert res["latest"]["path"] == str(new_pdf)
+    assert [item["name"] for item in res["files"]] == ["latest_invoice.pdf", "old_report.pdf"]
+
+    res_query = fs.recent_files("downloads", extension=".pdf", query="invoice", limit=5)
+    assert res_query["count"] == 1
+    assert res_query["files"][0]["path"] == str(new_pdf)
+
+    skills = DesktopSkills()
+    try:
+        skill_res = await skills.execute("recent_files", {"directory": "Downloads", "extension": "pdf", "limit": 1})
+        assert skill_res["count"] == 1
+        assert skill_res["latest"]["name"] == "latest_invoice.pdf"
+    finally:
+        await skills.close_agent_jobs()
+
+    from jarvis_control.config import Config
+    from jarvis_control.tools import Executor
+    exec_res = Executor(Config()).call("file_operation", {
+        "action": "recent",
+        "path": str(downloads),
+        "extension": "pdf",
+        "limit": 2,
+    })
+    assert exec_res.ok
+    payload = json.loads(exec_res.output)
+    assert payload["latest"]["name"] == "latest_invoice.pdf"

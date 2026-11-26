@@ -104,6 +104,13 @@ class SystemPowerManager:
             systemctl = shutil.which("systemctl") or "/usr/bin/systemctl"
             return [systemctl, "reboot"]
         if norm in ("lock", "lock_screen", "screen_lock"):
+            jarvis_lock = shutil.which("jarvis-lock")
+            if not jarvis_lock:
+                candidate = os.path.expanduser("~/JARVIS OS/bin/jarvis-lock")
+                if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+                    jarvis_lock = candidate
+            if jarvis_lock and os.path.exists(jarvis_lock) and os.access(jarvis_lock, os.X_OK):
+                return [jarvis_lock]
             omarchy_lock = shutil.which("omarchy-system-lock") or "/usr/share/omarchy/bin/omarchy-system-lock"
             if os.path.exists(omarchy_lock) and os.access(omarchy_lock, os.X_OK):
                 return [omarchy_lock]

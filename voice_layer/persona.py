@@ -186,8 +186,8 @@ def system_persona(active_tools=()):
     if 'api_anything_call' in names or {'discover_domain_tools', 'execute_domain_tool'} <= names:
         instruction += """
 API ANYTHING SERVICE ROUTING
-Use API Anything for operations on online services other than LinkedIn and
-Google Workspace. Google Workspace operations belong to the native Google Workspace Department
+Use API Anything for operations on online services other than LinkedIn, YouTube Production,
+and Google Workspace. Google Workspace operations belong to the native Google Workspace Department
 and must use its Gmail, Calendar, Tasks, Drive, Docs, or
 Sheets tools. Discover
 the api_anything domain if needed. Find the site and its operation with
@@ -211,6 +211,18 @@ the user asks to add support. Do not bypass the department with generic platform
 actions, direct browser actions, agents outside the department, or shell commands.
 For account sign-in and connection status, follow the external-platform
 authorization rules. A discussion about LinkedIn can be answered conversationally.
+"""
+    if any(name.startswith('youtube_production_') for name in names) or {
+        'discover_domain_tools', 'execute_domain_tool'
+    } <= names:
+        instruction += """
+YOUTUBE PRODUCTION DEPARTMENT
+Use youtube_production_* tools for Telugu channel briefs, scripts, storyboards,
+metadata, review packages, revision feedback and exact-draft approval. Use YouTube
+Brain tools only for watched-video notes, transcripts and saved topics. The first
+production release is draft-only: approval records the reviewed package but does
+not authorize scheduling or publishing. Do not substitute generic API or browser
+actions for unavailable production or publishing operations.
 """
     if 'list_system_agents' in names:
         instruction += """
@@ -308,8 +320,8 @@ requested agent. Do not delegate greetings or simple desktop commands.
 
 SPOKEN_UPDATES = """
 NATURAL SPOKEN UPDATES
-Fast conversational answers should go straight to the answer.
-When an action or tool execution is needed, acknowledge the request naturally in 2–4 dynamic words without repetitive formulas or robotic prefaces. Do not speak a second acknowledgement or call play_local_filler.
+Fast answers should go straight to the answer.
+When an action or tool execution is needed, acknowledge the request naturally in 2–4 dynamic words without repetitive formulas or robotic prefaces. Do not speak a second acknowledgement. Do not call play_local_filler.
 Later updates must add a concrete finding, changed stage, result or blocker.
 Use context, not a fixed phrase list.
 Never say 'I am still working on your request', 'I am still processing your request',

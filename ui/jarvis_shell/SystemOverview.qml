@@ -77,7 +77,7 @@ SciFiPanel {
                     anchors.centerIn: parent
                     spacing: 1
                     Text { text: "CPU"; color: "#4f7285"; font.pixelSize: 8; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
-                    Text { text: Math.round(overview.cpuPercent) + "%"; color: "#00e5ff"; font.pixelSize: 13; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
+                    Text { text: Math.round(overview.cpuPercent) + "%"; textFormat: Text.PlainText; color: "#00e5ff"; font.pixelSize: 13; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
                 }
             }
 
@@ -135,7 +135,7 @@ SciFiPanel {
                     anchors.centerIn: parent
                     spacing: 1
                     Text { text: "RAM"; color: "#4f7285"; font.pixelSize: 8; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
-                    Text { text: Math.round(overview.ramPercent) + "%"; color: "#38bdf8"; font.pixelSize: 13; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
+                    Text { text: Math.round(overview.ramPercent) + "%"; textFormat: Text.PlainText; color: "#38bdf8"; font.pixelSize: 13; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
                 }
             }
 
@@ -190,7 +190,7 @@ SciFiPanel {
                     anchors.centerIn: parent
                     spacing: 1
                     Text { text: "GPU"; color: "#4f7285"; font.pixelSize: 8; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
-                    Text { text: Math.round(overview.gpuPercent) + "%"; color: "#ffb020"; font.pixelSize: 13; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
+                    Text { text: Math.round(overview.gpuPercent) + "%"; textFormat: Text.PlainText; color: "#ffb020"; font.pixelSize: 13; font.weight: Font.Bold; anchors.horizontalCenter: parent.horizontalCenter }
                 }
             }
         }
@@ -238,9 +238,9 @@ SciFiPanel {
         Row {
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: 8
-            Text { text: "Temp: " + Math.round(overview.tempC) + "°C"; color: "#4f7285"; font.pixelSize: 8; font.family: "JetBrainsMono Nerd Font, monospace" }
+            Text { text: "Temp: " + Math.round(overview.tempC) + "°C"; textFormat: Text.PlainText; color: "#4f7285"; font.pixelSize: 8; font.family: "JetBrainsMono Nerd Font, monospace" }
             Text { text: "|"; color: "#1e3040"; font.pixelSize: 8 }
-            Text { text: "GPU: " + Math.round(overview.gpuTempC) + "°C"; color: "#4f7285"; font.pixelSize: 8; font.family: "JetBrainsMono Nerd Font, monospace" }
+            Text { text: "GPU: " + Math.round(overview.gpuTempC) + "°C"; textFormat: Text.PlainText; color: "#4f7285"; font.pixelSize: 8; font.family: "JetBrainsMono Nerd Font, monospace" }
             Text { text: "|"; color: "#1e3040"; font.pixelSize: 8 }
             Text { text: "Power: Balanced 🍃"; color: "#00f0a8"; font.pixelSize: 8; font.family: "JetBrainsMono Nerd Font, monospace" }
         }

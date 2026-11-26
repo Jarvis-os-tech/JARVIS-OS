@@ -122,6 +122,10 @@ class OrchestrationDomain:
             raise SkillError(str(error)) from None
 
     async def _adapter_list_system_agents(self):
+        from departments.cli_agent import AGENT_NAMES as CLI_AGENT_NAMES
+        from departments.api_agent import AGENT_NAMES as API_AGENT_NAMES
+        from departments.youtube_production import AGENT_NAMES as YOUTUBE_PRODUCTION_AGENT_NAMES
+
         result = self._agent_orchestrator.discover()
         department_agents = {
             'LinkedIn': ('ProfileOptimizer', 'ContentPlanner', 'PostWriter', 'ReplyHandler',
@@ -131,8 +135,11 @@ class OrchestrationDomain:
                        'RetrievalRouter', 'DayRolloverCompactor', 'VaultPruner'),
             'YouTube Brain': ('History Classifier', 'Transcript Fetcher', 'Video Summarizer',
                               'Note Classifier', 'Final Reviewer'),
+            'YouTube Production': YOUTUBE_PRODUCTION_AGENT_NAMES,
             'Google Workspace': ('Gmail Agent', 'Calendar Agent', 'Tasks Agent', 'Drive Agent',
                                  'Docs Agent', 'Sheets Agent'),
+            'API Agent': API_AGENT_NAMES,
+            'CLI Agent': CLI_AGENT_NAMES,
         }
         result['agents'].append({
             'name': 'Update Agent',
@@ -191,18 +198,28 @@ class OrchestrationDomain:
                 options['model'] = model
             if visible is not None:
                 options['visible'] = visible
+            if agent == 'antigravity':
+                options['auto_failover'] = False
             return self._agent_orchestrator.delegate(agent, prompt, workspace, timeout_seconds, **options)
         except (OrchestrationError, ValueError) as error:
             raise SkillError(str(error)) from None
 
-    async def _adapter_delegate_team(self, goal, assignments, workspace, timeout_seconds=900):
+    async def _adapter_delegate_team(self, goal, assignments, workspace, timeout_seconds=900, max_retries_per_stage=0):
         try:
             assignments = [
                 {**assignment, 'prompt': assignment['prompt'].strip()}
                 for assignment in assignments
             ]
+            if max_retries_per_stage:
+                try:
+                    return self._agent_orchestrator.delegate_team(
+                        goal, assignments, workspace, timeout_seconds, max_retries_per_stage=max_retries_per_stage)
+                except TypeError:
+                    pass
             return self._agent_orchestrator.delegate_team(
                 goal, assignments, workspace, timeout_seconds)
+        except OrchestrationError as error:
+            raise SkillError(str(error)) from None
         except OrchestrationError as error:
             raise SkillError(str(error)) from None
 

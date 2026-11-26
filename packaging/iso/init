@@ -1,0 +1,36 @@
+#!/bin/busybox sh
+set -eu
+export PATH=/bin:/usr/bin
+/bin/busybox --install -s /bin
+mount -t devtmpfs devtmpfs /dev
+exec </dev/console >/dev/console 2>&1
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t tmpfs tmpfs /run
+mkdir -p /run/live/media /run/live/image /run/live/lower /run/live/changes
+for module in isofs squashfs loop overlay sr_mod sd_mod ata_piix ahci xhci_pci usb_storage uas virtio_scsi; do
+    modprobe "$module" || true
+done
+for attempt in $(seq 1 40); do
+    media=$(blkid -t LABEL=JARVIS_OS -o device 2>/dev/null | head -n 1)
+    if [ -n "$media" ] && mount -t iso9660 -o ro "$media" /run/live/media; then break; fi
+    sleep 1
+done
+test -f /run/live/media/jarvis/system.sfs
+mount -t squashfs -o ro,loop /run/live/media/jarvis/system.sfs /run/live/image
+mount -t ext4 -o ro,noload,loop /run/live/image/root.ext4 /run/live/lower
+mkdir -p /run/live/changes/upper /run/live/changes/work
+mount -t overlay overlay -o lowerdir=/run/live/lower,upperdir=/run/live/changes/upper,workdir=/run/live/changes/work /newroot
+mkdir -p /newroot/opt/voice-os
+mount --bind /run/live/image/voice-os /newroot/opt/voice-os
+home_disk=$(/usr/bin/blkid -L JARVIS_HOME | head -n 1)
+if [ -n "$home_disk" ]; then
+    mkdir -p /run/live/personal
+    mount -t ext4 -o nodev,nosuid "$home_disk" /run/live/personal
+    if [ ! -d /run/live/personal/jarvis ]; then
+        cp -a /newroot/home/jarvis /run/live/personal/jarvis
+    fi
+    mount --bind /run/live/personal/jarvis /newroot/home/jarvis
+fi
+for fs in dev proc sys run; do mount --move "/$fs" "/newroot/$fs"; done
+exec switch_root /newroot /sbin/init

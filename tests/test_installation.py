@@ -76,7 +76,7 @@ def test_installer_preserves_existing_runtime_pointer_and_release(tmp_path):
     release = runtime / 'releases/existing'
     release.mkdir(parents=True)
     for package in ('voice_layer', 'orchestration', 'contracts', 'learning', 'configs', 'core'):
-        shutil.copytree(root / package, release / package)
+        shutil.copytree(root / package, release / package, symlinks=True, ignore_dangling_symlinks=True)
     shutil.copy2(root / 'requirements.txt', release / 'requirements.txt')
     (release / 'bin').mkdir()
     for command in ('jarvis-voice', 'jarvis', 'jarvis-memory', 'jarvis-control'):

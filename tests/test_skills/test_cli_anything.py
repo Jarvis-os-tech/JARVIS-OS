@@ -41,6 +41,19 @@ class CLIAnythingSkillTests(unittest.IsolatedAsyncioTestCase):
                 adapter_method = DesktopSkills.ADAPTERS[spec['adapter']]
                 self.assertTrue(hasattr(self.skills, adapter_method))
 
+    async def test_cli_hub_list_routes_through_department(self):
+        from departments.cli_agent import CLIAgentDepartment
+
+        original = CLIAgentDepartment.execute
+
+        async def execute(department, tool, arguments):
+            return await original(department, tool, arguments)
+
+        with patch.object(CLIAgentDepartment, 'execute', autospec=True, side_effect=execute) as route:
+            with patch.object(self.skills, '_run', new_callable=AsyncMock, return_value='[]'):
+                self.assertEqual(await self.skills.execute('cli_hub_list', {}), [])
+            route.assert_awaited_once()
+
     async def test_cli_hub_list_returns_parsed_json(self):
         with patch.object(self.skills, '_run', new_callable=AsyncMock) as mock_run:
             mock_run.return_value = json.dumps({'categories': ['image', 'video']})

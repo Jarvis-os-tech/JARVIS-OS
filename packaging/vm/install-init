@@ -1,0 +1,68 @@
+#!/bin/busybox sh
+set -eu
+export PATH=/bin:/usr/bin
+/bin/busybox --install -s /bin
+mount -t devtmpfs devtmpfs /dev
+ln -s /proc/self/fd /dev/fd
+ln -s /proc/self/fd/0 /dev/stdin
+ln -s /proc/self/fd/1 /dev/stdout
+ln -s /proc/self/fd/2 /dev/stderr
+exec </dev/console >/dev/console 2>&1
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t tmpfs tmpfs /run
+mount -o ro /dev/vdb /media
+mount /dev/vda /target
+mkdir -p /target/var/lib/pacman /target/dev /target/sys /target/proc /target/run
+for fs in dev sys proc run; do mount --bind "/$fs" "/target/$fs"; done
+# The builder checks every distribution archive against the host's repository database.
+printf '[options]\nArchitecture = x86_64\nSigLevel = Never\n' >/run/offline.conf
+pacman -U --root /target --config /run/offline.conf --noconfirm /media/*.pkg.tar.zst
+chroot /target useradd -m -s /bin/bash jarvis
+mkdir -p /target/etc/systemd/system/getty@tty1.service.d
+cat >/target/etc/systemd/system/getty@tty1.service.d/autologin.conf <<'UNIT'
+[Service]
+ExecStart=
+ExecStart=-/usr/bin/agetty --autologin jarvis --noclear %I linux
+UNIT
+cat >/target/home/jarvis/.bash_profile <<'PROFILE'
+if [[ $(tty) == /dev/tty1 ]]; then
+    export QT_QUICK_BACKEND=software
+    (
+        [[ -e "$HOME/launcher.png" ]] && exit
+        for ((attempt=0; attempt<45; attempt++)); do
+            for socket in "$XDG_RUNTIME_DIR"/wayland-*; do
+                [[ -S "$socket" ]] || continue
+                export WAYLAND_DISPLAY="${socket##*/}"
+                instance=$(hyprctl instances -j | jq -r '.[0].instance // empty')
+                [[ -n "$instance" ]] || continue
+                export HYPRLAND_INSTANCE_SIGNATURE="$instance"
+                hyprctl layers >"$HOME/layers.txt"
+                if grep -q 'jarvis-core' "$HOME/layers.txt"; then
+                    sleep 8
+                    qs log --path /usr/lib/jarvis-de/ui/JarvisTheme.qml >"$HOME/shell.log" 2>&1 || true
+                    grim "$HOME/desktop.png" || exit 1
+                    palette=(qs ipc --path /usr/lib/jarvis-de/ui/JarvisTheme.qml call jarvis-hud-preview togglePalette)
+                    "${palette[@]}" || exit 1
+                    sleep 1
+                    grim "$HOME/launcher.png"
+                    "${palette[@]}"
+                    sync
+                    exit
+                fi
+            done
+            sleep 1
+        done
+        qs log --path /usr/lib/jarvis-de/ui/JarvisTheme.qml >"$HOME/shell.log" 2>&1
+    ) >"$HOME/preview-check.log" 2>&1 &
+    exec jarvis-de >>"$HOME/desktop.log" 2>&1
+fi
+PROFILE
+# The local-only demo account can unlock its own screen.
+echo 'jarvis:jarvis' | chroot /target chpasswd
+chroot /target chown jarvis:jarvis /home/jarvis/.bash_profile
+echo jarvis-preview >/target/etc/hostname
+chroot /target systemctl enable NetworkManager.service
+sync
+echo JARVIS_INSTALL_COMPLETE
+poweroff -f

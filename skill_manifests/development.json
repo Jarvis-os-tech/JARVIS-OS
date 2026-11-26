@@ -3,12 +3,12 @@
   "skills": [
     {
       "name": "request_capability",
-      "description": "Use when the user asks for a capability that is not currently available. Records the exact original request and starts a development proposal for the missing skill. Tell the user the capability is not available yet and that it will be built; do not pretend the requested action happened.",
+      "description": "Start a CLI Agent development proposal for a missing capability. The supplied request is used for NVIDIA NIM planning. Keep credentials, private content, and personal data out of the request. Report proposal status separately from the requested application's task outcome.",
       "adapter": "evolution.request",
       "parameters_json_schema": {
         "type": "object",
         "properties": {
-          "request": {"type": "string", "description": "The exact unsupported user request."},
+          "request": {"type": "string", "description": "The unsupported action and target interface, without credentials or personal data."},
           "workspace": {"type": "string", "description": "Absolute path to the clean source repository root."},
           "agent": {"type": "string", "enum": ["codex", "claude", "opencode", "gemini", "hermes", "omp"]}
         },

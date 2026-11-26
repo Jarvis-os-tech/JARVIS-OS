@@ -6,6 +6,21 @@ Fixes from 30 Oct 2026 audit:
 - Fix 3: 400 on resumed session = resume rejection (fresh, delay=0); 400 without resume = fatal.
 """
 from dataclasses import dataclass
+import os
+import re
+
+from core.env import is_placeholder
+
+
+def live_api_keys(primary, environ=None):
+    environ = os.environ if environ is None else environ
+    numbered = sorted(
+        (name for name in environ if re.fullmatch(r'GEMINI_API_KEY_[0-9]+', name)),
+        key=lambda name: int(name.rsplit('_', 1)[1]),
+    )
+    candidates = [primary, environ.get('GEMINI_API_KEY'),
+                  environ.get('GOOGLE_API_KEY'), *(environ[name] for name in numbered)]
+    return tuple(dict.fromkeys(key.strip() for key in candidates if not is_placeholder(key)))
 
 
 @dataclass(frozen=True)
@@ -36,13 +51,19 @@ class ConnectionRecovery:
                 continue
             if isinstance(value, int) and not isinstance(value, bool):
                 return value
+            if isinstance(value, str) and value.isdigit():
+                return int(value)
+        msg = str(error)
+        m = re.search(r'\b(?:code\s*=\s*|status(?:\s*code)?\s*[:=]\s*|HTTP\s+)?(100[0-9]|429|50[0-4]|40[0-4])\b', msg)
+        if m:
+            return int(m.group(1))
         return None
 
     @staticmethod
     def _is_transient(error, code: int | None) -> bool:
         return (isinstance(error, (ConnectionError, TimeoutError, OSError, BufferError))
                 or code in ConnectionRecovery._TRANSIENT_CODES
-                or type(error).__name__ in ('APIError', 'ConnectionClosedError'))
+                or type(error).__name__ in ('APIError', 'ConnectionClosedError', 'ConnectionClosed'))
 
     def decide(
         self,
@@ -52,6 +73,10 @@ class ConnectionRecovery:
         session_seconds: float = 0.0,
     ) -> RecoveryDecision:
         code = self._error_code(error)
+        err_msg = str(error).lower()
+        is_already_connected = ("already connected" in err_msg or "existing client" in err_msg)
+        if is_already_connected and code is None:
+            code = 1008
 
         if session_opened:
             self._failed_resume_attempts = 0
@@ -62,12 +87,20 @@ class ConnectionRecovery:
         if not resuming:
             self._failed_resume_attempts = 0
 
-        # Fix 3: 400/1008 on a resumed session = resume rejection → fresh.
-        if resuming and code in (400, 1008):
+        # Fix 1008 / "session is already connected to an existing client":
+        # Google's server takes several seconds to clear the previous socket connection.
+        # Reconnection attempts < 6s fail in a loop. Enforce minimum 6s backoff and reset to fresh session.
+        if code == 1008 or is_already_connected:
             self._failed_resume_attempts = 0
             self._failures += 1
-            delay = 2.0 if code == 1008 else 0.0
-            return RecoveryDecision(delay, True, False, code)
+            delay = min(30.0, max(6.0, float(2 ** min(self._failures - 1, 5))))
+            return RecoveryDecision(delay, True, False, 1008)
+
+        # Fix 3: 400 on a resumed session = resume rejection → fresh.
+        if resuming and code == 400:
+            self._failed_resume_attempts = 0
+            self._failures += 1
+            return RecoveryDecision(0.0, True, False, code)
 
         transient = self._is_transient(error, code)
 

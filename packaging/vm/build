@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Build an offline preview disk from the package using the host's Arch repository snapshot.
+set -euo pipefail
+umask 077
+here="$(cd -- "$(dirname -- "$0")" && pwd)"
+vm="$(realpath -m "${JARVIS_VM_DIR:-$here/../dist/vm}")"
+pkg="$(realpath -e "${1:?pass the built JARVIS .pkg.tar.zst}")"
+mkdir -p "$vm"
+cd "$vm"
+[[ ! -e desktop.raw ]] || { echo 'A desktop disk already exists. Choose another JARVIS_VM_DIR.' >&2; exit 1; }
+stage="$(mktemp -d "$vm/build.XXXXXX")"
+trap 'rm -rf -- "$stage"' EXIT
+mkdir -p db/sync cache "$stage/payload" "$stage/init"/{bin,dev,proc,sys,run,target,media,tmp,etc,usr/bin,usr/lib}
+cp /var/lib/pacman/sync/{core,extra,omarchy}.db db/sync/
+cat >pacman.conf <<'CONF'
+[options]
+Architecture = x86_64
+SigLevel = Required DatabaseOptional
+ParallelDownloads = 5
+[core]
+Include = /etc/pacman.d/mirrorlist
+[extra]
+Include = /etc/pacman.d/mirrorlist
+CONF
+printf '[omarchy]\n' >>pacman.conf
+pacman-conf --repo omarchy Server | sed 's/^/Server = /' >>pacman.conf
+pm=(pacman --config "$vm/pacman.conf" --dbpath "$vm/db" --cachedir "$vm/cache" --cachedir /var/cache/pacman/pkg --logfile "$vm/pacman.log")
+mapfile -t depends < <(bsdtar -xOf "$pkg" .PKGINFO | sed -n 's/^depend = //p')
+requested=(base linux grim jq mesa qt6-multimedia ttf-liberation dbus "${depends[@]}")
+fakeroot "${pm[@]}" -Sw --noconfirm "${requested[@]}"
+"${pm[@]}" -Sp --print-format '%h %f' "${requested[@]}" >"$stage/manifest"
+while read -r hash name; do
+    src="$vm/cache/$name"
+    [[ -f "$src" ]] || src="/var/cache/pacman/pkg/$name"
+    cp --reflink=auto "$src" "$stage/payload/$name"
+    if [[ "$name" =~ ^linux-[0-9] ]]; then
+        bsdtar -xOf "$src" 'usr/lib/modules/*/vmlinuz' >"$stage/vmlinuz"
+    fi
+done <"$stage/manifest"
+(cd "$stage/payload" && sha256sum --quiet -c "$stage/manifest")
+cp "$pkg" "$stage/payload/"
+r="$stage/init"
+ln -s usr/lib "$r/lib"
+ln -s usr/lib "$r/lib64"
+cp /usr/lib/initcpio/busybox "$r/bin/busybox"
+for binary in /usr/bin/{pacman,mount}; do cp "$binary" "$r/usr/bin/"; done
+for binary in "$r/bin/busybox" "$r/usr/bin/"*; do
+    while read -r lib; do cp -L "$lib" "$r/usr/lib/${lib##*/}"; done < <(ldd "$binary" | awk '/=> \// {print $3} /^[[:space:]]*\// {print $1}')
+done
+cp "$here/install-init" "$r/init"
+(cd "$r" && find . -print0 | cpio --null -o -H newc --owner=0:0 2>/dev/null | gzip -1 >"$stage/init.gz")
+size="$(du -sm "$stage/payload" | cut -f1)"
+truncate -s "$((size + size / 10 + 32))M" "$stage/packages.raw"
+mkfs.ext4 -q -F -m 0 -d "$stage/payload" "$stage/packages.raw"
+truncate -s 10G "$stage/desktop.raw"
+mkfs.ext4 -q -F -L JARVIS "$stage/desktop.raw"
+timeout 12m qemu-system-x86_64 -accel kvm -cpu host -smp 2 -m 1536 -no-reboot \
+    -nic none -display none -monitor none -serial file:install.log \
+    -kernel "$stage/vmlinuz" -initrd "$stage/init.gz" -append 'console=ttyS0 panic=1' \
+    -drive "file=$stage/desktop.raw,format=raw,if=virtio" \
+    -drive "file=$stage/packages.raw,format=raw,if=virtio,readonly=on"
+grep -q '^JARVIS_INSTALL_COMPLETE' install.log || { tail -30 install.log >&2; exit 1; }
+mv "$stage/vmlinuz" "$stage/desktop.raw" "$vm/"
