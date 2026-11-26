@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import Mock, patch
 
-from jarvis_memory.embeddings import (
+from memory.embeddings import (
     DeterministicFakeEmbeddingProvider,
     EmbeddingError,
     GeminiEmbeddingProvider,
@@ -56,7 +56,7 @@ class EmbeddingTests(unittest.TestCase):
                 OllamaEmbeddingProvider(url, "m", 2)
 
     def test_proxy_disabled_and_redirect_handler_installed(self):
-        with patch("jarvis_memory.embeddings.build_opener") as build:
+        with patch("memory.embeddings.build_opener") as build:
             OllamaEmbeddingProvider("http://localhost:11434/api/embed", "m", 2)
         handlers = build.call_args.args
         self.assertEqual(handlers[0].proxies, {})

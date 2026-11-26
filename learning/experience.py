@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import time
 
-from jarvis_memory.knowledge import KnowledgeStore
+from memory.knowledge import KnowledgeStore
 from .bundles import BundleRegistry, HarnessBundle
 from .evidence import EpisodeStore, sanitize
 from .refinement import refinement_lease

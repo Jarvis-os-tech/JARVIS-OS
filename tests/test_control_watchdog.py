@@ -1,8 +1,8 @@
 import asyncio
 import unittest
 from unittest.mock import MagicMock
-from jarvis_control.skills import ControlSkills
-from jarvis_control.config import Config
+from control.skills import ControlSkills
+from control.config import Config
 
 class TestControlWatchdog(unittest.IsolatedAsyncioTestCase):
     async def test_tool_exception_returns_error_string(self):

@@ -1127,7 +1127,7 @@ class AlertStateManager:
             healed = False
             if auto_heal and act.action_type == "ALERT":
                 try:
-                    from core.self_healer import AutoHealer
+                    from kernel.self_healer import AutoHealer
                     heal_res = AutoHealer.auto_heal_action(act.alert_type, act.name, act.message)
                     if heal_res and heal_res.success:
                         healed = True

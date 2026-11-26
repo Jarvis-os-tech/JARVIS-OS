@@ -8,7 +8,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from jarvis_memory.evaluation import compare_baseline, evaluate, load_suite
+from memory.evaluation import compare_baseline, evaluate, load_suite
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -29,7 +29,7 @@ def main():
             if args.embedding == 'ollama':
                 if not args.model:
                     parser.error('--model is required with --embedding ollama')
-                from jarvis_memory.embeddings import OllamaEmbeddingProvider
+                from memory.embeddings import OllamaEmbeddingProvider
                 provider = OllamaEmbeddingProvider('http://127.0.0.1:11434', args.model, args.dimension)
             report = evaluate(load_suite(args.suite), provider)
             if args.baseline:

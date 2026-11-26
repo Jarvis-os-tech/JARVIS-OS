@@ -18,18 +18,18 @@ import tempfile
 import time
 import pytest
 
-from orchestration.agent_orchestrator import (
+from harness.agent_orchestrator import (
     AGENTS,
     AgentOrchestrator,
     detect_failover_reason,
 )
-from orchestration.personas import (
+from harness.personas import (
     PERSONAS,
     AGENT_FALLBACK_CANDIDATES,
     get_fallback_candidates,
     software_assignments,
 )
-from core.self_healer import AutoHealer, HealResult
+from kernel.self_healer import AutoHealer, HealResult
 
 
 # ==============================================================================

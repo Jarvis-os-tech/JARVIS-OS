@@ -19,7 +19,7 @@ import re
 import time
 from typing import Any, Dict, Optional
 
-from core.desktop_session import recover_desktop_environment
+from kernel.desktop_session import recover_desktop_environment
 
 log = logging.getLogger("jarvis.hypr_monitor")
 

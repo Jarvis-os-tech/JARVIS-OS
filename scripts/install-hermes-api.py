@@ -18,9 +18,9 @@ import sys
 
 SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE))
-from orchestration.release_manager import ReleaseManager
-from orchestration.integration_paths import locations
-from orchestration.durable_hermes import DurableHermes
+from harness.release_manager import ReleaseManager
+from harness.integration_paths import locations
+from harness.durable_hermes import DurableHermes
 
 FILES = [
     'orchestration/' + name + '.py' for name in (
@@ -87,7 +87,7 @@ def main():
     # Run the actual installed interpreter against the prepared release.
     env = dict(os.environ, PYTHONPATH=str(target), PYTHONDONTWRITEBYTECODE='1')
     subprocess.run([str(runtime / 'venv/bin/python'), '-c',
-        "from skills.skills import DesktopSkills; from jarvis_control.skills import UnifiedSkills; "
+        "from skills.skills import DesktopSkills; from control.skills import UnifiedSkills; "
         "s=DesktopSkills(); u=UnifiedSkills(desktop_skills=s); "
         "assert any(t['name']=='call_hermes_api' for t in u.live_declarations); print('Prepared release: Hermes API visible')"],
         cwd=target, env=env, check=True, timeout=30)

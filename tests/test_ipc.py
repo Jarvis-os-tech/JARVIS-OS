@@ -13,7 +13,7 @@ def socket_path(tmp_path):
 
 
 def test_status_file_contains_a_freshness_timestamp(tmp_path, monkeypatch):
-    from voice_layer import config, ipc
+    from voice import config, ipc
 
     state_file = tmp_path / 'state.json'
     monkeypatch.setattr(config, 'STATE_FILE', state_file)
@@ -25,7 +25,7 @@ def test_status_file_contains_a_freshness_timestamp(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_status_json(socket_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     status = {'listening': True, 'connected': True, 'model': 'test'}
     server = ControlServer(socket_path=socket_path, status_provider=lambda: status)
     await server.start()
@@ -43,7 +43,7 @@ async def test_status_json(socket_path):
 
 @pytest.mark.asyncio
 async def test_listen_toggle(socket_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     state = {'muted': False}
     def toggle():
         state['muted'] = not state['muted']
@@ -67,7 +67,7 @@ async def test_listen_toggle(socket_path):
 
 @pytest.mark.asyncio
 async def test_unknown_command(socket_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     server = ControlServer(socket_path=socket_path, status_provider=lambda: {})
     await server.start()
     try:
@@ -83,7 +83,7 @@ async def test_unknown_command(socket_path):
 
 @pytest.mark.asyncio
 async def test_second_daemon_does_not_unlink_live_socket(socket_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     first = ControlServer(socket_path=socket_path, status_provider=lambda: {'connected': True})
     second = ControlServer(socket_path=socket_path)
     await first.start()
@@ -104,7 +104,7 @@ async def test_second_daemon_does_not_unlink_live_socket(socket_path):
 
 @pytest.mark.asyncio
 async def test_control_path_never_replaces_regular_file(socket_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     socket_path.write_text('keep this file')
     server = ControlServer(socket_path=socket_path)
     with pytest.raises(PermissionError):
@@ -115,7 +115,7 @@ async def test_control_path_never_replaces_regular_file(socket_path):
 
 @pytest.mark.asyncio
 async def test_standby_ipc_command(socket_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     called = []
     server = ControlServer(
         socket_path=socket_path,
@@ -140,7 +140,7 @@ async def test_standby_ipc_command(socket_path):
 @pytest.mark.asyncio
 async def test_local_confirm_and_cancel_await_control_callbacks():
     from unittest.mock import AsyncMock, Mock
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     confirm, cancel, interrupt = AsyncMock(return_value='confirmed'), AsyncMock(return_value='cancelled'), Mock()
     server = ControlServer(confirm_cb=confirm, cancel_cb=cancel, interrupt_cb=interrupt)
     assert json.loads(await server._dispatch('listen confirm')) == {'result': 'confirmed'}
@@ -153,7 +153,7 @@ async def test_local_confirm_and_cancel_await_control_callbacks():
 @pytest.mark.asyncio
 async def test_socket_confirmation_returns_after_async_callback(tmp_path):
     from unittest.mock import AsyncMock
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     callback = AsyncMock(return_value='synthetic confirmed')
     server = ControlServer(socket_path=tmp_path / 'confirmation.sock', confirm_cb=callback)
     await server.start()
@@ -172,7 +172,7 @@ async def test_socket_confirmation_returns_after_async_callback(tmp_path):
 
 @pytest.mark.asyncio
 async def test_send_text_ipc_command(socket_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     sent = []
     server = ControlServer(
         socket_path=socket_path,
@@ -195,7 +195,7 @@ async def test_send_text_ipc_command(socket_path):
 
 @pytest.mark.asyncio
 async def test_wake_ipc_command(socket_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     woken = []
     server = ControlServer(
         socket_path=socket_path,
@@ -218,7 +218,7 @@ async def test_wake_ipc_command(socket_path):
 
 @pytest.mark.asyncio
 async def test_vision_mode_json_ipc_commands(socket_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     current_mode = {'mode': 'off'}
 
     def set_mode(m):
@@ -279,7 +279,7 @@ async def test_vision_mode_json_ipc_commands(socket_path):
 
 @pytest.mark.asyncio
 async def test_sync_memory_command(socket_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     recorded = []
     def record_cb(user, assistant):
         recorded.append((user, assistant))
@@ -314,8 +314,8 @@ async def test_sync_memory_command(socket_path):
 
 @pytest.mark.asyncio
 async def test_standby_toggle_uses_controller_atomically():
-    from voice_layer.ipc import ControlServer
-    from voice_layer.standby import StandbyController
+    from voice.ipc import ControlServer
+    from voice.standby import StandbyController
     controller=StandbyController(detector=object())
     server=ControlServer(standby_toggle_cb=controller.toggle)
     first=json.loads(await server._handle_json_command({'command':'standby_toggle'}))
@@ -326,7 +326,7 @@ async def test_standby_toggle_uses_controller_atomically():
 
 @pytest.mark.asyncio
 async def test_ipc_multimodal_send_input(socket_path, tmp_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
     received_items = []
     def on_input(item):
         received_items.append(item)
@@ -376,7 +376,7 @@ async def test_ipc_multimodal_send_input(socket_path, tmp_path):
 
 @pytest.mark.asyncio
 async def test_ipc_send_input_returns_error_when_cannot_queue(tmp_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
 
     text_calls = []
     server = ControlServer(send_text_cb=lambda t: text_calls.append(t))
@@ -414,7 +414,7 @@ async def test_ipc_send_input_returns_error_when_cannot_queue(tmp_path):
 
 @pytest.mark.asyncio
 async def test_dictation_ipc_text_and_json_commands(socket_path):
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
 
     state = {'active': False}
     calls = []
@@ -469,7 +469,7 @@ def test_cli_listen_dictation_and_toggle_script(tmp_path, monkeypatch):
     import os
     import socket as pysocket
     import subprocess
-    from voice_layer import __main__ as cli, config as voice_config
+    from voice import __main__ as cli, config as voice_config
 
     sent_cmds = []
     sock_file = tmp_path / 'control.sock'

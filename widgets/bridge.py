@@ -31,7 +31,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 try:
-    from ui.jarvis_widgets import backend
+    from widgets import backend
 except ImportError:
     backend = None
 

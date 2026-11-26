@@ -1,6 +1,6 @@
 """Unit tests for system_control_extension validation and execution dispatch."""
 import pytest
-from jarvis_control.system_control_extension import validate, EXTENSION_ACTIONS, execute
+from control.system_control_extension import validate, EXTENSION_ACTIONS, execute
 
 
 def test_validate_actions():

@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from connectors import google_workspace
-from departments.google_workspace import (
+from department_agents.google_workspace import (
     AGENTS,
     CONTROL_TOOLS,
     GoogleWorkspaceDepartment,

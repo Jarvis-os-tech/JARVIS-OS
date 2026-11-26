@@ -7,8 +7,8 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 
-from jarvis_memory.obsidian import FOLDER, plain, publish
-from jarvis_memory.summaries import render_daily_summary
+from memory.obsidian import FOLDER, plain, publish
+from memory.summaries import render_daily_summary
 
 
 class MemorySummaryTests(unittest.TestCase):

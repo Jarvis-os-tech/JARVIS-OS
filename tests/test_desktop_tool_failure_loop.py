@@ -1,8 +1,8 @@
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock
 import pytest
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
+from voice.daemon import LiveVoice
+from voice.playback import Playback
 
 
 @pytest.mark.asyncio
@@ -21,11 +21,11 @@ async def test_failed_desktop_calls_stop_across_provider_batches(raises):
 
 @pytest.mark.asyncio
 async def test_control_timing_preserves_result_and_hides_arguments(caplog):
-    from jarvis_control.skills import ControlSkills
-    from jarvis_control.config import Config
+    from control.skills import ControlSkills
+    from control.config import Config
     control = ControlSkills(Config())
     try:
-        with caplog.at_level('INFO', logger='jarvis_control.skills'):
+        with caplog.at_level('INFO', logger='control.skills'):
             result = await control._run(lambda value: value, 'private-note-content')
         assert result == 'private-note-content'
         assert 'queue_ms=' in caplog.text and 'handler_ms=' in caplog.text

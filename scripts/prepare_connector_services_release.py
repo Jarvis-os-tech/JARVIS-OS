@@ -50,7 +50,7 @@ def prepare():
     check = '''
 import asyncio
 from skills.skills import DesktopSkills
-from orchestration.tool_tiers import domain_for_tool
+from harness.tool_tiers import domain_for_tool
 async def main():
  s=DesktopSkills()
  try:

@@ -6,7 +6,7 @@ import tempfile
 import threading
 import unittest
 
-from jarvis_memory.vector_store import VectorStore
+from memory.vector_store import VectorStore
 
 
 class FakeProvider:

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)"
+
+# Switch voice runtime into private standby before locking
+if [[ -x "$repo_dir/bin/jarvis" ]]; then
+    "$repo_dir/bin/jarvis" standby >/dev/null 2>&1 || true
+fi
+
+# Run lock screen (prefer hyprlock with JARVIS theme, fallback to omarchy/loginctl)
+if command -v hyprlock >/dev/null 2>&1; then
+    hyprlock --config "$repo_dir/display_server/hypr/lock.conf" "$@"
+elif [[ -x "/usr/share/omarchy/bin/omarchy-system-lock" ]]; then
+    /usr/share/omarchy/bin/omarchy-system-lock
+elif command -v loginctl >/dev/null 2>&1; then
+    loginctl lock-session
+else
+    echo 'No suitable session locker found (hyprlock, omarchy-system-lock, or loginctl).' >&2
+    exit 1
+fi
+
+# Upon unlocking, resume voice runtime
+if [[ -x "$repo_dir/bin/jarvis" ]]; then
+    "$repo_dir/bin/jarvis" wake >/dev/null 2>&1 || true
+fi
+

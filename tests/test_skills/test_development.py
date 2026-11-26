@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
-from core.config import Config
+from kernel.config import Config
 from skills import DesktopSkills, SkillError
-from core.agent import LiveVoice
+from kernel.agent import LiveVoice
 
 
 class DevelopmentSkillsTests(unittest.IsolatedAsyncioTestCase):

@@ -1,6 +1,6 @@
 import pytest
-from ui.jarvis_widgets.backend import validate, make_widget, KINDS, FIELDS
-from ui.jarvis_widgets.three_compiler import is_three_live_available
+from widgets.backend import validate, make_widget, KINDS, FIELDS
+from widgets.three_compiler import is_three_live_available
 
 requires_three_live = pytest.mark.skipif(
     not is_three_live_available(),

@@ -5,8 +5,8 @@ import socket
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from core.self_healer import AutoHealer, HealResult
-from core.system_monitor import AlertAction, AlertStateManager, DesktopNotifier, JarvisVoiceSpeaker
+from kernel.self_healer import AutoHealer, HealResult
+from kernel.system_monitor import AlertAction, AlertStateManager, DesktopNotifier, JarvisVoiceSpeaker
 
 
 class TestSelfHealer(unittest.IsolatedAsyncioTestCase):
@@ -80,7 +80,7 @@ class TestSelfHealer(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as td:
             dummy_cache = Path(td) / "dummy.wav"
             dummy_cache.write_bytes(b"0" * 1024)
-            with patch("core.self_healer.Path.home", return_value=Path(td)):
+            with patch("kernel.self_healer.Path.home", return_value=Path(td)):
                 res = AutoHealer.heal_disk()
                 self.assertTrue(res.success)
                 self.assertEqual(res.subsystem, "storage")

@@ -68,7 +68,7 @@ class Harness2Adapter:
         return out
 
     def prepare_prompt(self, prompt: str, *, agent: str, workspace: str, role: str | None = None) -> str:
-        from orchestration.prompt_style import format_prompt
+        from harness.prompt_style import format_prompt
         formatted = format_prompt(task=prompt, workspace=workspace, role=role)
         return formatted['formatted_prompt']
 

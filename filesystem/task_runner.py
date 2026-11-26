@@ -6,8 +6,8 @@ from datetime import datetime
 import json
 import uuid
 
-from jarvis_control.outcomes import classify_result
-from jarvis_control.execution_policy import requires_confirmation
+from control.outcomes import classify_result
+from control.execution_policy import requires_confirmation
 
 
 FILE_TASK_TOOLS = frozenset({

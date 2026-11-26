@@ -1,6 +1,6 @@
 """Delivery guidance is included in the native voice instruction."""
 
-from voice_layer.daemon import build_instruction
+from voice.daemon import build_instruction
 
 
 def test_compiled_voice_guides_natural_task_and_explanation_delivery():

@@ -8,9 +8,9 @@ import sqlite3
 import tempfile
 import pytest
 
-from proactive.events import EventBus, EventStatus
-from proactive.ledger import ActivityLedger, ActivityStatus
-from proactive.policy import (
+from kernel.proactive.events import EventBus, EventStatus
+from kernel.proactive.ledger import ActivityLedger, ActivityStatus
+from kernel.proactive.policy import (
     Action,
     ActionEffect,
     AutonomyLevel,
@@ -19,8 +19,8 @@ from proactive.policy import (
     PolicyLimits,
     ProactivePolicy,
 )
-from proactive.system_watch import SystemWatch, sample_system
-from proactive.monitor import ProactiveMonitor
+from kernel.proactive.system_watch import SystemWatch, sample_system
+from kernel.proactive.monitor import ProactiveMonitor
 from skills.skills import DesktopSkills
 
 

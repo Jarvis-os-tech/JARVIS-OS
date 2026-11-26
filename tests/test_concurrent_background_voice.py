@@ -5,16 +5,16 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
-from core.background_tasks import (
+from kernel.background_tasks import (
     BackgroundTaskManager,
     reset_background_task_manager,
     get_background_task_manager,
 )
-from jarvis_control.skills import UnifiedSkills
-from voice_layer.config import Config, StandbyConfig
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
-from voice_layer.speech import SpeechTurnGate
+from control.skills import UnifiedSkills
+from voice.config import Config, StandbyConfig
+from voice.daemon import LiveVoice
+from voice.playback import Playback
+from voice.speech import SpeechTurnGate
 
 
 @pytest.fixture(autouse=True)

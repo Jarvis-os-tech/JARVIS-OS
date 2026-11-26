@@ -1,14 +1,14 @@
 import pytest
 from unittest.mock import Mock
-from jarvis_control.tools import Executor, Result
-from jarvis_control.config import Config
+from control.tools import Executor, Result
+from control.config import Config
 
 
 @pytest.mark.parametrize("name", ["Antigravity", "ANTIGRAVITY", "antigravity.desktop"])
 def test_launch_resolves_display_case_without_selecting_other_app(monkeypatch, name):
-    monkeypatch.setattr('jarvis_control.tools._desktop_entry_exists', lambda name: name in {'antigravity', 'antigravity-ide'})
-    monkeypatch.setattr('jarvis_control.discovery.applications', lambda: [('antigravity', 'Antigravity'), ('antigravity-ide', 'Antigravity IDE')])
-    monkeypatch.setattr('jarvis_control.tools.shutil.which', lambda name: '/usr/bin/gtk-launch')
+    monkeypatch.setattr('control.tools._desktop_entry_exists', lambda name: name in {'antigravity', 'antigravity-ide'})
+    monkeypatch.setattr('control.discovery.applications', lambda: [('antigravity', 'Antigravity'), ('antigravity-ide', 'Antigravity IDE')])
+    monkeypatch.setattr('control.tools.shutil.which', lambda name: '/usr/bin/gtk-launch')
     executor = Executor(Config())
     executor._shell = Mock(return_value=Result(False, 'test launch stopped'))
     executor._tool_launch_app(name)

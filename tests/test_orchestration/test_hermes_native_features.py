@@ -4,14 +4,14 @@ import sys
 
 import pytest
 
-from orchestration.hermes_bridge import HermesBridge, HermesBridgeError
-from orchestration._hermes_gateway_worker import operate
+from harness.hermes_bridge import HermesBridge, HermesBridgeError
+from harness._hermes_gateway_worker import operate
 try:
     from tests.test_orchestration.test_hermes_bridge import fake_gateway
 except ImportError:
     from test_hermes_bridge import fake_gateway
 
-from orchestration.tool_tiers import domain_for_tool, intent_domains
+from harness.tool_tiers import domain_for_tool, intent_domains
 from skills.skills import DesktopSkills
 
 

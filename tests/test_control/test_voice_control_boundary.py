@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
+from voice.daemon import LiveVoice
+from voice.playback import Playback
 
 
 def control_fixture(name='system_query', result='Current time retrieved'):
@@ -101,9 +101,9 @@ async def test_confirmation_uses_transcript_from_the_same_provider_event():
 
 @pytest.mark.asyncio
 async def test_audio_only_decision_uses_bound_control_confirmation():
-    from jarvis_control.config import Config
-    from jarvis_control.skills import ControlSkills, UnifiedSkills
-    from jarvis_control.tools import Result
+    from control.config import Config
+    from control.skills import ControlSkills, UnifiedSkills
+    from control.tools import Result
 
     control = ControlSkills(Config(dry_run=False))
     actuator = Mock(return_value=Result(True, "Fixture action completed"))

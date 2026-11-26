@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 from google.genai import types
 
-from core.agent import LiveVoice
+from kernel.agent import LiveVoice
 from learning.bundles import BundleRegistry
 from learning.evidence import EpisodeCapture, EpisodeStore
 from learning.jobs import LocalHarnessJobs, local_status, read_limited

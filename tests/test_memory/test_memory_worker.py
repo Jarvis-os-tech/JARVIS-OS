@@ -3,8 +3,8 @@ import threading
 from unittest.mock import patch
 
 import pytest
-from jarvis_memory.config import Config
-from jarvis_memory.skills import MemorySkills
+from memory.config import Config
+from memory.skills import MemorySkills
 
 
 @pytest.mark.asyncio

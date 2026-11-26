@@ -62,7 +62,7 @@ class SystemPowerManager:
     def _show_confirmation_widget(self, action: str, friendly: str) -> None:
         """Mandatory visual confirmation overlay on screen."""
         try:
-            from ui.jarvis_widgets import backend
+            from widgets import backend
             widget = backend.make_widget(
                 "text",
                 "⚠️ Confirmation Required",
@@ -84,7 +84,7 @@ class SystemPowerManager:
     def _dismiss_confirmation_widget(self) -> None:
         """Dismiss the visual confirmation overlay."""
         try:
-            from ui.jarvis_widgets import backend
+            from widgets import backend
             backend.shell_call("manage", {"id": "jarvis-power-confirm", "action": "dismiss"})
         except Exception:
             pass

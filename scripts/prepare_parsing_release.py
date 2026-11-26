@@ -111,7 +111,7 @@ def activate(staged):
     before = status()
     if not before or before.get('tools_in_flight') or before.get('vision_mode', 'off') != 'off':
         raise RuntimeError('Cannot restart while state is unknown or tools/vision are active')
-    from orchestration.release_manager import ReleaseManager
+    from harness.release_manager import ReleaseManager
     manager = ReleaseManager(RUNTIME)
     name = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '-command-parsing'
     installed = manager.install_prepared_release(

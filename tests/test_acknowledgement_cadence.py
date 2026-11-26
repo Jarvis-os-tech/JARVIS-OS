@@ -3,8 +3,8 @@ from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock
 
 import pytest
-from voice_layer.daemon import LiveVoice, build_instruction
-from voice_layer.playback import Playback
+from voice.daemon import LiveVoice, build_instruction
+from voice.playback import Playback
 
 
 def voice():
@@ -22,8 +22,8 @@ async def tick(instance, monkeypatch, now):
         cycles += 1
         if cycles > 1:
             raise asyncio.CancelledError
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: now)
-    monkeypatch.setattr('voice_layer.daemon.asyncio.sleep', cycle)
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: now)
+    monkeypatch.setattr('voice.daemon.asyncio.sleep', cycle)
     with pytest.raises(asyncio.CancelledError):
         await instance.monitor_response()
 

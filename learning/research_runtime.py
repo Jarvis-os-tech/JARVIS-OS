@@ -12,7 +12,7 @@ from .research import ResearchCorpus
 async def execute_corpus_call(corpus, call, *, capture=None):
     """Use the production skill policy without starting the voice/audio runtime."""
     from google.genai import types
-    from core.tool_dispatch import run_skill_call
+    from kernel.tool_dispatch import run_skill_call
     from skills.skills import SkillError
 
     started = time.perf_counter()
@@ -107,7 +107,7 @@ class GeminiBackend:
 async def research_rollout(backend, bundle, task, *, step_limit=4):
     """Text-only model transport; voice acoustics and Live model quality are separate."""
     from google.genai import types
-    from core.harness_config import live_config
+    from kernel.harness_config import live_config
     corpus = ResearchCorpus(task['sources'])
     configuration = live_config('Aoede', skills=corpus, bundle=bundle)
     transcript = []

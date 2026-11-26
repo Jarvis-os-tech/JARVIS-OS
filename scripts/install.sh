@@ -25,7 +25,7 @@ else
     INSTALL_DIR="$(mktemp -d "$RELEASES_DIR/install.XXXXXXXX")"
     FRESH_INSTALL=1
     runtime_packages=()
-    for package in voice_layer jarvis_memory jarvis_control skills \
+    for package in kernel control voice memory harness shell widgets department_agents display_server youtube_brain voice_layer jarvis_memory jarvis_control skills \
                    core connectors filesystem orchestration proactive audio ui \
                    plugins skill_manifests quickshell scripts learning contracts configs departments packaging bin; do
         # Only copy existing directories to support both lean checkouts and legacy structures
@@ -41,9 +41,10 @@ else
         -cf - "${runtime_packages[@]}" | tar -C "$INSTALL_DIR" -xf -
     cp "$REPO_DIR/agent.py" "$REPO_DIR/agent_orchestrator.py" "$REPO_DIR/task_runner.py" "$INSTALL_DIR/"
     cp "$REPO_DIR/requirements.txt" "$REPO_DIR/requirements-dev.txt" "$REPO_DIR/config.toml.example" "$INSTALL_DIR/"
+    if [[ -f "$REPO_DIR/sitecustomize.py" ]]; then cp "$REPO_DIR/sitecustomize.py" "$INSTALL_DIR/"; fi
     cp "$REPO_DIR/LICENSE" "$REPO_DIR/PROVENANCE.json" "$INSTALL_DIR/"
     mkdir -p "$INSTALL_DIR/docs"
-    cp "$REPO_DIR/JARVIS OS DOCS/references/jarvis-os/implementation/docs/omarchy-voice-port.md" "$INSTALL_DIR/docs/"
+    if [[ -f "$REPO_DIR/docs/omarchy-voice-port.md" ]]; then cp "$REPO_DIR/docs/omarchy-voice-port.md" "$INSTALL_DIR/docs/"; fi
 fi
 
 # Select the interpreter without changing an existing release.
@@ -69,8 +70,14 @@ else
 fi
 
 # Finish config setup before making a fresh runtime reachable.
-if [[ ! -f "$CONFIG_DIR/config.toml" && -f "$REPO_DIR/configs/config.toml.example" ]]; then
-    cp "$REPO_DIR/configs/config.toml.example" "$CONFIG_DIR/config.toml"
+if [[ ! -f "$CONFIG_DIR/config.toml" ]]; then
+    if [[ -f "$REPO_DIR/config/config.toml.example" ]]; then
+        cp "$REPO_DIR/config/config.toml.example" "$CONFIG_DIR/config.toml"
+    elif [[ -f "$REPO_DIR/configs/config.toml.example" ]]; then
+        cp "$REPO_DIR/configs/config.toml.example" "$CONFIG_DIR/config.toml"
+    elif [[ -f "$REPO_DIR/config.toml.example" ]]; then
+        cp "$REPO_DIR/config.toml.example" "$CONFIG_DIR/config.toml"
+    fi
 fi
 
 if [[ "$FRESH_INSTALL" == 1 ]]; then
@@ -79,14 +86,18 @@ fi
 
 # Check the payload before making it reachable through current or the CLIs.
 for required in bin/jarvis-voice bin/jarvis bin/jarvis-memory bin/jarvis-control \
-                orchestration/task_events.py contracts/task-event-v1.json \
-                learning/__init__.py configs/config.toml.example requirements.txt; do
+                contracts/task-event-v1.json \
+                learning/__init__.py requirements.txt; do
     if [[ ! -f "$INSTALL_DIR/$required" ]]; then
         echo "Runtime is incomplete (missing $required): $INSTALL_DIR" >&2
         exit 1
     fi
 done
-if [[ ! -f "$INSTALL_DIR/voice_layer/__main__.py" ]]; then
+if [[ ! -f "$INSTALL_DIR/harness/task_events.py" && ! -f "$INSTALL_DIR/orchestration/task_events.py" ]]; then
+    echo "Runtime is incomplete (missing task_events.py): $INSTALL_DIR" >&2
+    exit 1
+fi
+if [[ ! -f "$INSTALL_DIR/voice/__main__.py" && ! -f "$INSTALL_DIR/voice_layer/__main__.py" ]]; then
     echo "Runtime voice entry point is missing: $INSTALL_DIR" >&2
     exit 1
 fi
@@ -121,7 +132,10 @@ for module in ('google.genai', 'numpy', 'sounddevice', 'onnxruntime', 'openwakew
 if missing:
     raise SystemExit('Missing runtime dependencies: ' + ', '.join(missing)
                      + '. Install requirements.txt in the selected Python environment first.')
-from orchestration.task_events import CONTRACT
+try:
+    from harness.task_events import CONTRACT
+except ImportError:
+    from orchestration.task_events import CONTRACT
 import learning
 
 if not CONTRACT:

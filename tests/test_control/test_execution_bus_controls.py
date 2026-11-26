@@ -7,10 +7,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from jarvis_control.config import Config
-from jarvis_control.skills import ControlSkills, UnifiedSkills
-from jarvis_control.system_control import ACTIONS, SCHEMA, execute, validate
-from jarvis_control.tools import Executor, Result
+from control.config import Config
+from control.skills import ControlSkills, UnifiedSkills
+from control.system_control import ACTIONS, SCHEMA, execute, validate
+from control.tools import Executor, Result
 from skills.skills import DesktopSkills
 
 
@@ -66,7 +66,7 @@ async def test_unified_skills_prefers_desktop_and_keeps_legacy_executable(monkey
 
         # Confirmation bridges both ControlSkills.executor.pending and POWER_MANAGER
         from skills.system_power import POWER_MANAGER
-        with patch("ui.jarvis_widgets.backend.shell_call", return_value={"ok": True}):
+        with patch("widgets.backend.shell_call", return_value={"ok": True}):
             POWER_MANAGER.request_action("lock", confirm=False)
             try:
                 with patch.object(desktop, "execute", return_value={"status": "executing", "action": "lock"}) as mock_exec:
@@ -126,7 +126,7 @@ def test_control_system_control_directional_window_actions():
 
 def test_executor_clipboard_cliphist_history_and_paste_item(monkeypatch):
     executor = Executor(Config())
-    monkeypatch.setattr("jarvis_control.tools.shutil.which", lambda cmd: f"/usr/bin/{cmd}" if cmd in ("cliphist", "wl-copy", "wl-paste") else None)
+    monkeypatch.setattr("control.tools.shutil.which", lambda cmd: f"/usr/bin/{cmd}" if cmd in ("cliphist", "wl-copy", "wl-paste") else None)
     clipboard_bytes = {"buf": b""}
 
     def fake_run(argv, capture_output=False, text=False, input=None, stdout=None, stderr=None, timeout=None, env=None):
@@ -143,7 +143,7 @@ def test_executor_clipboard_cliphist_history_and_paste_item(monkeypatch):
             return subprocess.CompletedProcess(argv, 0, clipboard_bytes["buf"], b"")
         raise AssertionError(f"unexpected subprocess: {argv}")
 
-    monkeypatch.setattr("jarvis_control.tools.subprocess.run", fake_run)
+    monkeypatch.setattr("control.tools.subprocess.run", fake_run)
     win = {"address": "0x200", "pid": 77, "class": "antigravity", "focusHistoryID": 0}
     monkeypatch.setattr(executor, "_window_geometry", lambda _target="activewindow": (win, None))
     shortcut_mock = Mock(return_value=Result(True, "ok"))
@@ -164,7 +164,7 @@ def test_executor_type_text_wayland_electron_and_tmux_verification(monkeypatch):
     win_electron = {"address": "0x300", "pid": 88, "class": "antigravity", "xwayland": False, "focusHistoryID": 0}
     monkeypatch.setattr(executor, "_window_geometry", lambda _target="activewindow": (win_electron, None))
     pasted = []
-    monkeypatch.setattr("jarvis_control.tools.page_text.paste_text", lambda text, paste_fn, _focused: (paste_fn(), pasted.append(text)))
+    monkeypatch.setattr("control.tools.page_text.paste_text", lambda text, paste_fn, _focused: (paste_fn(), pasted.append(text)))
     monkeypatch.setattr(executor, "_tool_send_shortcut", lambda mods, key, window: Result(True, f"{mods}+{key}@{window}"))
 
     res = executor.call("type_text", {"text": "hello antigravity", "press_enter": True})
@@ -173,7 +173,7 @@ def test_executor_type_text_wayland_electron_and_tmux_verification(monkeypatch):
     # Terminal with tmux pane proves effect_observed
     win_term = {"address": "0x301", "pid": 1, "class": "foot", "xwayland": False, "focusHistoryID": 0}
     monkeypatch.setattr(executor, "_window_geometry", lambda _target="activewindow": (win_term, None))
-    monkeypatch.setattr("jarvis_control.tools.shutil.which", lambda cmd: "/usr/bin/tmux" if cmd == "tmux" else None)
+    monkeypatch.setattr("control.tools.shutil.which", lambda cmd: "/usr/bin/tmux" if cmd == "tmux" else None)
     monkeypatch.setattr(executor, "_shell", lambda argv, input_text="": Result(True, "ok"))
 
     captures = iter(["$ ", "$ pwd"])
@@ -185,8 +185,8 @@ def test_executor_type_text_wayland_electron_and_tmux_verification(monkeypatch):
             return subprocess.CompletedProcess(argv, 0, next(captures), "")
         raise AssertionError(argv)
 
-    monkeypatch.setattr("jarvis_control.tools.subprocess.run", fake_run)
-    monkeypatch.setattr("jarvis_control.tools.time.sleep", lambda _s: None)
+    monkeypatch.setattr("control.tools.subprocess.run", fake_run)
+    monkeypatch.setattr("control.tools.time.sleep", lambda _s: None)
     term_res = executor.call("type_text", {"text": "pwd"})
     assert term_res.ok
     data = json.loads(term_res.output)

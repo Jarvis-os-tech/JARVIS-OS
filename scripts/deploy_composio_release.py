@@ -108,7 +108,7 @@ GitHub and Google Workspace (Gmail, Calendar, Drive, Docs, Sheets) are configure
     check_code = """
 from pathlib import Path
 from skills.skills import DesktopSkills
-from orchestration.tool_tiers import CORE_TOOLS
+from harness.tool_tiers import CORE_TOOLS
 r = DesktopSkills.__new__(DesktopSkills)
 r.manifest_dirs = [Path('skill_manifests')]
 specs = r._load_manifests()
@@ -123,7 +123,7 @@ from connectors import composio
 assert 'open_platform_authorization' in composio.TOOLS
 assert 'check_platform_connection' in composio.TOOLS
 
-from jarvis_control.nlu import NLUEngine
+from control.nlu import NLUEngine
 assert not NLUEngine.validate_tool_intent('github_authorize', {}, 'is github connected')[0]
 assert NLUEngine.validate_tool_intent('github_connection_status', {}, 'is github connected')[0]
 assert not NLUEngine.validate_tool_intent('open_platform_authorization', {'platform': 'notion'}, 'is notion connected or connecting')[0]
@@ -144,7 +144,7 @@ print('Composio and native integrations verified in release!')
 
     # Install using ReleaseManager
     sys.path.insert(0, str(SOURCE))
-    from orchestration.release_manager import ReleaseManager
+    from harness.release_manager import ReleaseManager
     rel_name = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-composio-integrations'
     rm = ReleaseManager(root_dir=runtime)
     activated = rm.install_prepared_release(

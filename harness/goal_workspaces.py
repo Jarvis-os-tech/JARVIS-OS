@@ -3,8 +3,8 @@ from pathlib import Path
 import os
 import subprocess
 
-from core.secret_env import sanitized_subprocess_env
-from jarvis_control.workspace_files import open_file
+from kernel.secret_env import sanitized_subprocess_env
+from control.workspace_files import open_file
 
 
 def project_workspace(target, source, inputs=()):

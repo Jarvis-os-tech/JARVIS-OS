@@ -12,7 +12,7 @@ SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE))
 from scripts.prepare_system_integration_release import status
 from scripts.prepare_parsing_release import restore_settings
-from orchestration.release_manager import ReleaseManager
+from harness.release_manager import ReleaseManager
 
 def deploy(staged):
     runtime = Path.home() / '.local/share/jarvis-runtime'

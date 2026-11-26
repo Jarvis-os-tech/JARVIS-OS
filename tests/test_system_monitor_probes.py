@@ -4,7 +4,7 @@ import socket
 import urllib.request
 import pytest
 
-from core.system_monitor import (
+from kernel.system_monitor import (
     ProbeResult,
     NetworkProbe,
     ServerProbe,

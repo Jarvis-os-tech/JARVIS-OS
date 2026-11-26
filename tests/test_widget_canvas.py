@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ui.jarvis_widgets import backend
+from widgets import backend
 from scripts.install_widget_plugin import install
 from skills.domains.widgets import WidgetsDomain
 from skills.errors import SkillError
-from ui.jarvis_widgets.view_schema import validate_view, EXAMPLE
+from widgets.view_schema import validate_view, EXAMPLE
 
 
 @pytest.fixture(autouse=True)
@@ -238,7 +238,7 @@ def test_voice_service_discovers_the_native_session_without_display_env(monkeypa
 
 
 def test_choices_disambiguation_card_compiles_and_validates():
-    from ui.jarvis_widgets.view_schema import describe
+    from widgets.view_schema import describe
     example = describe()["native_cards"]["choices"]
     widget = backend.make_widget("choices", "Choose file", example, widget_id="disambig-1")
     assert widget["kind"] == "view"
@@ -291,39 +291,39 @@ def test_choices_manage_select_cli_dispatches_index_and_dismiss(monkeypatch):
 def test_zero_polling_and_motion_compliance_across_shell_surfaces():
     import re
     root = Path(__file__).resolve().parents[1]
-    hud_preview = (root / "ui/jarvis_shell/HudPreview.qml").read_text()
+    hud_preview = (root / "shell/HudPreview.qml").read_text()
     assert "stateFileView.reload()" not in hud_preview or "onFileChanged: reload()" in hud_preview
     assert "interval: 100" not in hud_preview
     assert "watchChanges: path !== \"\"" in hud_preview
     assert "Style.reduceMotion" in hud_preview
     assert "root.drafts = nextDrafts" in hud_preview
 
-    scifi_panel = (root / "ui/jarvis_shell/SciFiPanel.qml").read_text()
+    scifi_panel = (root / "shell/SciFiPanel.qml").read_text()
     assert "textFormat: Text.PlainText" in scifi_panel
 
-    shell_qml = (root / "ui/jarvis_shell/Shell.qml").read_text()
+    shell_qml = (root / "shell/Shell.qml").read_text()
     assert "sh -c" not in shell_qml
     assert "interval: 200" not in shell_qml
     assert "watchChanges: path !== \"\"" in shell_qml
     assert "running: rootWin.visible && rootWin.activeVoice" in shell_qml
 
-    wave_qml = (root / "ui/jarvis_shell/AcousticWaveform.qml").read_text()
+    wave_qml = (root / "shell/AcousticWaveform.qml").read_text()
     assert "running: true" not in wave_qml
     assert 'wave.voiceState === "listening" || wave.voiceState === "speaking"' in wave_qml
     assert "Style.duration(" in wave_qml
 
-    reactor_qml = (root / "ui/jarvis_shell/ArcReactorCore.qml").read_text()
+    reactor_qml = (root / "shell/ArcReactorCore.qml").read_text()
     assert "running: core.visible && core.animating" in reactor_qml
     assert "Style.duration(" in reactor_qml
 
-    core_canvas_qml = (root / "ui/jarvis_shell/CoreCanvas.qml").read_text()
+    core_canvas_qml = (root / "shell/CoreCanvas.qml").read_text()
     assert "Style.duration(" in core_canvas_qml
 
-    hologram_qml = (root / "ui/jarvis_shell/HologramCard.qml").read_text()
+    hologram_qml = (root / "shell/HologramCard.qml").read_text()
     assert "Style.duration(" in hologram_qml
 
     for name in ("AgentsStatusPanel.qml", "MemoryPanel.qml"):
-        content = (root / "ui/jarvis_shell" / name).read_text()
+        content = (root / "shell" / name).read_text()
         assert "running: true" not in content
 
     shell_cfg = json.loads((root / "config/omarchy/shell.json").read_text())
@@ -333,5 +333,5 @@ def test_zero_polling_and_motion_compliance_across_shell_surfaces():
     assert island["mic"] is False
     assert isinstance(island["reducedMotion"], bool)
     for rel in ("CoreCanvas.qml", "ArcReactorCore.qml", "HologramCard.qml", "AcousticWaveform.qml"):
-        src = (root / "ui/jarvis_shell" / rel).read_text()
+        src = (root / "shell" / rel).read_text()
         assert not re.search(r"\bduration\s*:\s*\d+", src), f"Bare numeric duration found in {rel}"

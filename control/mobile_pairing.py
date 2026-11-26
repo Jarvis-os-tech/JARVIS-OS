@@ -16,7 +16,7 @@ SCHEMA = {
 def open_pairing_qr():
     root = Path(__file__).resolve().parents[1]
     from scripts.pairing_window_state import create, path_for, status
-    from ui.jarvis_widgets import backend
+    from widgets import backend
 
     session = create()
     destination = path_for(session).with_suffix('.png')

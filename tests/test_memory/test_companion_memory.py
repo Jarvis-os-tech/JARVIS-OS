@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from jarvis_memory.bridge import MemoryBridge
-from jarvis_memory.config import MemoryConfig
-from jarvis_memory.session import SessionStore
+from memory.bridge import MemoryBridge
+from memory.config import MemoryConfig
+from memory.session import SessionStore
 
 
 def record(identifier='mobile-1', content='I prefer concise answers.'):

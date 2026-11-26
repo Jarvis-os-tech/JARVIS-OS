@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(dirname -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
+if (( $# > 1 )); then echo 'Usage: jarvis-de [--commands | --check]' >&2; exit 2; fi
+case "${1:-}" in
+    ""|--commands|--check) ;;
+    *) echo 'Usage: jarvis-de [--commands | --check]' >&2; exit 2 ;;
+esac
+if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    if [[ -n "${1:-}" ]]; then echo 'A running Hyprland session is required.' >&2; exit 1; fi
+    "$root/bin/theme-setup"
+    export XDG_SESSION_DESKTOP=JARVIS-DE
+    exec start-hyprland
+fi
+if [[ "${1:-}" != --check ]]; then
+    current=""
+    state="$HOME/.local/state/omarchy/current/theme.name"
+    if [[ -r "$state" ]]; then current=$(<"$state"); fi
+    [[ "$current" == jarvis ]] || omarchy theme set jarvis
+    systemctl --user start jarvis-shell.service
+fi
+case "${1:-}" in
+    --check) exec "$root/shell/launch.sh" ipc call jarvis-hud-preview status ;;
+    --commands) exec "$root/shell/launch.sh" ipc call jarvis-hud-preview input ;;
+esac

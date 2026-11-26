@@ -2,7 +2,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from voice_layer.progress import ProgressUpdates, announce_progress
+from voice.progress import ProgressUpdates, announce_progress
 
 
 @pytest.fixture(autouse=True)
@@ -10,7 +10,7 @@ def fake_snapshot_worker(monkeypatch):
     async def immediate(function, *args, **kwargs):
         return function(*args, **kwargs)
 
-    monkeypatch.setattr('voice_layer.progress.asyncio.to_thread', immediate)
+    monkeypatch.setattr('voice.progress.asyncio.to_thread', immediate)
 
 
 def event(*, revision=1, generation=1, state='running', progress=None, terminal=False, **extra):
@@ -107,7 +107,7 @@ class Voice:
 
 @pytest.mark.asyncio
 async def test_background_monitor_speaks_task_facts_only_when_idle_and_connected(monkeypatch):
-    from voice_layer.background import monitor
+    from voice.background import monitor
 
     voice = Voice()
     desktop = NS(_task_presentation=NS(store=Store([event()])))
@@ -130,7 +130,7 @@ async def test_background_monitor_speaks_task_facts_only_when_idle_and_connected
             raise asyncio.CancelledError
 
     import asyncio
-    monkeypatch.setattr('voice_layer.background.asyncio.sleep', tick)
+    monkeypatch.setattr('voice.background.asyncio.sleep', tick)
     with pytest.raises(asyncio.CancelledError):
         await monitor(voice, control, interval=2)
     assert voice.spoken == ['Background work is underway.']
@@ -161,8 +161,8 @@ async def test_background_progress_respects_privacy_and_speech_state(blocked):
 async def test_progress_revalidates_selected_task_after_waiting_for_send_lock(change):
     import asyncio
     from unittest.mock import AsyncMock
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     store = Store([event()])
     desktop = NS(_task_presentation=NS(store=store))

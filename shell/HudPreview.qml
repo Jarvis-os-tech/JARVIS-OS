@@ -6,10 +6,10 @@ import Quickshell.Hyprland
 import "HudModel.js" as Hud
 import "style"
 import "../omarchy-ai.orbit/OrbitState.js" as OrbitState
-import "../jarvis_widgets/WidgetModel.js" as Widgets
-import "../jarvis_widgets/TaskEvents.js" as Tasks
-import "../jarvis_widgets/WorkspaceModel.js" as Workspaces
-import "../jarvis_widgets/SessionModel.js" as Session
+import "../widgets/WidgetModel.js" as Widgets
+import "../widgets/TaskEvents.js" as Tasks
+import "../widgets/WorkspaceModel.js" as Workspaces
+import "../widgets/SessionModel.js" as Session
 
 ShellRoot {
     id: root

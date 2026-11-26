@@ -42,8 +42,8 @@ def prepare():
     check = '''
 import asyncio,tempfile
 from pathlib import Path
-from jarvis_memory.config import Config,MemoryConfig
-from jarvis_memory.skills import MemorySkills
+from memory.config import Config,MemoryConfig
+from memory.skills import MemorySkills
 from skills.skills import DesktopSkills
 async def main():
  with tempfile.TemporaryDirectory(prefix='jarvis-memory-smoke-') as root:

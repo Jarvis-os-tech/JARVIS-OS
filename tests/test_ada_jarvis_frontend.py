@@ -12,9 +12,9 @@ import os
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ADA_DIR = REPO_ROOT / "ui" / "ada"
+ADA_DIR = REPO_ROOT / "shell" / "ada"
 FRONTEND_DIR = ADA_DIR / "frontend"
-CONSTELLATION_DIR = REPO_ROOT / "ui" / "hud_constellation"
+CONSTELLATION_DIR = REPO_ROOT / "shell" / "constellation"
 
 
 def test_complete_frontend_assets_present():
@@ -208,9 +208,9 @@ def test_voice_subsystem_lock_preservation():
     """Verify that no locked files in voice_layer or audio were modified."""
     # Check git status for voice_layer changes
     result = subprocess.run(
-        ["git", "diff", "--name-only", "audio/"],
+        ["git", "diff", "--name-only", "voice/assets/"],
         capture_output=True,
         text=True,
         check=True
     )
-    assert result.stdout.strip() == "", f"Protected audio/ files were modified: {result.stdout}"
+    assert result.stdout.strip() == "", f"Protected audio files were modified: {result.stdout}"

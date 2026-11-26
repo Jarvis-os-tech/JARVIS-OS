@@ -27,7 +27,7 @@ class ControlSkills:
         else:
             # The voice config exposes these switches; keep the control
             # adapter's complete policy/provider defaults for other fields.
-            from voice_layer.config import control_config
+            from voice.config import control_config
             self.config = control_config(config)
         self.call_timeout = call_timeout
         self.executor = Executor(self.config)
@@ -283,7 +283,7 @@ class UnifiedSkills:
         if desktop_live is None:
             self._live_declarations = self.declarations
         else:
-            from orchestration.tool_tiers import CANONICAL_VOICE_TOOLS
+            from harness.tool_tiers import CANONICAL_VOICE_TOOLS
             self._live_declarations = [
                 tool for tool in self.declarations
                 if tool['name'] in CANONICAL_VOICE_TOOLS
@@ -524,7 +524,7 @@ class UnifiedSkills:
             effective_name = arguments.get('tool_name', name)
 
         if effective_name in self.VOICE_ALWAYS_BACKGROUND_TOOLS:
-            from core.background_tasks import get_background_task_manager
+            from kernel.background_tasks import get_background_task_manager
             bg_mgr = get_background_task_manager()
             task = bg_mgr.submit_tool(name, arguments, self.execute)
             return {
@@ -544,13 +544,13 @@ class UnifiedSkills:
     async def background_events(self) -> list[dict]:
         events = await self.control.background_events() if self.control else []
         try:
-            from core.background_tasks import get_background_task_manager
+            from kernel.background_tasks import get_background_task_manager
             events.extend(get_background_task_manager().events())
         except Exception as err:
             log.debug("Background task manager events lookup error: %s", err)
         presented = self.desktop is not None and hasattr(self.desktop, 'refresh_task_presentation')
         if not presented:
-            from orchestration.model_notices import pending_model_notices
+            from harness.model_notices import pending_model_notices
             events.extend(pending_model_notices(self.desktop))
         agents = getattr(self.desktop, '_task_agents', None)
         if agents is None and self.desktop and hasattr(self.desktop, '_personal_agents'):
@@ -565,13 +565,13 @@ class UnifiedSkills:
             for job in agents.jobs.values():
                 for prompt in (job.get('pending_approvals', []) if job['state'] not in {'completed','failed','cancelled','timed_out','interrupted'} else []):
                     if prompt.get('prompt_id') not in job.get('approval_notices_acknowledged', []):
-                        from orchestration.task_names import task_name
+                        from harness.task_names import task_name
                         name = job.get('name') or task_name(job.get('task'))
                         detail = prompt.get('description') or prompt.get('question') or prompt.get('command') or 'A concrete response is needed.'
                         events.append({'id': 'hermes-approval:' + job['id'] + ':' + prompt['prompt_id'],
                                        'text': f"{name}: Hermes needs your response. {detail}"})
                 if not presented and job['state'] in {'completed', 'failed', 'cancelled', 'timed_out', 'interrupted'} and not job.get('notice_acknowledged'):
-                    from orchestration.task_names import task_name
+                    from harness.task_names import task_name
                     name = job.get('name') or task_name(job.get('task'))
                     suffix = ':' + str(job.get('event_sequence', 0)) if job.get('native_authority') else ''
                     events.append({'id': 'hermes:' + job['id'] + suffix,
@@ -583,7 +583,7 @@ class UnifiedSkills:
     async def acknowledge_event(self, identity: str) -> None:
         if identity.startswith('bg-task:'):
             try:
-                from core.background_tasks import get_background_task_manager
+                from kernel.background_tasks import get_background_task_manager
                 get_background_task_manager().acknowledge_event(identity)
             except Exception as err:
                 log.debug("Background task manager acknowledge error: %s", err)
@@ -592,7 +592,7 @@ class UnifiedSkills:
             if presenter is not None:
                 await asyncio.to_thread(presenter.acknowledge, identity)
         elif identity.startswith('model:'):
-            from orchestration.model_notices import acknowledge_model_notice
+            from harness.model_notices import acknowledge_model_notice
             acknowledge_model_notice(self.desktop, identity)
         elif identity.startswith('hermes-approval:'):
             agents = getattr(self.desktop, '_task_agents', None)

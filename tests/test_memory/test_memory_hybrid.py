@@ -1,6 +1,6 @@
 import unittest
 
-from jarvis_memory.hybrid import fuse_results
+from memory.hybrid import fuse_results
 
 
 class HybridFusionTests(unittest.TestCase):

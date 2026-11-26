@@ -3,8 +3,8 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
-from ui.jarvis_widgets import backend
-from ui.jarvis_widgets.view_schema import validate_view
+from widgets import backend
+from widgets.view_schema import validate_view
 
 
 def test_workspace_uses_legacy_view_only_on_omarchy_fallback():

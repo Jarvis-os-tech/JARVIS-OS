@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(dirname -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}"
+native="$config_dir/omarchy"
+
+link_missing() {
+    if [[ ! -e "$2" && ! -L "$2" ]]; then
+        mkdir -p -- "$(dirname -- "$2")"
+        ln -s -- "$1" "$2"
+    fi
+}
+link_missing "$root/bin/jarvis-de" "$HOME/.local/bin/jarvis-de"
+link_missing "$root/ui/jarvis_shell/launch.sh" "$HOME/.local/bin/jarvis-shell"
+link_missing "$root/config/omarchy/themes/jarvis" "$native/themes/jarvis"
+link_missing "$root/config/omarchy/plugins/omarchy-dynamic-island" "$native/plugins/omarchy-dynamic-island"
+link_missing "$root/ui/jarvis_widgets" "$native/plugins/jarvis.widgets"
+link_missing "$root/config/omarchy/hooks/theme-set.d/20-jarvis-shell-theme.sh" "$native/hooks/theme-set.d/20-jarvis-shell-theme.sh"
+if [[ ! -e "$native/shell.json" ]]; then
+    install -Dm600 "$root/config/omarchy/shell.json" "$native/shell.json"
+fi
+link_missing "$root/systemd/jarvis-shell.service" "$config_dir/systemd/user/jarvis-shell.service"
+systemctl --user daemon-reload
+link_missing "$root/config/omarchy/hooks/post-boot.d/20-jarvis-shell" "$native/hooks/post-boot.d/20-jarvis-shell"

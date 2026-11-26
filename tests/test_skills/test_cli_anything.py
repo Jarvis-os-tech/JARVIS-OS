@@ -42,7 +42,7 @@ class CLIAnythingSkillTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(hasattr(self.skills, adapter_method))
 
     async def test_cli_hub_list_routes_through_department(self):
-        from departments.cli_agent import CLIAgentDepartment
+        from department_agents.cli_agent import CLIAgentDepartment
 
         original = CLIAgentDepartment.execute
 

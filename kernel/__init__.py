@@ -1,2 +1,2 @@
 """Core package for JARVIS OS."""
-import core.env  # Ensure .env is loaded on package import
+import kernel.env  # Ensure .env is loaded on package import

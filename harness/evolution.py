@@ -23,8 +23,8 @@ import subprocess
 import sys
 import uuid
 
-from core.secret_env import sanitized_subprocess_env
-from ui.jarvis_widgets import backend as widget_backend
+from kernel.secret_env import sanitized_subprocess_env
+from widgets import backend as widget_backend
 from .agent_orchestrator import AGENTS, OrchestrationError, now
 
 
@@ -468,7 +468,7 @@ class EvolutionManager:
             self._update(job, state='baseline_testing')
             await self._verify(job, 'baseline_tests')
             if job.get('department') == 'CLI Agent':
-                from departments.cli_agent.service import request
+                from department_agents.cli_agent.service import request
 
                 self._check_cancel(job)
                 self._update(job, state='planning_connection')

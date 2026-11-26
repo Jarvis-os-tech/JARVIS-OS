@@ -15,7 +15,7 @@ import tempfile
 import zipfile
 import pytest
 
-from voice_layer.daemon import LiveVoice
+from voice.daemon import LiveVoice
 from tests.test_multimodal_filesystem import _create_minimal_pdf
 
 

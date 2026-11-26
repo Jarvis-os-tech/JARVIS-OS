@@ -4,9 +4,9 @@ import re
 
 import pytest
 
-from jarvis_memory.bridge import MemoryBridge
-from jarvis_memory.config import MemoryConfig, Config
-from jarvis_memory.skills import MemorySkills
+from memory.bridge import MemoryBridge
+from memory.config import MemoryConfig, Config
+from memory.skills import MemorySkills
 
 @pytest.fixture
 def memory(tmp_path):
@@ -87,7 +87,7 @@ async def test_voice_memory_tools_accept_category_and_scope(tmp_path):
 
 def test_six_layers_have_temporary_working_and_persistent_events_and_procedures(memory, monkeypatch):
     clock = [100.0]
-    monkeypatch.setattr('jarvis_memory.manager.time.monotonic', lambda: clock[0])
+    monkeypatch.setattr('memory.manager.time.monotonic', lambda: clock[0])
     memory.manager.set_working('task', 'Compare database options', ttl=5)
     assert memory.manager.working()[0]['text'] == 'Compare database options'
     clock[0] = 106
@@ -105,7 +105,7 @@ def test_six_layers_have_temporary_working_and_persistent_events_and_procedures(
     assert all((base / (name + ' Memory.md')).exists() for name in ('Short-term','Long-term','Episodic','Semantic','Procedural','Shared'))
 
 def test_shared_manager_enforces_agent_policy_and_proposal_commit(memory):
-    from jarvis_memory.mcp_server import ClientPolicy
+    from memory.mcp_server import ClientPolicy
     with pytest.raises(ValueError):
         memory.manager.shared(ClientPolicy('agent-a', frozenset({'user'}), frozenset()))
     writer = memory.manager.shared(ClientPolicy('agent-a', frozenset({'shared:team'}), frozenset({'shared:team'}), frozenset({'propose'})))

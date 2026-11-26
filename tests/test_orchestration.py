@@ -17,8 +17,8 @@ import subprocess
 import tempfile
 import pytest
 
-from orchestration import tool_tiers
-from orchestration.agent_orchestrator import (
+from harness import tool_tiers
+from harness.agent_orchestrator import (
     AGENTS,
     AgentOrchestrator,
     OrchestrationError,
@@ -26,9 +26,9 @@ from orchestration.agent_orchestrator import (
     clear_task_brief,
     validate_model,
 )
-from orchestration.personas import PERSONAS, software_assignments
-from orchestration.model_policy import apply_model_policy
-from orchestration.evolution import EvolutionManager, _emit_hud_proposal, verification_command
+from harness.personas import PERSONAS, software_assignments
+from harness.model_policy import apply_model_policy
+from harness.evolution import EvolutionManager, _emit_hud_proposal, verification_command
 from skills.skills import DesktopSkills
 from skills.errors import SkillError
 
@@ -289,7 +289,7 @@ async def test_team_cancellation(tmp_path):
 @pytest.mark.asyncio
 async def test_desktop_skills_list_system_agents():
     """Verify DesktopSkills executes list_system_agents tool."""
-    from voice_layer.daemon import build_instruction
+    from voice.daemon import build_instruction
 
     desktop = DesktopSkills()
     declarations = desktop.live_declarations
@@ -397,7 +397,7 @@ async def test_desktop_skills_delegate_team_and_status(tmp_path):
 
 @pytest.mark.asyncio
 async def test_evolution_proposals_have_distinct_cards_and_bounded_shell_calls(monkeypatch):
-    from ui.jarvis_widgets import backend
+    from widgets import backend
 
     calls = []
 

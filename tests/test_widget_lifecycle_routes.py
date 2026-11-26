@@ -14,15 +14,15 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 function loadModel(path, imports = {}) {
-    const source = fs.readFileSync("ui/" + path, "utf8").replace(/^\.(pragma|import).*$/gm, "");
+    const source = fs.readFileSync(path, "utf8").replace(/^\.(pragma|import).*$/gm, "");
     vm.runInNewContext(source, imports);
     return imports;
 }
-const Views = loadModel("jarvis_widgets/ViewSchema.js");
-const Widgets = loadModel("jarvis_widgets/WidgetModel.js", {Views});
-const Workspaces = loadModel("jarvis_widgets/WorkspaceModel.js", {Widgets});
-const Hud = loadModel("jarvis_shell/HudModel.js");
-const source = fs.readFileSync("ui/jarvis_shell/HudPreview.qml", "utf8");
+const Views = loadModel("widgets/ViewSchema.js");
+const Widgets = loadModel("widgets/WidgetModel.js", {Views});
+const Workspaces = loadModel("widgets/WorkspaceModel.js", {Widgets});
+const Hud = loadModel("shell/HudModel.js");
+const source = fs.readFileSync("shell/HudPreview.qml", "utf8");
 function method(name, indent) {
     const pad = " ".repeat(indent);
     const expression = new RegExp("^" + pad + "(function " + name +

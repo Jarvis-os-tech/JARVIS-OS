@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from orchestration.hermes_setup import configured, assert_offline, atomic_text
+from harness.hermes_setup import configured, assert_offline, atomic_text
 
 
 def test_fresh_configuration_keeps_credentials_model_and_skills_untouched(tmp_path):

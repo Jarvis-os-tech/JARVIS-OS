@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from jarvis_memory.config import Config, MemoryConfig, load_config
+from memory.config import Config, MemoryConfig, load_config
 
 
 class MemoryConfigTests(unittest.TestCase):

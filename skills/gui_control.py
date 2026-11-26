@@ -12,7 +12,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
-from core.secret_env import sanitized_subprocess_env
+from kernel.secret_env import sanitized_subprocess_env
 
 
 class GuiControlError(ValueError):

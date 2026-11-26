@@ -28,26 +28,26 @@ import uuid
 from urllib.parse import urlsplit
 import filesystem as fs
 from filesystem.task_runner import TaskPlanError, TaskRunner
-from orchestration.agent_orchestrator import AgentOrchestrator, OrchestrationError
-from orchestration.desktop_execution import DesktopAgentOrchestrator
-from orchestration.evolution import EvolutionManager
+from harness.agent_orchestrator import AgentOrchestrator, OrchestrationError
+from harness.desktop_execution import DesktopAgentOrchestrator
+from harness.evolution import EvolutionManager
 from connectors import google_workspace
 from connectors import github
 from connectors import internet_search as web_search
 from connectors import credentials
 try:
-    from jarvis_memory.config import MemoryConfig
+    from memory.config import MemoryConfig
 except ImportError:
     from config import MemoryConfig
-from core.workers import BoundedWorker, WorkerBusyError
-from core.secret_env import sanitized_subprocess_env
-from jarvis_memory.bridge import MemoryBridge
+from kernel.workers import BoundedWorker, WorkerBusyError
+from kernel.secret_env import sanitized_subprocess_env
+from memory.bridge import MemoryBridge
 try:
     from skills.input_bar import TestBar
 except ImportError:
     from test_bar import TestBar
-from proactive.runtime import ProactiveRuntime
-from jarvis_memory.paths import get_config_dir
+from kernel.proactive.runtime import ProactiveRuntime
+from memory.paths import get_config_dir
 try:
     from skills import system_control
 except ImportError:
@@ -68,9 +68,9 @@ from skills.domains.widgets import WidgetsDomain, ADAPTERS as WIDGET_ADAPTERS, A
 from skills.domains.linkedin import LinkedInDomain, ADAPTERS as LINKEDIN_ADAPTERS, ADAPTER_COMMANDS as LINKEDIN_COMMANDS
 from skills.domains.agent_reach import AgentReachDomain, ADAPTERS as AGENT_REACH_ADAPTERS, ADAPTER_COMMANDS as AGENT_REACH_COMMANDS
 from skills.domains.memory import MemoryDomain, ADAPTERS as MEMORY_ADAPTERS, ADAPTER_COMMANDS as MEMORY_COMMANDS
-from skills.domains.yt_brain import YtBrainDomain, ADAPTERS as YT_BRAIN_ADAPTERS, ADAPTER_COMMANDS as YT_BRAIN_COMMANDS
+from youtube_brain.domain import YtBrainDomain, ADAPTERS as YT_BRAIN_ADAPTERS, ADAPTER_COMMANDS as YT_BRAIN_COMMANDS
 from skills.domains.youtube_production import YouTubeProductionDomain, ADAPTERS as YOUTUBE_PRODUCTION_ADAPTERS, ADAPTER_COMMANDS as YOUTUBE_PRODUCTION_COMMANDS
-from orchestration.tool_tiers import CORE_TOOLS, META_TOOLS, DOMAINS, META_SPECS, domain_for_tool
+from harness.tool_tiers import CORE_TOOLS, META_TOOLS, DOMAINS, META_SPECS, domain_for_tool
 
 
 def _normalized(value: str) -> str:
@@ -631,7 +631,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         name, arguments = self.resolve_domain_call(domain, tool_name, arguments_json)
         # Keep mute policy, timeouts, GUI verification and schema checks common
         # to direct and domain-routed execution, rather than calling a handler.
-        from core.tool_dispatch import run_skill_call
+        from kernel.tool_dispatch import run_skill_call
         self._active_domains.add(domain)
         return await run_skill_call(self, name, arguments)
 
@@ -939,7 +939,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
 
     def _applications(self):
         """Discover installed .desktop applications via XDG directories."""
-        from jarvis_control.discovery import desktop_paths, read_desktop
+        from control.discovery import desktop_paths, read_desktop
         apps = {}
         self._application_classes = {}
         for app_id, entry in desktop_paths().items():
@@ -1006,7 +1006,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         if not self._arguments_match(arguments, spec['parameters_json_schema']):
             raise SkillError(f'invalid arguments for {name}')
 
-        from departments.cli_agent import CLIAgentDepartment
+        from department_agents.cli_agent import CLIAgentDepartment
         if CLIAgentDepartment.handles(name, arguments):
             return await CLIAgentDepartment(self._execute_validated).execute(name, arguments)
         return await self._execute_validated(name, arguments)
@@ -1315,7 +1315,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
 
     async def _adapter_close_input_bar(self):
         try:
-            from ui.jarvis_widgets.backend import shell_call
+            from widgets.backend import shell_call
             await asyncio.to_thread(shell_call, 'closeInput')
         except (OSError, RuntimeError, subprocess.SubprocessError):
             pass
@@ -1498,7 +1498,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
 
     def _task_presenter(self):
         if getattr(self, '_task_presentation', None) is None:
-            from orchestration.task_presentation import TaskPresentation
+            from harness.task_presentation import TaskPresentation
             self._task_presentation = TaskPresentation(self)
         return self._task_presentation
 
@@ -1533,7 +1533,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
             if not isinstance(parsed, list):
                 raise SkillError(str(error)) from None
 
-            from core.background_tasks import get_background_task_manager
+            from kernel.background_tasks import get_background_task_manager
             bg_mgr = get_background_task_manager()
 
             bg_task = None
@@ -1576,7 +1576,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         try:
             return await self._task_event_response('file_task', self._task_runner.status(task_id))
         except (TaskPlanError, KeyError, ValueError):
-            from core.background_tasks import get_background_task_manager
+            from kernel.background_tasks import get_background_task_manager
             bg_mgr = get_background_task_manager()
             st = bg_mgr.status(task_id)
             if st is not None:
@@ -1586,7 +1586,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
     async def _adapter_list_tasks(self):
         file_res = self._task_runner.list_tasks()
         file_tasks = file_res.get('tasks', []) if isinstance(file_res, dict) else (file_res or [])
-        from core.background_tasks import get_background_task_manager
+        from kernel.background_tasks import get_background_task_manager
         bg_tasks = get_background_task_manager().list_tasks()
         return {'tasks': file_tasks + bg_tasks}
 
@@ -1596,7 +1596,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
                 return await self._task_event_response('file_task', self._task_runner.cancel(task_id))
             except TaskPlanError as error:
                 raise SkillError(str(error)) from None
-        from core.background_tasks import get_background_task_manager
+        from kernel.background_tasks import get_background_task_manager
         bg_mgr = get_background_task_manager()
         if bg_mgr.cancel(task_id):
             return {'ok': True, 'status': 'cancelled', 'task_id': task_id, 'message': 'Background task cancelled'}
@@ -1883,7 +1883,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
             except Exception:
                 pass
 
-        from jarvis_control.web_text import bounded_page_text, PageReadError
+        from control.web_text import bounded_page_text, PageReadError
         try:
             text = await asyncio.to_thread(bounded_page_text, url, timeout=12)
             return {'status': 'success', 'url': url, 'content': text}
@@ -1935,7 +1935,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
         return {'status': 'shown'}
 
     async def _adapter_parse_command_values(self, **arguments):
-        from jarvis_control.parsing_service import parse_command_values
+        from control.parsing_service import parse_command_values
         return await parse_command_values(**arguments)
 
     async def _adapter_create_reminder(self, minutes, message='Reminder'):
@@ -2908,7 +2908,7 @@ class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, Composio
     async def _adapter_system_update(self, action="check"):
         """Check, apply, or roll back standalone JARVIS OS releases."""
         try:
-            from orchestration.release_manager import ReleaseManager
+            from harness.release_manager import ReleaseManager
             rm = ReleaseManager()
             if action in ("check", "status"):
                 return rm.check_remote_update()

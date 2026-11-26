@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from departments.youtube_production import YouTubeProductionDepartment, YouTubeProductionError
+from department_agents.youtube_production import YouTubeProductionDepartment, YouTubeProductionError
 from skills.errors import SkillError
 
 

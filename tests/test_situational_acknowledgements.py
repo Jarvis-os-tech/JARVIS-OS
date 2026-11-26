@@ -2,9 +2,9 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from voice_layer.acknowledgements import PHRASES, select_ack, short_ack
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
+from voice.acknowledgements import PHRASES, select_ack, short_ack
+from voice.daemon import LiveVoice
+from voice.playback import Playback
 
 
 @pytest.mark.parametrize('tool,args,expected', [
@@ -98,7 +98,8 @@ def test_all_contextual_phrases_are_cached_as_non_silent_pcm():
     import hashlib
     from pathlib import Path
     import struct
-    root = Path(__file__).resolve().parents[1] / 'voice_layer/assets'
+    repo_root = Path(__file__).resolve().parents[1]
+    root = repo_root / 'voice/assets' if (repo_root / 'voice/assets').exists() else repo_root / 'voice_layer/assets'
     manifest = json.loads((root / 'acknowledgements.json').read_text())
     assert set(manifest) == set(PHRASES)
     for name, text in PHRASES.items():

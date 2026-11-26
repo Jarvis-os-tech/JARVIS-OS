@@ -44,9 +44,9 @@ from .decision_router import DecisionRouter
 from .hypr_monitor import HyprlandMonitor, SessionContext
 from .acknowledgements import PHRASES as ACK_PHRASES, select_ack, short_ack
 from .interaction import InteractionPolicy
-from jarvis_control.outcomes import classify_result
-from jarvis_control.execution_policy import tool_timeout
-from jarvis_control.evidence import requires_action_evidence, META_TOOLS
+from control.outcomes import classify_result
+from control.execution_policy import tool_timeout
+from control.evidence import requires_action_evidence, META_TOOLS
 
 log = logging.getLogger('voice_layer')
 INPUT_BYTES = 640  # 20ms at 16kHz mono s16le (320 samples)
@@ -160,7 +160,7 @@ def build_instruction(tools: list | None = None, *, desktop_context: str = '') -
             "  NEVER call 'uninstall_app' or try to uninstall software unless the user explicitly and verbatim uses the word 'uninstall'.\n"
         )
     if 'omarchy_help' in active_tools:
-        from jarvis_control.omarchy_skill import ROUTING
+        from control.omarchy_skill import ROUTING
         inst += ROUTING
     if 'discover_domain_tools' in active_tools and 'execute_domain_tool' in active_tools:
         inst += (
@@ -173,13 +173,13 @@ def build_instruction(tools: list | None = None, *, desktop_context: str = '') -
             'Do not perform discovery for an already attached everyday control.\n'
         )
     if 'phone_control' in active_tools:
-        from jarvis_control.phone_control import ROUTING
+        from control.phone_control import ROUTING
         inst += ROUTING
     if 'camera_view' in active_tools:
-        from jarvis_control.vision import ROUTING
+        from control.vision import ROUTING
         inst += ROUTING
     if 'task_submit' in active_tools:
-        from jarvis_control.tasks import ROUTING
+        from control.tasks import ROUTING
         inst += ROUTING
     if any(t in active_tools for t in ('connect_platform', 'open_platform_authorization', 'check_platform_connection')):
         inst += (
@@ -228,7 +228,7 @@ def build_instruction(tools: list | None = None, *, desktop_context: str = '') -
     if desktop_context:
         inst += f"\nInitial Desktop Context:\n{desktop_context}\n"
     if 'start_hermes_goal' in active_tools:
-        from orchestration.routing import ROUTING
+        from harness.routing import ROUTING
         inst += ROUTING
     return inst
 
@@ -423,7 +423,7 @@ class LiveVoice:
         self.recent_os_alerts = deque(maxlen=20)
         self._speak_announcement_queue = asyncio.Queue()
         self._offline_speech = None
-        from core.background_tasks import get_background_task_manager
+        from kernel.background_tasks import get_background_task_manager
         self.background_manager = get_background_task_manager()
         self._user_speaking_event = asyncio.Event()
         self._current_tool_task: asyncio.Task | None = None
@@ -532,6 +532,8 @@ class LiveVoice:
 
     def get_desktop_context(self, text: str = '') -> str:
         """Return compact live desktop context when Hyprland/session context is available."""
+        if not getattr(self, 'hypr_monitor', None):
+            return ''
         return self.hypr_monitor.prompt_context(text)
 
     def resolve_deictic(self, text: str) -> dict | None:
@@ -758,8 +760,8 @@ class LiveVoice:
                 res = await res
             return True if res is None else bool(res)
 
-        from core.desktop_session import recover_desktop_environment
-        from core.secret_env import sanitized_subprocess_env
+        from kernel.desktop_session import recover_desktop_environment
+        from kernel.secret_env import sanitized_subprocess_env
         env = sanitized_subprocess_env(os.environ)
         env.update(recover_desktop_environment(env))
 
@@ -1457,7 +1459,7 @@ class LiveVoice:
 
                 for u_target in clean_urls[:2]:
                     try:
-                        from jarvis_control.web_text import bounded_page_text
+                        from control.web_text import bounded_page_text
                         page_text = await asyncio.to_thread(bounded_page_text, u_target, timeout=12)
                         if page_text:
                             fetched_contexts.append(f"[Live Web Page Content for {u_target}]:\n{page_text[:12000]}")
@@ -1470,7 +1472,8 @@ class LiveVoice:
                 try:
                     candidate_path = Path(name).expanduser().resolve()
                     if candidate_path.exists():
-                        self.session_context.record_file(str(candidate_path))
+                        if getattr(self, 'session_context', None):
+                            self.session_context.record_file(str(candidate_path))
                         if candidate_path.is_dir():
                             dir_res = await asyncio.to_thread(fs.read_text, str(candidate_path), 0, 15000)
                             dir_text = dir_res.get('content', '')
@@ -2092,7 +2095,7 @@ class LiveVoice:
                 signature = None
                 cached = None
                 try:
-                    from jarvis_control.nlu import NLUEngine
+                    from control.nlu import NLUEngine
                     arguments = dict(call.args or {}) if call.args is not None and isinstance(call.args, dict) else {}
                     allowed_by_nlu, nlu_guidance = NLUEngine.validate_tool_intent(name, arguments, self._user_text)
                     if not allowed_by_nlu:
@@ -2197,7 +2200,7 @@ class LiveVoice:
                     response = {'ok': False, 'status': 'unknown',
                                 'error': 'Tool timed out; outcome is unknown. Inspect current state before retrying any action.'}
                 except Exception as error:
-                    from jarvis_control.security import redact_text
+                    from control.security import redact_text
                     log.warning('Tool %s failed: %s: %s', name, type(error).__name__,
                                 redact_text(str(error))[:500].replace('\n', ' '))
                     response = {'ok': False, 'status': 'failed', 'error': str(error)}
@@ -2790,8 +2793,8 @@ class LiveVoice:
 
 
 async def run(args, key: str):
-    from jarvis_memory.skills import MemorySkills
-    from jarvis_control.skills import ControlSkills, UnifiedSkills
+    from memory.skills import MemorySkills
+    from control.skills import ControlSkills, UnifiedSkills
 
     config = getattr(args, 'config_obj', None) or load_config()
     config.validate()
@@ -2833,7 +2836,7 @@ async def _run_voice(args, key: str, config, skills):
     await voice.hypr_monitor.start()
     await voice.local_speech.start()
     if voice.local_speech.ready:
-        from jarvis_control.discovery import applications
+        from control.discovery import applications
         voice._local_apps = app_names(await asyncio.to_thread(applications))
         # Feed installed application names and local command terms to Whistle as decoding hints
         voice.local_speech.keywords.extend([
@@ -2856,7 +2859,7 @@ async def _run_voice(args, key: str, config, skills):
             skills.desktop.on_standby_request = voice.standby.request
             skills.desktop.on_vision_mode_change = voice.set_vision_mode
 
-    from jarvis_control.device_execution import SharedToolExecutor
+    from control.device_execution import SharedToolExecutor
     from .config import STATE_HOME
     shared_execution = SharedToolExecutor(skills, STATE_HOME / 'jarvis' / 'device-calls.sqlite3')
     ipc = ControlServer(

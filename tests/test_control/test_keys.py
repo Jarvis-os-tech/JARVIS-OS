@@ -1,6 +1,6 @@
 """Tests for key translation and keysym normalization."""
 import pytest
-from jarvis_control.keys import normalise_key, normalise_mods
+from control.keys import normalise_key, normalise_mods
 
 
 def test_enter_becomes_return():

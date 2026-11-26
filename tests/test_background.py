@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from voice_layer.background import deliver_once
-from voice_layer.config import Config, StandbyConfig
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
-from jarvis_control.config import Config as ControlConfig
-from jarvis_control.skills import ControlSkills
+from voice.background import deliver_once
+from voice.config import Config, StandbyConfig
+from voice.daemon import LiveVoice
+from voice.playback import Playback
+from control.config import Config as ControlConfig
+from control.skills import ControlSkills
 
 
 @pytest.fixture
@@ -219,7 +219,7 @@ async def test_cancelling_os_alert_releases_queue_and_gemini_turn(voice):
 @pytest.mark.asyncio
 async def test_execution_airlock_rejects_stale_and_replayed_approval():
     import json
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
 
     control = ControlSkills(ControlConfig(dry_run=True, tasks_enabled=False))
     server = ControlServer(approval_cb=control.resolve_local_approval)

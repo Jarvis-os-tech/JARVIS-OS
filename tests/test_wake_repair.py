@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from voice_layer.ipc import ControlServer
-from voice_layer.standby import LocalPhraseDetector, StandbyController, WakeWordUnavailable
+from voice.ipc import ControlServer
+from voice.standby import LocalPhraseDetector, StandbyController, WakeWordUnavailable
 
 
 @pytest.mark.asyncio

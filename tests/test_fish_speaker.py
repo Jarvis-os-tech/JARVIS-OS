@@ -2,7 +2,7 @@ import time
 import pytest
 import numpy as np
 
-from voice_layer.fish_speaker import FishAudioClient, emotion_demo, has_emotion_cues, strip_cues
+from voice.fish_speaker import FishAudioClient, emotion_demo, has_emotion_cues, strip_cues
 
 
 @pytest.mark.parametrize("request_text,cue", [

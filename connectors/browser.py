@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import webbrowser
 
-from core.secret_env import sanitized_subprocess_env
+from kernel.secret_env import sanitized_subprocess_env
 
 
 def open_url(url: str) -> bool:

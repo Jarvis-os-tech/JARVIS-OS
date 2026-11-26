@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from google.genai import types
 
-from core.agent import LiveVoice, live_config
+from kernel.agent import LiveVoice, live_config
 from learning.bundles import BundleRegistry, HarnessBundle
 from learning.evidence import EpisodeCapture, EpisodeStore, sanitize
 from learning.research import ResearchCorpus, assess, fixture_trial, seed_bundle
@@ -214,8 +214,8 @@ async def test_enabled_startup_installs_pinned_bundle_without_real_devices(tmp_p
     import contextlib
     from types import SimpleNamespace
     from unittest.mock import MagicMock, patch
-    from core import agent
-    from core.config import Config
+    from kernel import agent
+    from kernel.config import Config
 
     registry = BundleRegistry(tmp_path)
     bundle = registry.register(seed_bundle())

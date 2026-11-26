@@ -1,8 +1,8 @@
 """Tests for StateGraph, typed working memory, and cyclic retry loops in multi-agent orchestration."""
 import asyncio
 import pytest
-from orchestration.agent_orchestrator import AgentOrchestrator
-from orchestration.state_graph import TeamStateGraph, EdgeAction
+from harness.agent_orchestrator import AgentOrchestrator
+from harness.state_graph import TeamStateGraph, EdgeAction
 
 
 def test_state_graph_data_structures():

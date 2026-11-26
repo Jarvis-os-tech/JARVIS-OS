@@ -3,8 +3,8 @@ import pytest
 
 
 def test_voice_layer_exports():
-    import voice_layer
-    from voice_layer import (
+    import voice
+    from voice import (
         LiveVoice,
         EchoCancellation,
         SpeechTurnGate,
@@ -28,7 +28,7 @@ def test_voice_layer_exports():
 
 
 def test_voice_layer_recovery():
-    from voice_layer.recovery import ConnectionRecovery, RecoveryDecision
+    from voice.recovery import ConnectionRecovery, RecoveryDecision
 
     recovery = ConnectionRecovery(retry_budget=3)
     decision = recovery.decide(Exception("test"), None)
@@ -36,7 +36,7 @@ def test_voice_layer_recovery():
 
 
 def test_voice_layer_echo():
-    from voice_layer.echo import EchoCancellation, monitor_properties
+    from voice.echo import EchoCancellation, monitor_properties
 
     echo = EchoCancellation()
     assert echo is not None

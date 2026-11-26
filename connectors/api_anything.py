@@ -14,7 +14,7 @@ import signal
 from typing import Any, Dict, List, Optional
 
 from connectors import credentials
-from core.secret_env import sanitized_subprocess_env
+from kernel.secret_env import sanitized_subprocess_env
 
 # Path to the api-anything project & daemon
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

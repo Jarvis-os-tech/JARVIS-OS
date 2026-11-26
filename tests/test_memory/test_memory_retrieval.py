@@ -1,6 +1,6 @@
 import unittest
 
-from jarvis_memory.retrieval import rank_candidates
+from memory.retrieval import rank_candidates
 
 
 class RetrievalTests(unittest.TestCase):

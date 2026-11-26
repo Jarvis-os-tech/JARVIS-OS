@@ -7,8 +7,8 @@ import tempfile
 import time
 import pytest
 
-from jarvis_memory.store import Fact, LocalFactStore
-from jarvis_memory.staleness_detector import (
+from memory.store import Fact, LocalFactStore
+from memory.staleness_detector import (
     ClarificationRequest,
     KeyCollisionDetector,
     OsRealityDetector,
@@ -20,7 +20,7 @@ from jarvis_memory.staleness_detector import (
     resolve_clarification,
     scan_memory_staleness,
 )
-from core.self_healer import AutoHealer
+from kernel.self_healer import AutoHealer
 
 
 @pytest.fixture
@@ -224,7 +224,7 @@ def test_auto_healer_heal_memory_staleness(temp_store: LocalFactStore, tmp_path:
     temp_store.add("User prefers zsh for all scripts", entity_key="preference:shell")
 
     # Patch clarification path for test
-    from jarvis_memory import staleness_detector
+    from memory import staleness_detector
     orig_path_fn = staleness_detector._clarifications_path
     staleness_detector._clarifications_path = lambda: clarification_file
     try:

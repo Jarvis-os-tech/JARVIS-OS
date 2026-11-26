@@ -8,7 +8,7 @@ import re
 import time
 
 import httpx
-from orchestration.tool_tiers import (
+from harness.tool_tiers import (
     CORE_TOOLS, META_TOOLS, domain_for_tool, intent_domains, collision_safe_tools,
     routed_arguments_match,
 )

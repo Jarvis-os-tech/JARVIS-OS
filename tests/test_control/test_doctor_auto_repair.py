@@ -13,8 +13,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from jarvis_control import __main__ as cli
-from jarvis_control import diagnostics
+from control import __main__ as cli
+from control import diagnostics
 
 
 def test_dead_socket_detection_and_repair(tmp_path, monkeypatch):
@@ -107,7 +107,7 @@ def test_secrets_and_env_permissions_repair(tmp_path):
     fake_home = tmp_path / "home"
     fake_home.mkdir()
 
-    with patch("jarvis_control.diagnostics.Path.home", return_value=fake_home):
+    with patch("control.diagnostics.Path.home", return_value=fake_home):
         issues, repairs = diagnostics.check_and_fix_secrets_and_env(tmp_path, fix=True)
         # Check hardened permission
         assert project_env.stat().st_mode & 0o777 == 0o600
@@ -165,7 +165,7 @@ def test_systemd_services_sync_and_enable(tmp_path):
 
     with patch("shutil.which", return_value="/usr/bin/systemctl"):
         with patch("subprocess.run", side_effect=fake_subprocess_run):
-            with patch("jarvis_control.diagnostics.Path.home", return_value=fake_home):
+            with patch("control.diagnostics.Path.home", return_value=fake_home):
                 issues, repairs = diagnostics.check_and_fix_systemd_services(tmp_path, fix=True)
                 assert (user_systemd / "jarvis-voice.service").exists()
                 assert (user_systemd / "jarvis-memory-sync.timer").exists()

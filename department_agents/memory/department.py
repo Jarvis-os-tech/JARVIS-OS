@@ -12,7 +12,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from jarvis_memory.paths import get_config_dir
+from memory.paths import get_config_dir
 
 from .config import config, MemoryConfig
 from .agents.a5_day_rollover_compactor import SYNC_CURSOR, is_compacted, write_note

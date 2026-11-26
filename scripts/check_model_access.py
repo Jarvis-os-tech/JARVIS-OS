@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from connectors.credentials import read_env
 from google import genai
-from orchestration.model_routes import ROUTES
+from harness.model_routes import ROUTES
 
 
 async def main():

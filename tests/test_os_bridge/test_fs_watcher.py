@@ -1,7 +1,7 @@
 """Unit tests for FsWatcher filtering."""
 import pytest
 from pathlib import Path
-from jarvis_os_bridge.fs_watcher import FsWatcher, INCOMPLETE_EXTENSIONS
+from control.bridge.fs_watcher import FsWatcher, INCOMPLETE_EXTENSIONS
 
 
 def test_fs_watcher_extensions():

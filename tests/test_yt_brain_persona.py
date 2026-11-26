@@ -1,4 +1,4 @@
-from voice_layer.daemon import build_instruction
+from voice.daemon import build_instruction
 
 
 def test_youtube_connection_claim_requires_observed_status():

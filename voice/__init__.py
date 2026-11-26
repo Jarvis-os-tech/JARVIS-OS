@@ -15,6 +15,32 @@ from .ipc import ControlServer
 from .fish_speaker import FishAudioClient, has_emotion_cues, strip_cues
 from .config import Config, load as load_config, load_env
 from .hypr_monitor import HyprlandMonitor, SessionContext
+from . import daemon
+from . import playback
+from . import speech
+from . import config
+from . import echo
+from . import decision_router
+from . import hypr_monitor
+from . import ipc
+from . import recovery
+from . import standby
+from . import fish_speaker
+from . import local_speech
+from . import needle_router
+from . import progress
+from . import acknowledgements
+
+def __getattr__(name: str):
+    import importlib
+    try:
+        mod = importlib.import_module(f"{__name__}.{name}")
+        globals()[name] = mod
+        return mod
+    except ModuleNotFoundError as e:
+        if e.name == f"{__name__}.{name}":
+            raise AttributeError(f"module '{__name__}' has no attribute '{name}'") from e
+        raise
 
 __version__ = '0.1.0'
 

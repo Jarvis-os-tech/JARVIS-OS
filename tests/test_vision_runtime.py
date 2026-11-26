@@ -7,7 +7,7 @@ import pytest
 
 from skills.errors import SkillError
 from skills.skills import DesktopSkills
-from voice_layer import daemon
+from voice import daemon
 
 
 @pytest.mark.asyncio
@@ -75,7 +75,7 @@ def test_missing_camera_via_local_control_does_not_change_voice_state(monkeypatc
 @pytest.mark.asyncio
 async def test_local_vision_failure_returns_an_error_instead_of_an_empty_reply():
     import json
-    from voice_layer.ipc import ControlServer
+    from voice.ipc import ControlServer
 
     def unavailable(mode):
         raise RuntimeError('Connect a webcam first.')

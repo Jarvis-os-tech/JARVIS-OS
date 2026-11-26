@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 import pytest_asyncio
 
-from core.config import Config
+from kernel.config import Config
 from skills import DesktopSkills, ground_truth, system_control
 from skills.gui_control import GuiControl, GuiControlError
 import filesystem.filesystem as files

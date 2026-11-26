@@ -19,9 +19,9 @@ import uuid
 
 from learning.bundles import private_directory
 from learning.evidence import sanitize
-from core.secret_env import sanitized_subprocess_env
-from proactive.verification import capture_workspace, verify_workspace_changes, completion_evidence, verification_notice
-from orchestration.task_names import task_name
+from kernel.secret_env import sanitized_subprocess_env
+from kernel.proactive.verification import capture_workspace, verify_workspace_changes, completion_evidence, verification_notice
+from harness.task_names import task_name
 
 JOB_ID = re.compile(r'task-[0-9a-f]{12}')
 TERMINAL = {'completed', 'failed', 'cancelled', 'timed_out', 'interrupted'}
@@ -32,7 +32,7 @@ class TaskAgents:
         self.root = private_directory(root)
         self.events = events
         if bridge is None:
-            from orchestration.hermes_bridge import HermesBridge
+            from harness.hermes_bridge import HermesBridge
             bridge = HermesBridge()
         self.bridge = bridge
         self.jobs = {}

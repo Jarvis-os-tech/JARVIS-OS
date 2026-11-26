@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import os
 import re
 
-from core.env import is_placeholder
+from kernel.env import is_placeholder
 
 
 def live_api_keys(primary, environ=None):

@@ -6,9 +6,9 @@ from unittest.mock import patch
 
 import pytest
 
-from jarvis_memory.bridge import MemoryBridge, MemoryError
-from jarvis_memory.config import Config, MemoryConfig
-from jarvis_memory.skills import MemorySkills
+from memory.bridge import MemoryBridge, MemoryError
+from memory.config import Config, MemoryConfig
+from memory.skills import MemorySkills
 
 
 @pytest.fixture

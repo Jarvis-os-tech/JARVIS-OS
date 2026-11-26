@@ -17,7 +17,7 @@ import sys
 import tempfile
 from asyncio import create_subprocess_exec as _verification_process
 
-from core.secret_env import sanitized_subprocess_env
+from kernel.secret_env import sanitized_subprocess_env
 
 MAX_ARTIFACT_BYTES = 16 * 1024 * 1024
 

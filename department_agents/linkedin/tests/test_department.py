@@ -6,9 +6,9 @@ import unittest
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from departments.linkedin.config import LinkedInConfig
-from departments.linkedin.agents import AGENT_REGISTRY
-from departments.linkedin.department import LinkedInDepartment
+from department_agents.linkedin.config import LinkedInConfig
+from department_agents.linkedin.agents import AGENT_REGISTRY
+from department_agents.linkedin.department import LinkedInDepartment
 
 
 class TestLinkedInDepartment(unittest.TestCase):
@@ -29,7 +29,7 @@ class TestLinkedInDepartment(unittest.TestCase):
             self.assertIn(key, AGENT_REGISTRY)
 
     def test_approved_image_publishes_through_scheduler_once(self):
-        from departments.linkedin.tools import LinkedInTools
+        from department_agents.linkedin.tools import LinkedInTools
 
         with TemporaryDirectory() as folder:
             root = Path(folder)

@@ -1,6 +1,6 @@
 """Compatibility shim redirecting audio.echo_cancel to voice_layer.echo."""
 import sys
-import voice_layer.echo
+import voice.echo
 
 sys.modules[__name__] = voice_layer.echo
-from voice_layer.echo import *
+from voice.echo import *

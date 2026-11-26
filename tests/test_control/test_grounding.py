@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from jarvis_control.grounding import (
+from control.grounding import (
     background_google_grounding,
     fallback_background_search,
     format_grounding_result,
@@ -20,8 +20,8 @@ from jarvis_control.grounding import (
     encyclopedia_eligible,
     GROUNDING_MODELS,
 )
-from jarvis_control.tools import Executor, Result
-from jarvis_control.config import Config
+from control.tools import Executor, Result
+from control.config import Config
 
 
 def test_public_url_validation():
@@ -99,7 +99,7 @@ async def test_google_grounding_success_mock():
 @pytest.mark.asyncio
 async def test_web_search_tool_uses_background_grounding():
     executor = Executor(Config())
-    with patch("jarvis_control.grounding.background_google_grounding", new_callable=AsyncMock) as mock_ground:
+    with patch("control.grounding.background_google_grounding", new_callable=AsyncMock) as mock_ground:
         mock_ground.return_value = {
             "ok": True,
             "answer": "Grounded answer from Google.",
@@ -164,7 +164,7 @@ async def test_wikipedia_fallback_for_encyclopedic_query(monkeypatch):
             }
         ]
     }
-    monkeypatch.setattr("jarvis_control.grounding._get_json", AsyncMock(return_value=fake_wiki_json))
+    monkeypatch.setattr("control.grounding._get_json", AsyncMock(return_value=fake_wiki_json))
     res = await fallback_background_search("Ada Lovelace history")
     assert res["ok"] is True
     assert "Ada Lovelace" in res["answer"]
@@ -194,7 +194,7 @@ async def test_brave_search_fallback(monkeypatch):
             ]
         }
     }
-    monkeypatch.setattr("jarvis_control.grounding._get_json", AsyncMock(return_value=fake_brave_json))
+    monkeypatch.setattr("control.grounding._get_json", AsyncMock(return_value=fake_brave_json))
     res = await fallback_background_search("test query")
     assert res["ok"] is True
     assert "Brave Search" in res["provider"]
@@ -212,7 +212,7 @@ def test_background_failure_does_not_open_browser_window(monkeypatch):
     opened = []
     monkeypatch.setattr(executor, "_open_web_window", lambda *args, **kwargs: opened.append(args))
 
-    with patch("jarvis_control.grounding.background_google_grounding", new_callable=AsyncMock) as mock_ground:
+    with patch("control.grounding.background_google_grounding", new_callable=AsyncMock) as mock_ground:
         mock_ground.return_value = {"ok": False, "answer": "Background grounding temporarily unavailable.", "sources": []}
         res = executor._tool_web_search("public info", background=True)
         assert res.ok is True

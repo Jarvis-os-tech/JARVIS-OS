@@ -2,7 +2,7 @@
 
 import unittest
 
-from jarvis_memory.capture import extract_memories
+from memory.capture import extract_memories
 
 
 class MemoryCaptureTests(unittest.TestCase):

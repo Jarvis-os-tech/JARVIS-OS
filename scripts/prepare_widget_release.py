@@ -43,7 +43,7 @@ def prepare(destination):
     relative = "skills/skills.py"
     body = (target / relative).read_text()
     addition = "from skills.domains.widgets import WidgetsDomain, ADAPTERS as WIDGET_ADAPTERS, ADAPTER_COMMANDS as WIDGET_COMMANDS\n"
-    body = replace_once(body, "from orchestration.tool_tiers import CORE_TOOLS", addition + "from orchestration.tool_tiers import CORE_TOOLS")
+    body = replace_once(body, "from harness.tool_tiers import CORE_TOOLS", addition + "from harness.tool_tiers import CORE_TOOLS")
     body = replace_once(body, "class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, ComposioDomain, ApiAnythingDomain):",
                         "class DesktopSkills(WorkspaceDomain, GithubDomain, OrchestrationDomain, ComposioDomain, ApiAnythingDomain, WidgetsDomain):")
     body = replace_once(body, "        **API_ANYTHING_ADAPTERS,", "        **API_ANYTHING_ADAPTERS,\n        **WIDGET_ADAPTERS,")
@@ -86,9 +86,9 @@ def prepare(destination):
     env = dict(os.environ, PYTHONPATH=str(target), PYTHONDONTWRITEBYTECODE="1")
     check = (
         "from pathlib import Path; from skills.skills import DesktopSkills; "
-        "from orchestration.tool_tiers import CORE_TOOLS; "
-        "from ui.jarvis_widgets.backend import make_widget; "
-        "from ui.jarvis_widgets.three_compiler import compile_3d; "
+        "from harness.tool_tiers import CORE_TOOLS; "
+        "from widgets.backend import make_widget; "
+        "from widgets.three_compiler import compile_3d; "
         "assert make_widget('workspace', 'Check', {'brief':'Ready'})['data']['panels']; "
         "r=DesktopSkills.__new__(DesktopSkills); r.manifest_dirs=[Path('skill_manifests')]; "
         "s=r._load_manifests(); assert {'show_widget','manage_canvas','manage_widget'}<=set(s); "
@@ -116,7 +116,7 @@ def activate(staged):
             raise RuntimeError("Staged file changed: " + name)
     name = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "-existing-shell-widgets"
     sys.path.insert(0, str(SOURCE))
-    from orchestration.release_manager import ReleaseManager
+    from harness.release_manager import ReleaseManager
     manager = ReleaseManager(root_dir=runtime)
     # No data migration is involved; retain all prior releases and use the
     # manager's atomic pointers and automatic service-health rollback.

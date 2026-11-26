@@ -16,7 +16,7 @@ SOURCE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SOURCE))
 from scripts.prepare_system_integration_release import status
 from scripts.prepare_parsing_release import restore_settings
-from orchestration.release_manager import ReleaseManager
+from harness.release_manager import ReleaseManager
 
 def atomic(path, data):
     temporary = path.with_name('.' + path.name + '.jarvis-new')
@@ -75,8 +75,8 @@ def deploy(staged):
     # a new session or running extraction. No user contents are printed.
     export_code = '''
 import json,sys
-from jarvis_memory.bridge import MemoryBridge
-from jarvis_memory.config import MemoryConfig
+from memory.bridge import MemoryBridge
+from memory.config import MemoryConfig
 b=MemoryBridge(MemoryConfig(path=sys.argv[1],obsidian_vault=sys.argv[2],obsidian_auto_sync=False))
 try:
  r=b.sync_obsidian()

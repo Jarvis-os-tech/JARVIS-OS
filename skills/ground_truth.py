@@ -16,7 +16,7 @@ import re
 import shutil
 import time
 from typing import Any
-from core.secret_env import sanitized_subprocess_env
+from kernel.secret_env import sanitized_subprocess_env
 
 log = logging.getLogger(__name__)
 MAX_FILE_CONTENT_SCAN_BYTES = 1024 * 1024

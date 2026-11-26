@@ -62,7 +62,7 @@ def app_names(rows):
 
 
 def command_for(text, apps):
-    from jarvis_control.command_values import number_slots, parse_control_command, protected_ranges
+    from control.command_values import number_slots, parse_control_command, protected_ranges
     if not isinstance(text, str) or protected_ranges(text):
         return None
     parsed = parse_control_command(text)

@@ -31,7 +31,7 @@ PYTHON="${AGENT_DIR}/.venv/bin/python"
 
 # systemd may retain XDG_RUNTIME_DIR while omitting the active compositor's
 # display identifiers. Recover only unambiguous values; .env values take priority.
-eval "$(cd -- "$AGENT_DIR" && "$PYTHON" -m core.desktop_session --wait-seconds 5)"
+eval "$(cd -- "$AGENT_DIR" && "$PYTHON" -m kernel.desktop_session --wait-seconds 5)"
 
 # The application also runs network, database and desktop work. Keep the
 # process on normal scheduling; PipeWire manages its audio worker priority.

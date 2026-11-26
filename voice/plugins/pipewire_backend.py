@@ -13,7 +13,7 @@ import time
 
 from audio.engine import StreamLostError
 from audio.plugins.native_backend import CaptureQueue
-from core.secret_env import sanitized_subprocess_env
+from kernel.secret_env import sanitized_subprocess_env
 
 
 async def stop_process(process):

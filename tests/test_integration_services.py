@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from connectors import api_anything as api, api_service as service
-from jarvis_control.execution_policy import tool_timeout
-from jarvis_control.outcomes import classify_result
-from orchestration.tool_tiers import domain_for_tool, intent_domains, DOMAINS
+from control.execution_policy import tool_timeout
+from control.outcomes import classify_result
+from harness.tool_tiers import domain_for_tool, intent_domains, DOMAINS
 
 
 @pytest.mark.parametrize('name,domain', [

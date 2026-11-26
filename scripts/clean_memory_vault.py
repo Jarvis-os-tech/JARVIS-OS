@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from orchestration.release_manager import ReleaseManager
+from harness.release_manager import ReleaseManager
 from scripts.deploy_organized_memory import atomic
 
 def states():
@@ -66,8 +66,8 @@ def main(staged):
     code = '''
 import json
 from pathlib import Path
-from jarvis_memory.bridge import MemoryBridge
-from jarvis_memory.config import load_config
+from memory.bridge import MemoryBridge
+from memory.config import load_config
 b=MemoryBridge(load_config(Path.home()/'.config/jarvis-voice/config.toml').memory)
 try: print(json.dumps(b.sync_obsidian()))
 finally:b.close()

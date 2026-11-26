@@ -10,8 +10,8 @@ trap 'rm -rf -- "$build_dir"' EXIT
 mkdir -p "$build_dir/session"
 cd "$repo_dir"
 cp --parents -a bin/jarvis-de bin/jarvis-theme-setup config/omarchy \
-    systemd/jarvis-shell.service ui/JarvisTheme.qml ui/jarvis_shell ui/jarvis_widgets \
-    ui/omarchy-jarvis-island/ReactiveModel.js LICENSE "$build_dir/session/"
+    systemd/jarvis-shell.service shell/Theme.qml shell widgets \
+    shell/island/ReactiveModel.js LICENSE "$build_dir/session/"
 printf "%s\n" "CSE-OS by CSE-OS Contributors, adapted from Founder OS by Adam M. Adamek (Impact Brussels ASBL)." >"$build_dir/session/ATTRIBUTION.md"
 tar --exclude='__pycache__' --exclude='*.pyc'     -C "$build_dir" -czf "$build_dir/jarvis-de-session.tar.gz" session
 cp packaging/{PKGBUILD,jarvis-de,jarvis-de.desktop} "$build_dir/"

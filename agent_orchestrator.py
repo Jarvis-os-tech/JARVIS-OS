@@ -5,5 +5,5 @@ REPO_ROOT = Path(__file__).resolve().parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import orchestration.agent_orchestrator
-sys.modules[__name__] = orchestration.agent_orchestrator
+import harness.agent_orchestrator
+sys.modules[__name__] = harness.agent_orchestrator

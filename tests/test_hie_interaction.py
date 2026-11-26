@@ -1,8 +1,8 @@
 import pytest
 
-from voice_layer.config import Config
-from voice_layer.interaction import InteractionPolicy
-from voice_layer.speech import SpeechTurnGate
+from voice.config import Config
+from voice.interaction import InteractionPolicy
+from voice.speech import SpeechTurnGate
 
 
 def test_long_narrative_gets_one_sparse_backchannel():

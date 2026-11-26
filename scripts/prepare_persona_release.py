@@ -15,6 +15,25 @@ import tempfile
 SOURCE = Path(__file__).resolve().parents[1]
 
 
+def read_source(rel: str) -> str:
+    p = SOURCE / rel
+    if p.exists():
+        return p.read_text()
+    for old_p, new_p in [
+        ('voice_layer/', 'voice/'),
+        ('core/', 'kernel/'),
+        ('orchestration/', 'harness/'),
+        ('jarvis_control/', 'control/'),
+        ('jarvis_memory/', 'memory/'),
+        ('departments/', 'department_agents/'),
+    ]:
+        if rel.startswith(old_p):
+            candidate = SOURCE / (new_p + rel[len(old_p):])
+            if candidate.exists():
+                return candidate.read_text()
+    return p.read_text()
+
+
 def function_text(body, name, class_name=None):
     scope = ast.parse(body).body
     if class_name:
@@ -76,9 +95,9 @@ def prepare(destination):
         path.write_text(body)
         changed.append(relative)
 
-    write('voice_layer/persona.py', (SOURCE / 'voice_layer/persona.py').read_text())
+    write('voice_layer/persona.py', read_source('voice_layer/persona.py'))
     relative = 'voice_layer/daemon.py'
-    body, source = (target / relative).read_text(), (SOURCE / 'voice_layer/daemon.py').read_text()
+    body, source = (target / relative).read_text(), read_source('voice_layer/daemon.py')
     for name in ('build_instruction', 'live_config'):
         body = replace_once(body, function_text(body, name), function_text(source, name))
     body = replace_once(body, function_text(body, 'send_wake_confirmation', 'LiveVoice'),
@@ -93,8 +112,8 @@ def prepare(destination):
     write(relative, body)
 
     relative = 'core/harness_config.py'
-    body, source = (target / relative).read_text(), (SOURCE / relative).read_text()
-    if 'from voice_layer.persona import system_persona' not in body:
+    body, source = (target / relative).read_text(), read_source(relative)
+    if 'from voice.persona import system_persona' not in body:
         old_start = body.index('        instruction = (', body.index('    elif skills is not None:'))
         end_marker = "            'Begin with the answer or execute the requested action immediately. '"
         old_end = body.index(end_marker, old_start)
@@ -118,12 +137,12 @@ def prepare(destination):
 
     relative = 'orchestration/model_routes.py'
     body = (target / relative).read_text()
-    body = refresh_worker_instruction(body, (SOURCE / relative).read_text())
+    body = refresh_worker_instruction(body, read_source(relative))
     write(relative, body)
 
     # Transplant only delivery methods, preserving other installed control work.
     relative = 'jarvis_control/skills.py'
-    body, source = (target / relative).read_text(), (SOURCE / relative).read_text()
+    body, source = (target / relative).read_text(), read_source(relative)
     old_class = next(n for n in ast.parse(body).body if isinstance(n, ast.ClassDef) and n.name == 'UnifiedSkills')
     new_class = next(n for n in ast.parse(source).body if isinstance(n, ast.ClassDef) and n.name == 'UnifiedSkills')
     for name in ('background_events', 'acknowledge_event'):
@@ -136,7 +155,7 @@ def prepare(destination):
     write(relative, body)
     for relative in ('orchestration/model_notices.py', 'orchestration/release_manager.py',
                      'jarvis_control/nlu.py', 'skill_manifests/standby.json'):
-        write(relative, (SOURCE / relative).read_text())
+        write(relative, read_source(relative))
     relative = 'orchestration/tool_tiers.py'
     body = (target / relative).read_text()
     if "    'start_model_processing', 'model_processing_status'," not in body:
@@ -151,9 +170,9 @@ def prepare(destination):
     check = """from types import SimpleNamespace as NS
 from pathlib import Path
 from google.genai import types
-from voice_layer.daemon import live_config
+from voice.daemon import live_config
 from skills.skills import DesktopSkills
-from orchestration.tool_tiers import CORE_TOOLS
+from harness.tool_tiers import CORE_TOOLS
 r=DesktopSkills.__new__(DesktopSkills);r.manifest_dirs=[Path('skill_manifests')]
 specs=r._load_manifests()
 required={'start_model_processing','model_processing_status','show_widget','widget_schema'}
@@ -164,7 +183,7 @@ assert 'system voice and interaction layer' in c['system_instruction']
 assert 'GENERATED WIDGETS ARE PART OF THE OS' in c['system_instruction']
 types.LiveConnectConfig.model_validate(c)
 import asyncio
-from jarvis_control.skills import UnifiedSkills
+from control.skills import UnifiedSkills
 async def verify_delivery():
     jobs=NS(jobs={'fixture':{'id':'fixture','route':'reasoning','status':'completed','result':'Synthetic verification result'}})
     u=UnifiedSkills(desktop_skills=NS(_model_jobs=jobs))
@@ -193,7 +212,7 @@ def activate(staged):
         if hashlib.sha256((staged / name).read_bytes()).hexdigest() != digest:
             raise ValueError('Staged source changed: ' + name)
     sys.path.insert(0, str(SOURCE))
-    from orchestration.release_manager import ReleaseManager
+    from harness.release_manager import ReleaseManager
     name = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '-system-persona'
     target = ReleaseManager(root_dir=runtime).install_prepared_release(
         staged, name, expected_current=Path(metadata['parent']), timeout=20,

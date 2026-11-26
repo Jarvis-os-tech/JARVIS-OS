@@ -25,10 +25,10 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 if __package__ in (None, ""):
-    from jarvis_control import config as cfg
-    from jarvis_control.tasks import ACTIVE, TaskStore, confined, read_text
-    from jarvis_control.trace import Trace
-    from jarvis_control.workspace_files import open_file, write_text
+    from control import config as cfg
+    from control.tasks import ACTIVE, TaskStore, confined, read_text
+    from control.trace import Trace
+    from control.workspace_files import open_file, write_text
 else:
     from . import config as cfg
     from .tasks import ACTIVE, TaskStore, confined, read_text
@@ -372,7 +372,7 @@ class Worker:
                            "previous_jobs": self.store.jobs(self.task_id)[-20:], "budgets": self.settings}, ensure_ascii=False)
 
     def responses(self):
-        from voice_layer.config import load_env
+        from voice.config import load_env
         load_env(self.settings["api_key_env"])
         key = os.environ.get(self.settings["api_key_env"], "")
         if not key:

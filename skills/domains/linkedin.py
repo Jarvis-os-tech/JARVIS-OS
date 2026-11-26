@@ -4,7 +4,7 @@ Exposes the 12-agent LinkedIn Department to Jarvis orchestrator and handles revi
 
 import re
 from typing import Any, Dict, Optional
-from departments.linkedin import linkedin_dept
+from department_agents.linkedin import linkedin_dept
 
 ADAPTERS = {
     "linkedin.draft_post": "_adapter_linkedin_draft_post",

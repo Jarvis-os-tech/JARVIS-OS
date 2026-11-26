@@ -3,13 +3,13 @@ import json
 
 import pytest
 
-from core.ipc import JarvisIPCServer
-from voice_layer import ipc
+from kernel.ipc import JarvisIPCServer
+from voice import ipc
 
 
 @pytest.mark.asyncio
 async def test_core_second_server_preserves_running_socket(tmp_path):
-    path = tmp_path / 'core.sock'
+    path = tmp_path / 'kernel.sock'
     first = JarvisIPCServer(path, status_provider=lambda: {'connected': True})
     second = JarvisIPCServer(path)
     await first.start()
@@ -29,7 +29,7 @@ async def test_core_second_server_preserves_running_socket(tmp_path):
 
 @pytest.mark.asyncio
 async def test_core_preserves_regular_control_path(tmp_path):
-    path = tmp_path / 'core.sock'
+    path = tmp_path / 'kernel.sock'
     path.write_text('keep')
     server = JarvisIPCServer(path)
     with pytest.raises(PermissionError):
@@ -75,7 +75,7 @@ async def test_voice_preserves_existing_legacy_path(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_concurrent_core_start_keeps_one_owner(tmp_path):
-    path = tmp_path / 'core.sock'
+    path = tmp_path / 'kernel.sock'
     servers = [JarvisIPCServer(path), JarvisIPCServer(path)]
     try:
         results = await asyncio.gather(*(server.start() for server in servers), return_exceptions=True)

@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from jarvis_control.wayland_pointer import validate_click
-from jarvis_control.tools import Executor, Result
-from jarvis_control.config import Config
-from jarvis_control.outcomes import classify_result
+from control.wayland_pointer import validate_click
+from control.tools import Executor, Result
+from control.config import Config
+from control.outcomes import classify_result
 from skills.gui_control import GuiControl, GuiControlError
 
 
@@ -54,7 +54,7 @@ async def test_explicit_input_refusal_can_use_exact_observed_native_target(monke
 
 def test_native_text_click_backend_requires_an_observed_target_and_point(monkeypatch):
     executor=Executor(Config())
-    monkeypatch.setattr('jarvis_control.tools.shutil.which',lambda _:None)
+    monkeypatch.setattr('control.tools.shutil.which',lambda _:None)
     shell=Mock(return_value=Result(True,'{"status":"dispatched_unverified","verified":false}'))
     monkeypatch.setattr(executor,'_shell',shell)
     assert not executor._press_button('left',False).ok

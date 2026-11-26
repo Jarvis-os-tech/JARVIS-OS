@@ -17,12 +17,12 @@ import time
 from typing import Any, Dict, Optional, Union
 import wave
 
-from jarvis_control.execution_policy import (
+from control.execution_policy import (
     CONFIRMATION_DECISION_CRITERIA,
     requires_confirmation as policy_requires_confirmation,
 )
-from orchestration.model_routes import SUBSYSTEM_ROUTES
-from voice_layer.acknowledgements import (
+from harness.model_routes import SUBSYSTEM_ROUTES
+from voice.acknowledgements import (
     DECISION_ACK_CRITERIA,
     is_conversational_inquiry,
     select_ack,

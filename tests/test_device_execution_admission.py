@@ -4,13 +4,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from jarvis_control.device_execution import SharedToolExecutor
-from jarvis_control.outcomes import classify_result
+from control.device_execution import SharedToolExecutor
+from control.outcomes import classify_result
 
 
 @pytest.mark.asyncio
 async def test_unrelated_request_is_rejected_without_queueing_or_ledger_entry(tmp_path, monkeypatch):
-    monkeypatch.setattr('jarvis_control.device_execution.tool_timeout', lambda *_: 1)
+    monkeypatch.setattr('control.device_execution.tool_timeout', lambda *_: 1)
     started, release = asyncio.Event(), asyncio.Event()
 
     async def execute(name, args):
@@ -39,7 +39,7 @@ async def test_unrelated_request_is_rejected_without_queueing_or_ledger_entry(tm
 
 @pytest.mark.asyncio
 async def test_response_deadline_returns_pending_and_keeps_slot_until_real_completion(tmp_path, monkeypatch):
-    monkeypatch.setattr('jarvis_control.device_execution.tool_timeout', lambda *_: .01)
+    monkeypatch.setattr('control.device_execution.tool_timeout', lambda *_: .01)
     started, release = asyncio.Event(), asyncio.Event()
 
     async def execute(name, args):

@@ -153,8 +153,8 @@ def apply(home, repo, python, *, reset_history=False):
     current = yaml.safe_load((home / 'config.yaml').read_text()) or {}
     if not isinstance(current, dict):
         raise ValueError('Hermes config must be a mapping')
-    from voice_layer.config import load as load_voice
-    from jarvis_memory.paths import get_config_dir
+    from voice.config import load as load_voice
+    from memory.paths import get_config_dir
     memory = load_voice().memory
     database = (Path(memory.path).expanduser() if memory.path else get_config_dir()) / 'knowledge.db'
     updated, disabled = configured(current, repo, python, database)

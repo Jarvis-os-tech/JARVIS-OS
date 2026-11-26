@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from voice_layer.playback import Playback
+from voice.playback import Playback
 
 
 async def until(predicate):
@@ -27,7 +27,7 @@ async def test_preserving_cancel_during_prime_discards_old_chunk():
     from unittest.mock import patch
 
     worker = None
-    with patch('voice_layer.playback.asyncio.create_subprocess_exec', spawn):
+    with patch('voice.playback.asyncio.create_subprocess_exec', spawn):
         worker = asyncio.create_task(player.run())
         try:
             player.enqueue(b'\x01\x00')
@@ -57,7 +57,7 @@ async def test_preserving_cancel_during_spawn_stops_unpublished_process():
         return spawned
 
     from unittest.mock import patch
-    with patch('voice_layer.playback.asyncio.create_subprocess_exec', spawn):
+    with patch('voice.playback.asyncio.create_subprocess_exec', spawn):
         preparing = asyncio.create_task(player.prepare())
         await started.wait()
         generation = player.generation
@@ -79,7 +79,7 @@ async def test_preserving_cancel_during_drain_fences_old_audio_and_accounting():
     spawned = iter((old_process, new_process))
 
     from unittest.mock import patch
-    with patch('voice_layer.playback.asyncio.create_subprocess_exec',
+    with patch('voice.playback.asyncio.create_subprocess_exec',
                AsyncMock(side_effect=lambda *args, **kwargs: next(spawned))):
         worker = asyncio.create_task(player.run())
         try:

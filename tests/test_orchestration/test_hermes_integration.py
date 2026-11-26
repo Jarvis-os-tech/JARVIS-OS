@@ -6,13 +6,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from orchestration.agent_orchestrator import AgentOrchestrator
-from orchestration.mcp_server import OrchestratorMCP, TOOLS
-from jarvis_control.skills import UnifiedSkills
-from orchestration.task_agents import TaskAgents
-from orchestration.task_presentation import TaskPresentation
+from harness.agent_orchestrator import AgentOrchestrator
+from harness.mcp_server import OrchestratorMCP, TOOLS
+from control.skills import UnifiedSkills
+from harness.task_agents import TaskAgents
+from harness.task_presentation import TaskPresentation
 from skills.skills import DesktopSkills
-from voice_layer.daemon import build_instruction
+from voice.daemon import build_instruction
 
 
 def worker():
@@ -100,7 +100,7 @@ async def test_goal_is_registered_routes_to_hermes_and_notice_is_acknowledged(tm
 
 
 def test_service_discovers_installed_agents_without_running_wrappers(tmp_path, monkeypatch):
-    from orchestration.executables import installed_executables
+    from harness.executables import installed_executables
     binary = tmp_path / '.local/share/mise/installs/codex/latest/bin/codex'
     binary.parent.mkdir(parents=True)
     binary.write_text('#!/bin/sh\nexit 0\n')

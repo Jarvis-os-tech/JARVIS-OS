@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from voice_layer import microphone
+from voice import microphone
 
 
 def volume(*percentages):

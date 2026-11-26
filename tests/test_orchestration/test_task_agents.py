@@ -5,7 +5,7 @@ import stat
 
 import pytest
 
-from orchestration.task_agents import TaskAgents
+from harness.task_agents import TaskAgents
 
 
 class Bridge:

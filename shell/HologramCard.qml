@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import "style"
-import "../jarvis_widgets" as Widgets
+import "../widgets" as Widgets
 
 FocusScope {
     id: card

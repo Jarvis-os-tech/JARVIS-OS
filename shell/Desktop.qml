@@ -1,3 +1,3 @@
-import "jarvis_shell"
+import "."
 
 HudPreview { standaloneMode: true }

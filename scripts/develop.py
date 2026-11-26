@@ -11,11 +11,11 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from orchestration.agent_orchestrator import AGENTS, AgentOrchestrator
-from orchestration.evolution import EvolutionManager, EvolutionError
-from proactive.control import AutonomyControl
-from jarvis_memory.paths import get_config_dir
-from core.config import load_config
+from harness.agent_orchestrator import AGENTS, AgentOrchestrator
+from harness.evolution import EvolutionManager, EvolutionError
+from kernel.proactive.control import AutonomyControl
+from memory.paths import get_config_dir
+from kernel.config import load_config
 
 
 async def run(args):

@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config import load_config
-from jarvis_memory.bridge import MemoryBridge
+from memory.bridge import MemoryBridge
 
 memory = MemoryBridge(load_config().memory)
 try:

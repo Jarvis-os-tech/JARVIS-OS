@@ -1,7 +1,7 @@
 import subprocess
 from pathlib import Path
 import pytest
-from orchestration.goal_workspaces import project_workspace
+from harness.goal_workspaces import project_workspace
 
 
 def git(root,*args):

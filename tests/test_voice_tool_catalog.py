@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from jarvis_control.config import Config
-from jarvis_control.skills import ControlSkills, UnifiedSkills
-from voice_layer.daemon import build_instruction
+from control.config import Config
+from control.skills import ControlSkills, UnifiedSkills
+from voice.daemon import build_instruction
 from skills.skills import DesktopSkills
 
 

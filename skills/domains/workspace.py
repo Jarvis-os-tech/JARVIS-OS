@@ -1,5 +1,5 @@
 """Workspace adapters extracted from the registry facade."""
-from departments.google_workspace import google_workspace_department
+from department_agents.google_workspace import google_workspace_department
 from skills.errors import SkillError
 
 

@@ -69,7 +69,7 @@ def refinement_lease(root):
 
 
 def git(root, *arguments):
-    from core.secret_env import sanitized_subprocess_env
+    from kernel.secret_env import sanitized_subprocess_env
     env = {k: v for k, v in sanitized_subprocess_env().items() if not k.startswith('GIT_')}
     env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null', GIT_TERMINAL_PROMPT='0')
     subprocess.run(['git', '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgsign=false',

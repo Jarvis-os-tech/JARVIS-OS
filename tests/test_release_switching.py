@@ -4,7 +4,7 @@ import subprocess
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from orchestration.release_manager import ReleaseManager
+from harness.release_manager import ReleaseManager
 
 def test_atomic_activation_and_previous_link(tmp_path):
     rm = ReleaseManager(root_dir=tmp_path)
@@ -90,7 +90,7 @@ def test_state_snapshot(tmp_path):
     source.commit()
     assert Path(str(db1) + '-wal').exists()
 
-    with patch('orchestration.release_manager.time.time_ns', return_value=123):
+    with patch('harness.release_manager.time.time_ns', return_value=123):
         first = rm.snapshot_state()
         second = rm.snapshot_state()
     source.close()
@@ -191,21 +191,21 @@ def test_first_activation_failure_removes_current(tmp_path):
 def test_health_rejects_unhealthy_services(tmp_path, states):
     import subprocess
     rm = ReleaseManager(tmp_path)
-    with patch('orchestration.release_manager.subprocess.run',
+    with patch('harness.release_manager.subprocess.run',
                return_value=subprocess.CompletedProcess([], 0, states)), \
-         patch('orchestration.release_manager.time.sleep'), \
-         patch('orchestration.release_manager.time.monotonic', side_effect=[0, 0, 0, 0.1, 2]):
+         patch('harness.release_manager.time.sleep'), \
+         patch('harness.release_manager.time.monotonic', side_effect=[0, 0, 0, 0.1, 2]):
         assert not rm.verify_health(timeout=1)
 
 
 def test_health_requires_sustained_activity(tmp_path):
     import subprocess
     rm = ReleaseManager(tmp_path)
-    with patch('orchestration.release_manager.subprocess.run',
+    with patch('harness.release_manager.subprocess.run',
                return_value=subprocess.CompletedProcess([], 0, 'active\nactive\n')) as run, \
          patch.object(rm, '_voice_ready', return_value=True) as voice, \
-         patch('orchestration.release_manager.time.sleep'), \
-         patch('orchestration.release_manager.time.monotonic', side_effect=[0, 0, 0, 0, 0, 0.5, 0.5, 0.5, 1.1]):
+         patch('harness.release_manager.time.sleep'), \
+         patch('harness.release_manager.time.monotonic', side_effect=[0, 0, 0, 0, 0, 0.5, 0.5, 0.5, 1.1]):
         assert rm.verify_health(timeout=2)
     assert run.call_count == 2
     assert voice.call_count == 2
@@ -215,10 +215,10 @@ def test_health_requires_sustained_activity(tmp_path):
 def test_active_services_without_responding_voice_are_unhealthy(tmp_path):
     import subprocess
     rm = ReleaseManager(tmp_path)
-    with patch('orchestration.release_manager.subprocess.run',
+    with patch('harness.release_manager.subprocess.run',
                return_value=subprocess.CompletedProcess([], 0, 'active\nactive\n')), \
          patch.object(rm, '_voice_ready', return_value=False) as voice, \
-         patch('orchestration.release_manager.time.sleep'), \
-         patch('orchestration.release_manager.time.monotonic', side_effect=[0, 0, 0, 0, 0.1, 0.1, 2]):
+         patch('harness.release_manager.time.sleep'), \
+         patch('harness.release_manager.time.monotonic', side_effect=[0, 0, 0, 0, 0.1, 0.1, 2]):
         assert not rm.verify_health(timeout=1)
     voice.assert_called_once()

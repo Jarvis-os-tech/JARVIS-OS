@@ -75,7 +75,7 @@ def _numbers(text):
 
 
 def eligible_text(text):
-    from jarvis_control.command_values import protected_ranges
+    from control.command_values import protected_ranges
     if not isinstance(text, str) or protected_ranges(text):
         return False
     text = normalize(text.replace("'", ''))

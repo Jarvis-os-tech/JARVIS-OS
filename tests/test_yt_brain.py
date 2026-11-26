@@ -5,11 +5,11 @@ import types
 
 import pytest
 
-from connectors.yt_brain import MAX_NOTE_CHARS, YtBrainClient
-from jarvis_control.config import Config
-from jarvis_control.skills import ControlSkills, UnifiedSkills
+from youtube_brain.client import MAX_NOTE_CHARS, YtBrainClient
+from control.config import Config
+from control.skills import ControlSkills, UnifiedSkills
 from skills.skills import DesktopSkills
-from voice_layer.daemon import build_instruction
+from voice.daemon import build_instruction
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def yt_client(tmp_path):
 
 @pytest.mark.asyncio
 async def test_yt_brain_declarations_and_routing(monkeypatch, yt_client):
-    monkeypatch.setattr("skills.domains.yt_brain.get_client", lambda: yt_client)
+    monkeypatch.setattr("youtube_brain.domain.get_client", lambda: yt_client)
     desktop = DesktopSkills()
     control = ControlSkills(Config())
     skills = UnifiedSkills(control_skills=control, desktop_skills=desktop)
@@ -164,7 +164,7 @@ async def test_bus_connection_setup_is_bounded(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_search_caps_limit_before_bus_request(monkeypatch, yt_client):
-    from connectors.yt_brain import MAX_SEARCH_RESULTS
+    from youtube_brain.client import MAX_SEARCH_RESULTS
     from unittest.mock import AsyncMock
     request = AsyncMock(return_value={'results': []})
     monkeypatch.setattr(yt_client, '_bus_request', request)

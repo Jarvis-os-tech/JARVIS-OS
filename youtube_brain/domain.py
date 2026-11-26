@@ -6,7 +6,7 @@ extract notes, search transcripts, and inspect topics.
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
-from connectors.yt_brain import get_client
+from youtube_brain.client import get_client
 from skills.errors import SkillError
 
 

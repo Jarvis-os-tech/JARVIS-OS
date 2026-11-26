@@ -4,8 +4,8 @@ from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock
 
 import pytest
-from voice_layer.local_speech import LocalSpeechConfig
-from voice_layer.needle_router import NeedleRouter, validate_prediction
+from voice.local_speech import LocalSpeechConfig
+from voice.needle_router import NeedleRouter, validate_prediction
 
 
 def prediction(name, args, confidence=.95):
@@ -53,9 +53,9 @@ def test_expanded_needle_commands_reject_ungrounded_targets(name, args, text):
 
 @pytest.mark.asyncio
 async def test_local_lock_screen_preserves_confirmation_gate_when_online():
-    from voice_layer.config import Config
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.config import Config
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     voice = LiveVoice(
         Playback('test'),
@@ -123,9 +123,9 @@ def test_single_action_schemas_still_require_grounded_direction(name,text,expect
 
 @pytest.mark.asyncio
 async def test_needles_offline_prediction_uses_existing_executor_once():
-    from voice_layer.config import Config
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.config import Config
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     voice=LiveVoice(Playback('test'),config=Config(),skills=NS(execute=AsyncMock(return_value={'ok':True,'status':'completed'})))
     voice.local_speech=NS(transcribe=AsyncMock(return_value='make the speakers quieter'))
     voice.local_router=NS(config=LocalSpeechConfig(needle_enabled=True),ready=True,
@@ -139,9 +139,9 @@ async def test_needles_offline_prediction_uses_existing_executor_once():
 
 @pytest.mark.asyncio
 async def test_needle_does_not_delay_online_conversation():
-    from voice_layer.config import Config
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.config import Config
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     voice=LiveVoice(Playback('test'),config=Config())
     voice.connected=True
     voice.local_speech=NS(transcribe=AsyncMock(return_value='tell me about the weather'))
@@ -151,8 +151,8 @@ async def test_needle_does_not_delay_online_conversation():
 
 
 def test_offline_feedback_never_claims_unverified_success():
-    from jarvis_control.outcomes import classify_result
-    from voice_layer.offline_speech import result_text
+    from control.outcomes import classify_result
+    from voice.offline_speech import result_text
     text=result_text('system_control',{'action':'volume_set','value':40},classify_result({'ok':True,'status':'unverified'}))
     assert 'could not verify' in text
     assert 'set to' not in text
@@ -171,9 +171,9 @@ def test_compound_number_cannot_be_truncated_to_its_last_digit():
 
 @pytest.mark.asyncio
 async def test_online_first_needle_executes_eligible_command_locally_without_cloud():
-    from voice_layer.config import Config
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.config import Config
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     voice = LiveVoice(Playback('test'), config=Config(),
                       skills=NS(execute=AsyncMock(return_value={'ok': True, 'status': 'completed'})))
@@ -199,9 +199,9 @@ async def test_online_first_needle_executes_eligible_command_locally_without_clo
     'set volume to forty on my phone',
 ])
 async def test_online_needle_respects_negation_protected_ranges_and_phone_targets(text):
-    from voice_layer.config import Config
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.config import Config
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     voice = LiveVoice(Playback('test'), config=Config(),
                       skills=NS(execute=AsyncMock()))

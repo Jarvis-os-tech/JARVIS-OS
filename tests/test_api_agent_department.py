@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock
 
-from departments.api_agent import AGENTS, AGENT_NAMES, APIAgentDepartment
+from department_agents.api_agent import AGENTS, AGENT_NAMES, APIAgentDepartment
 from skills.skills import DesktopSkills
 
 

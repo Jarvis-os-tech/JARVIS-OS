@@ -12,8 +12,8 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
+from voice.daemon import LiveVoice
+from voice.playback import Playback
 
 
 def voice():
@@ -83,8 +83,8 @@ async def test_long_wait_has_no_speculative_speech(monkeypatch):
         if cycles > 2:
             raise asyncio.CancelledError
 
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: 16)
-    monkeypatch.setattr('voice_layer.daemon.asyncio.sleep', cycle)
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: 16)
+    monkeypatch.setattr('voice.daemon.asyncio.sleep', cycle)
     with pytest.raises(asyncio.CancelledError):
         await instance.monitor_response()
     assert instance.player.queue.empty()
@@ -105,8 +105,8 @@ async def test_closed_user_turn_waits_for_reply_or_admitted_work(monkeypatch):
         if cycles > 1:
             raise asyncio.CancelledError
 
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: 11.3)
-    monkeypatch.setattr('voice_layer.daemon.asyncio.sleep', cycle)
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: 11.3)
+    monkeypatch.setattr('voice.daemon.asyncio.sleep', cycle)
     with pytest.raises(asyncio.CancelledError):
         await instance.monitor_response()
     assert instance.player.queue.empty()
@@ -130,8 +130,8 @@ async def test_early_ack_does_not_compete_with_answers_or_control_turns(monkeypa
         if cycles > 1:
             raise asyncio.CancelledError
 
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: 11.3)
-    monkeypatch.setattr('voice_layer.daemon.asyncio.sleep', cycle)
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: 11.3)
+    monkeypatch.setattr('voice.daemon.asyncio.sleep', cycle)
     with pytest.raises(asyncio.CancelledError):
         await instance.monitor_response()
     assert instance.player.queue.empty()
@@ -139,7 +139,7 @@ async def test_early_ack_does_not_compete_with_answers_or_control_turns(monkeypa
 
 @pytest.mark.asyncio
 async def test_uploaded_speech_boundary_arms_local_ack():
-    from voice_layer.speech import GateFrame
+    from voice.speech import GateFrame
     instance = voice()
     queue = asyncio.Queue()
     queue.put_nowait((GateFrame(bytes(640), opened=True), 0))

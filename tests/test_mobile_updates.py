@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from jarvis_control.device_bridge import DeviceBridge
+from control.device_bridge import DeviceBridge
 from scripts.publish_mobile_update import publish
 
 

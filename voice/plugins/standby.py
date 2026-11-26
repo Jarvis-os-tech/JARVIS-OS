@@ -1,5 +1,5 @@
 """Compatibility alias for voice_layer.standby."""
-from voice_layer.standby import (
+from voice.standby import (
     OpenWakeWordDetector,
     StandbyController,
     WakeWordUnavailable,

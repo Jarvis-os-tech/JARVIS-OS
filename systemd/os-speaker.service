@@ -1,0 +1,21 @@
+[Unit]
+Description=JARVIS OS System-Wide Speech Bus (D-Bus, Hardware, Systemd, Shell)
+After=pipewire.service wireplumber.service jarvis-voice.service
+Wants=jarvis-voice.service
+
+[Service]
+Type=simple
+ExecStart="/home/g0pi/JARVIS OS/.venv/bin/python" -m voice_layer.os_speaker
+WorkingDirectory=/home/g0pi/JARVIS OS
+Environment="PYTHONPATH=/home/g0pi/JARVIS OS"
+Environment="PYTHONUNBUFFERED=1"
+CPUAffinity=4-11
+Nice=5
+Restart=always
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=5
+
+[Install]
+Alias=jarvis-os-speaker.service
+WantedBy=default.target

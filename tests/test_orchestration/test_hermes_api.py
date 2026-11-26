@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from orchestration.hermes_api import HermesAPI, workflow_prompt
-from orchestration.durable_hermes import DurableHermes, GoalWorker
+from harness.hermes_api import HermesAPI, workflow_prompt
+from harness.durable_hermes import DurableHermes, GoalWorker
 try:
     from tests.test_orchestration.test_durable_hermes import Bridge, Supervisor
 except ImportError:

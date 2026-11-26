@@ -228,7 +228,7 @@ class PhoneSkillIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(res["contacts"][0]["name"], "Alice")
 
     async def test_monitor_phone_calls_queues_notice(self):
-        from core.agent import LiveVoice
+        from kernel.agent import LiveVoice
         skills = DesktopSkills()
         voice = LiveVoice(None, skills=skills)
 
@@ -260,7 +260,7 @@ class PhoneSkillIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("+919949617551", notice_text)
 
     async def test_outgoing_call_hung_off_queues_proactive_notice(self):
-        from core.agent import LiveVoice
+        from kernel.agent import LiveVoice
         skills = DesktopSkills()
         voice = LiveVoice(None, skills=skills)
 
@@ -292,7 +292,7 @@ class PhoneSkillIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("hung off", notice_text)
 
     async def test_incoming_missed_call_queues_proactive_notice(self):
-        from core.agent import LiveVoice
+        from kernel.agent import LiveVoice
         skills = DesktopSkills()
         voice = LiveVoice(None, skills=skills)
 
@@ -323,7 +323,7 @@ class PhoneSkillIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("hung up", notice_text)
 
     async def test_call_connected_and_ended_queues_notices(self):
-        from core.agent import LiveVoice
+        from kernel.agent import LiveVoice
         skills = DesktopSkills()
         voice = LiveVoice(None, skills=skills)
 

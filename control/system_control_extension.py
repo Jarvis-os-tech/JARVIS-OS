@@ -115,7 +115,7 @@ def execute(executor, action: str, target: str = '', password: str = '') -> Any:
 
         # ── Network Actions ──
         if action == 'network_status':
-            from jarvis_os_bridge.network_control import NetworkController
+            from control.bridge.network_control import NetworkController
             result = _run_async(NetworkController().get_status())
             if not result.get('ok'):
                 return Result(False, result.get('error', 'Network status unavailable'))
@@ -132,7 +132,7 @@ def execute(executor, action: str, target: str = '', password: str = '') -> Any:
             return Result(True, '. '.join(parts) + '.')
 
         if action == 'wifi_scan':
-            from jarvis_os_bridge.network_control import NetworkController
+            from control.bridge.network_control import NetworkController
             aps = _run_async(NetworkController().scan_wifi(rescan=True))
             if not aps:
                 return Result(True, 'No WiFi networks found nearby.')
@@ -142,7 +142,7 @@ def execute(executor, action: str, target: str = '', password: str = '') -> Any:
             return Result(True, '\n'.join(lines))
 
         if action == 'wifi_connect':
-            from jarvis_os_bridge.network_control import NetworkController
+            from control.bridge.network_control import NetworkController
             ctrl = NetworkController()
             result = _run_async(ctrl.connect_wifi(target, password or None))
             if result.get('ok'):
@@ -150,17 +150,17 @@ def execute(executor, action: str, target: str = '', password: str = '') -> Any:
             return Result(False, result.get('error', f"Failed connecting to '{target}'"))
 
         if action == 'wifi_disconnect':
-            from jarvis_os_bridge.network_control import NetworkController
+            from control.bridge.network_control import NetworkController
             result = _run_async(NetworkController().disconnect_wifi())
             return Result(result.get('ok', False), result.get('message') or result.get('error', 'WiFi disconnect attempted.'))
 
         if action == 'wifi_forget':
-            from jarvis_os_bridge.network_control import NetworkController
+            from control.bridge.network_control import NetworkController
             result = _run_async(NetworkController().forget_wifi(target))
             return Result(result.get('ok', False), result.get('message') or result.get('error', ''))
 
         if action == 'wifi_saved':
-            from jarvis_os_bridge.network_control import NetworkController
+            from control.bridge.network_control import NetworkController
             saved = _run_async(NetworkController().list_saved_wifi())
             if not saved:
                 return Result(True, 'No saved WiFi networks.')
@@ -170,7 +170,7 @@ def execute(executor, action: str, target: str = '', password: str = '') -> Any:
             return Result(True, '\n'.join(lines))
 
         if action == 'vpn_list':
-            from jarvis_os_bridge.network_control import NetworkController
+            from control.bridge.network_control import NetworkController
             vpns = _run_async(NetworkController().list_vpns())
             if not vpns:
                 return Result(True, 'No VPN profiles configured.')
@@ -181,18 +181,18 @@ def execute(executor, action: str, target: str = '', password: str = '') -> Any:
             return Result(True, '\n'.join(lines))
 
         if action == 'vpn_connect':
-            from jarvis_os_bridge.network_control import NetworkController
+            from control.bridge.network_control import NetworkController
             result = _run_async(NetworkController().connect_vpn(target))
             return Result(result.get('ok', False), result.get('message') or result.get('error', ''))
 
         if action == 'vpn_disconnect':
-            from jarvis_os_bridge.network_control import NetworkController
+            from control.bridge.network_control import NetworkController
             result = _run_async(NetworkController().disconnect_vpn(target))
             return Result(result.get('ok', False), result.get('message') or result.get('error', ''))
 
         # ── Bluetooth Actions ──
         if action in ('bt_status', 'bt_devices'):
-            from jarvis_os_bridge.bluetooth_control import BluetoothController
+            from control.bridge.bluetooth_control import BluetoothController
             status = _run_async(BluetoothController().get_status())
             if not status.get('ok'):
                 return Result(False, status.get('error', 'Bluetooth status unavailable'))
@@ -209,7 +209,7 @@ def execute(executor, action: str, target: str = '', password: str = '') -> Any:
             return Result(True, '\n'.join(parts))
 
         if action == 'bt_scan':
-            from jarvis_os_bridge.bluetooth_control import BluetoothController
+            from control.bridge.bluetooth_control import BluetoothController
             devs = _run_async(BluetoothController().scan_devices(timeout=6.0))
             if not devs:
                 return Result(True, 'No Bluetooth devices found nearby.')
@@ -220,27 +220,27 @@ def execute(executor, action: str, target: str = '', password: str = '') -> Any:
             return Result(True, '\n'.join(lines))
 
         if action == 'bt_connect':
-            from jarvis_os_bridge.bluetooth_control import BluetoothController
+            from control.bridge.bluetooth_control import BluetoothController
             result = _run_async(BluetoothController().connect_device(target))
             return Result(result.get('ok', False), result.get('message') or result.get('error', ''))
 
         if action == 'bt_disconnect':
-            from jarvis_os_bridge.bluetooth_control import BluetoothController
+            from control.bridge.bluetooth_control import BluetoothController
             result = _run_async(BluetoothController().disconnect_device(target))
             return Result(result.get('ok', False), result.get('message') or result.get('error', ''))
 
         if action == 'bt_pair':
-            from jarvis_os_bridge.bluetooth_control import BluetoothController
+            from control.bridge.bluetooth_control import BluetoothController
             result = _run_async(BluetoothController().pair_device(target))
             return Result(result.get('ok', False), result.get('message') or result.get('error', ''))
 
         if action == 'bt_remove':
-            from jarvis_os_bridge.bluetooth_control import BluetoothController
+            from control.bridge.bluetooth_control import BluetoothController
             result = _run_async(BluetoothController().remove_device(target))
             return Result(result.get('ok', False), result.get('message') or result.get('error', ''))
 
         if action == 'bt_audio_route':
-            from jarvis_os_bridge.bluetooth_control import BluetoothController
+            from control.bridge.bluetooth_control import BluetoothController
             result = _run_async(BluetoothController().route_audio(target))
             return Result(result.get('ok', False), result.get('message') or result.get('error', ''))
 

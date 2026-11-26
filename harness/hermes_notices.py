@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import time
 
-from orchestration.hermes_setup import atomic_text
+from harness.hermes_setup import atomic_text
 
 
 class NativeNotices:

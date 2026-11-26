@@ -3,7 +3,7 @@ import asyncio
 import logging
 import time
 
-from core.audio_scheduler import SendStalled, VideoFrameDropped
+from kernel.audio_scheduler import SendStalled, VideoFrameDropped
 
 log = logging.getLogger('gemini_voice')
 

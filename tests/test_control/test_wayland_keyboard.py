@@ -1,6 +1,6 @@
 import pytest
 
-from jarvis_control.wayland_keyboard import keymap_for_shortcut, literal_plan
+from control.wayland_keyboard import keymap_for_shortcut, literal_plan
 
 
 @pytest.mark.parametrize('key,code', [('Return', 28), ('Escape', 1), ('Tab', 15), ('BackSpace', 14)])

@@ -78,12 +78,12 @@ def prepare(destination):
         original=(target/deployed).read_text()
         content=splice(original,(SOURCE/relative).read_text(),names)
         if deployed=='voice_layer/daemon.py':
-            if 'from jarvis_control.evidence import requires_action_evidence, META_TOOLS' not in content:
-                content=content.replace('from jarvis_control.outcomes import classify_result',
-                    'from jarvis_control.outcomes import classify_result\nfrom jarvis_control.evidence import requires_action_evidence, META_TOOLS')
-            if 'from jarvis_control.execution_policy import tool_timeout' not in content:
-                content=content.replace('from jarvis_control.outcomes import classify_result',
-                    'from jarvis_control.outcomes import classify_result\nfrom jarvis_control.execution_policy import tool_timeout')
+            if 'from control.evidence import requires_action_evidence, META_TOOLS' not in content:
+                content=content.replace('from control.outcomes import classify_result',
+                    'from control.outcomes import classify_result\nfrom jarvis_control.evidence import requires_action_evidence, META_TOOLS')
+            if 'from control.execution_policy import tool_timeout' not in content:
+                content=content.replace('from control.outcomes import classify_result',
+                    'from control.outcomes import classify_result\nfrom jarvis_control.execution_policy import tool_timeout')
             if not node_for(content,'MAX_TOOL_CALLS_PER_TURN'):
                 content=content.replace("log = logging.getLogger('voice_layer')",
                     "MAX_TOOL_CALLS_PER_TURN = 64\n\nlog = logging.getLogger('voice_layer')")
@@ -105,12 +105,12 @@ import asyncio,json
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock
 from skills.skills import DesktopSkills
-from jarvis_control.outcomes import classify_result
-from jarvis_control.execution_policy import tool_timeout
-from jarvis_control.wayland_keyboard import literal_plan
-from jarvis_control.nlu import NLUEngine
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
+from control.outcomes import classify_result
+from control.execution_policy import tool_timeout
+from control.wayland_keyboard import literal_plan
+from control.nlu import NLUEngine
+from voice.daemon import LiveVoice
+from voice.playback import Playback
 assert not classify_result({'ground_truth_verified':False}).completed
 assert not classify_result({'successful':False}).completed
 assert not classify_result({'status':'awaiting_authorization'}).completed
@@ -153,7 +153,7 @@ def activate(staged):
     parent=Path(metadata['parent'])
     before=status()
     sys.path.insert(0,str(parent))
-    from orchestration.release_manager import ReleaseManager
+    from harness.release_manager import ReleaseManager
     manager=ReleaseManager(RUNTIME)
     name=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-system-integration'
     installed=manager.install_prepared_release(staged,name,expected_current=parent,

@@ -1,8 +1,8 @@
 import asyncio,json,sys,subprocess
 from pathlib import Path
 import pytest
-from orchestration.agent_orchestrator import AgentOrchestrator
-from orchestration.mcp_server import OrchestratorMCP
+from harness.agent_orchestrator import AgentOrchestrator
+from harness.mcp_server import OrchestratorMCP
 
 
 @pytest.mark.asyncio

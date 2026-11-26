@@ -4,12 +4,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from voice_layer.config import Config
-from voice_layer.daemon import LiveVoice
-from voice_layer.decision_router import DecisionResult
-from voice_layer.local_speech import LocalSpeechConfig, WhistleClient, app_names, command_for
-from voice_layer.playback import Playback
-from voice_layer.speech import GateFrame
+from voice.config import Config
+from voice.daemon import LiveVoice
+from voice.decision_router import DecisionResult
+from voice.local_speech import LocalSpeechConfig, WhistleClient, app_names, command_for
+from voice.playback import Playback
+from voice.speech import GateFrame
 
 
 @pytest.mark.parametrize('text,expected', [

@@ -342,7 +342,7 @@ class ReleaseManager:
         )
 
     def _voice_ready(self, timeout: float) -> bool:
-        from voice_layer.config import SOCKET_PATH
+        from voice.config import SOCKET_PATH
 
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:

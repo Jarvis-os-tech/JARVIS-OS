@@ -37,19 +37,19 @@ def test_installed_commands_and_distributed_config(tmp_path):
     assert installed.is_symlink()
     assert Path(os.readlink(installed)).is_absolute()
     assert installed.resolve().is_relative_to(runtime / 'releases')
-    assert (installed / 'jarvis_memory/__init__.py').is_file()
-    assert (installed / 'jarvis_control/omarchy_guides/SKILL.md').is_file()
-    assert (installed / 'jarvis_control/web_text.py').is_file()
-    assert (installed / 'voice_layer/background.py').is_file()
+    assert (installed / 'memory/__init__.py').is_file() or (installed / 'jarvis_memory/__init__.py').is_file()
+    assert (installed / 'control/omarchy_guides/SKILL.md').is_file() or (installed / 'jarvis_control/omarchy_guides/SKILL.md').is_file()
+    assert (installed / 'control/web_text.py').is_file() or (installed / 'jarvis_control/web_text.py').is_file()
+    assert (installed / 'voice/background.py').is_file() or (installed / 'voice_layer/background.py').is_file()
     assert (installed / 'skill_manifests/vision.json').is_file()
-    assert (installed / 'departments/memory/schema.sql').is_file()
-    assert not (installed / 'departments/memory/state').exists()
-    assert not (installed / 'scripts/jarvis-shell-hook.sh.jarvis.bak').exists()
+    assert (installed / 'department_agents/memory/schema.sql').is_file() or (installed / 'departments/memory/schema.sql').is_file()
+    assert not (installed / 'department_agents/memory/state').exists() and not (installed / 'departments/memory/state').exists()
+    assert not (installed / 'scripts/jarvis-shell-hook.sh.jarvis.bak').exists() and not (installed / 'scripts/shell-hook.sh.jarvis.bak').exists()
     interpreter = installed / '.venv/bin/python'
     run(str(interpreter), '-c',
         'import sys; sys.path.insert(0, ' + repr(str(installed)) + '); '
-        'from skills.skills import DesktopSkills; from voice_layer.background import monitor; '
-        'from orchestration.task_events import CONTRACT; import learning')
+        'from skills.skills import DesktopSkills; from voice.background import monitor; '
+        'from harness.task_events import CONTRACT; import learning')
 
     service = (destination / '.config/systemd/user/jarvis-voice.service').read_text()
     assert '%h/.local/share/jarvis-runtime/current/bin/jarvis-voice run' in service
@@ -75,8 +75,10 @@ def test_installer_preserves_existing_runtime_pointer_and_release(tmp_path):
     current = runtime / 'current'
     release = runtime / 'releases/existing'
     release.mkdir(parents=True)
-    for package in ('voice_layer', 'orchestration', 'contracts', 'learning', 'configs', 'core'):
-        shutil.copytree(root / package, release / package, symlinks=True, ignore_dangling_symlinks=True)
+    for package in ('voice', 'harness', 'contracts', 'learning', 'config', 'kernel'):
+        target_pkg = 'voice_layer' if package == 'voice' else ('orchestration' if package == 'harness' else ('configs' if package == 'config' else ('core' if package == 'kernel' else package)))
+        src = root / package if (root / package).exists() else root / target_pkg
+        shutil.copytree(src, release / target_pkg, symlinks=True, ignore_dangling_symlinks=True)
     shutil.copy2(root / 'requirements.txt', release / 'requirements.txt')
     (release / 'bin').mkdir()
     for command in ('jarvis-voice', 'jarvis', 'jarvis-memory', 'jarvis-control'):

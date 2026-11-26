@@ -15,23 +15,23 @@ import wave
 
 import pytest
 
-from jarvis_control.execution_policy import requires_confirmation
-from voice_layer.acknowledgements import (
+from control.execution_policy import requires_confirmation
+from voice.acknowledgements import (
     DECISION_ACK_CRITERIA,
     get_decision_ack_phrase,
     resolve_ack_asset,
 )
-from voice_layer.daemon import LiveVoice
-from voice_layer.decision_router import (
+from voice.daemon import LiveVoice
+from voice.decision_router import (
     DecisionResult,
     DecisionRouter,
     pcm_to_wav,
 )
-from voice_layer.playback import Playback
+from voice.playback import Playback
 
 
 def test_decision_config_loads_and_reaches_router(tmp_path, monkeypatch):
-    from voice_layer.config import load
+    from voice.config import load
 
     config_dir = tmp_path / 'jarvis-voice'
     config_dir.mkdir()

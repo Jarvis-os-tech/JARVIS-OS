@@ -2,11 +2,11 @@
 import logging
 import sqlite3
 from pathlib import Path
-from orchestration.agent_orchestrator import OrchestrationError
-from orchestration.evolution import EvolutionManager
-from core.workers import WorkerBusyError
+from harness.agent_orchestrator import OrchestrationError
+from harness.evolution import EvolutionManager
+from kernel.workers import WorkerBusyError
 from skills.errors import SkillError
-from orchestration.integration_paths import locations
+from harness.integration_paths import locations
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ ADAPTER_COMMANDS = {
 
 class OrchestrationDomain:
     def _hermes_api(self):
-        from orchestration.hermes_api import HermesAPI
+        from harness.hermes_api import HermesAPI
         return HermesAPI(self._personal_agents())
 
     async def _adapter_hermes_api(self, operation='operations.list', arguments=None, request_key=None):
@@ -113,7 +113,7 @@ class OrchestrationDomain:
             if workspace_id != 'scratch' or input_paths:
                 options.update(workspace_id=workspace_id, input_paths=input_paths)
             agents = self._personal_agents()
-            from orchestration.durable_hermes import DurableHermes
+            from harness.durable_hermes import DurableHermes
             if isinstance(agents, DurableHermes):
                 return await self._file_worker.run(agents.start, goal, role='main orchestrator', context=context,
                                                    timeout_seconds=timeout_seconds, **options)
@@ -122,9 +122,9 @@ class OrchestrationDomain:
             raise SkillError(str(error)) from None
 
     async def _adapter_list_system_agents(self):
-        from departments.cli_agent import AGENT_NAMES as CLI_AGENT_NAMES
-        from departments.api_agent import AGENT_NAMES as API_AGENT_NAMES
-        from departments.youtube_production import AGENT_NAMES as YOUTUBE_PRODUCTION_AGENT_NAMES
+        from department_agents.cli_agent import AGENT_NAMES as CLI_AGENT_NAMES
+        from department_agents.api_agent import AGENT_NAMES as API_AGENT_NAMES
+        from department_agents.youtube_production import AGENT_NAMES as YOUTUBE_PRODUCTION_AGENT_NAMES
 
         result = self._agent_orchestrator.discover()
         department_agents = {
@@ -165,7 +165,7 @@ class OrchestrationDomain:
         return result
 
     async def _adapter_model_job(self, prompt, route='background'):
-        from orchestration.model_routes import ModelJobs
+        from harness.model_routes import ModelJobs
         if not hasattr(self, '_model_jobs'):
             self._model_jobs = ModelJobs(self._memory_api_key, self.task_events)
         try:
@@ -188,7 +188,7 @@ class OrchestrationDomain:
             if task_type is not None:
                 options['task_type'] = task_type
             if model is None:
-                from orchestration.model_policy import apply_model_policy
+                from harness.model_policy import apply_model_policy
                 routed = apply_model_policy([{'agent': agent}], cost_profile)[0]
                 if routed.get('model'):
                     options['model'] = routed['model']
@@ -225,14 +225,14 @@ class OrchestrationDomain:
 
     async def _adapter_format_agent_prompt(self, task, context=None, constraints=None, role=None, workspace=None):
         try:
-            from orchestration.prompt_style import format_prompt
+            from harness.prompt_style import format_prompt
             return format_prompt(task=task, context=context, constraints=constraints, role=role, workspace=workspace)
         except (ValueError, TypeError) as error:
             raise SkillError(str(error)) from None
 
     async def _adapter_start_agent_goal(self, goal, workspace, timeout_seconds=900, cost_profile='budget'):
-        from orchestration.personas import software_assignments
-        from orchestration.model_policy import apply_model_policy
+        from harness.personas import software_assignments
+        from harness.model_policy import apply_model_policy
         try:
             assignments = apply_model_policy(
                 software_assignments(self._agent_orchestrator.executables), cost_profile)
@@ -345,7 +345,7 @@ class OrchestrationDomain:
 
     def _personal_agents(self):
         if not hasattr(self, '_task_agents'):
-            from orchestration.durable_hermes import DurableHermes
+            from harness.durable_hermes import DurableHermes
             self._task_agents = DurableHermes(locations()['goals_root'], events=self.task_events)
         return self._task_agents
 
@@ -358,7 +358,7 @@ class OrchestrationDomain:
     async def _adapter_create_task_agent(self, task, role='assistant', context='', timeout_seconds=300):
         try:
             agents = self._personal_agents()
-            from orchestration.durable_hermes import DurableHermes
+            from harness.durable_hermes import DurableHermes
             if isinstance(agents, DurableHermes):
                 return await self._file_worker.run(agents.start, task, role=role, context=context, timeout_seconds=timeout_seconds)
             return agents.start(task, role=role, context=context, timeout_seconds=timeout_seconds)
@@ -418,7 +418,7 @@ class OrchestrationDomain:
     async def _adapter_followup_task_agent(self, job_id, message):
         try:
             agents = self._personal_agents()
-            from orchestration.durable_hermes import DurableHermes
+            from harness.durable_hermes import DurableHermes
             if isinstance(agents, DurableHermes):
                 return await self._file_worker.run(agents.followup, job_id, message)
             return agents.followup(job_id, message)

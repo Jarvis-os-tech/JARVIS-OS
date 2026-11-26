@@ -418,7 +418,7 @@ async def test_type_text_electron_paste_and_tmux_effect_observed(monkeypatch):
 async def test_choices_widget_manifest_and_select_adapter(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        "ui.jarvis_widgets.backend.shell_call",
+        "widgets.backend.shell_call",
         lambda method, payload=None: (calls.append((method, payload)), {"ok": True, "id": "choice-1"})[1],
     )
     skills = DesktopSkills()

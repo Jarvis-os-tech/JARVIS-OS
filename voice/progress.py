@@ -6,7 +6,7 @@ from collections import OrderedDict
 import time
 
 from jsonschema import ValidationError
-from orchestration.task_events import validate_event
+from harness.task_events import validate_event
 
 
 _TERMINAL = {'completed', 'response_received', 'failed', 'cancelled', 'timed_out', 'interrupted'}

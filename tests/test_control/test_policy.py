@@ -1,7 +1,7 @@
 """Tests for policy gating and execution controls in jarvis_control."""
 import pytest
-from jarvis_control.config import Config
-from jarvis_control.tools import Denied, Executor, NeedsConfirmation, Policy, Result
+from control.config import Config
+from control.tools import Denied, Executor, NeedsConfirmation, Policy, Result
 
 
 def test_ordinary_actions_pass():

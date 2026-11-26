@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from jarvis_control.device_bridge import build_parser, run
+from control.device_bridge import build_parser, run
 
 
 def test_bridge_defaults_to_loopback_without_lan_access():

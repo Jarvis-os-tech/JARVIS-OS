@@ -118,7 +118,7 @@ def run_privileged_action(
         # Step D: Execute via sudo -A with desktop environment recovery
         env = dict(os.environ)
         try:
-            from core.desktop_session import recover_desktop_environment
+            from kernel.desktop_session import recover_desktop_environment
             env.update(recover_desktop_environment(env))
         except Exception:
             pass
@@ -293,7 +293,7 @@ def execute_manage_packages(
             cmd_yay = ["yay", "-S", "--noconfirm", "--needed", *clean_pkgs]
             env_yay = dict(os.environ)
             try:
-                from core.desktop_session import recover_desktop_environment
+                from kernel.desktop_session import recover_desktop_environment
                 env_yay.update(recover_desktop_environment(env_yay))
             except Exception:
                 pass

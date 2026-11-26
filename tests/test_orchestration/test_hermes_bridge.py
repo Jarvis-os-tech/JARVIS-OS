@@ -8,8 +8,8 @@ import sys
 
 import pytest
 
-from orchestration.hermes_bridge import HermesBridge, HermesBridgeError
-from orchestration._hermes_gateway_worker import operate
+from harness.hermes_bridge import HermesBridge, HermesBridgeError
+from harness._hermes_gateway_worker import operate
 
 
 @pytest.mark.asyncio

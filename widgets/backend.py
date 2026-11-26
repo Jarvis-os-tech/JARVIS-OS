@@ -15,9 +15,9 @@ import sys
 import tempfile
 import uuid
 try:
-    from ui.jarvis_widgets.view_schema import validate_view
-    from ui.jarvis_widgets.native_cards import view as native_view, objects, line_chart
-    from ui.jarvis_widgets.workspace import compile_workspace, legacy_view
+    from widgets.view_schema import validate_view
+    from widgets.native_cards import view as native_view, objects, line_chart
+    from widgets.workspace import compile_workspace, legacy_view
 except ModuleNotFoundError:
     from native_cards import view as native_view, objects, line_chart
     from view_schema import validate_view  # Installed shell's short-lived input helper.
@@ -156,7 +156,7 @@ def validate(kind, data):
         if not script_content.strip():
             raise ValueError("3D widget requires a Three.js script")
         try:
-            from ui.jarvis_widgets.three_compiler import compile_3d
+            from widgets.three_compiler import compile_3d
         except ModuleNotFoundError:
             from three_compiler import compile_3d
         compiled = compile_3d(script_content, title="3D Model")

@@ -9,7 +9,7 @@ import re
 import subprocess
 import fcntl
 
-from orchestration.task_events import CONTRACT, TERMINAL, TaskEventStore
+from harness.task_events import CONTRACT, TERMINAL, TaskEventStore
 from jsonschema import ValidationError
 import sqlite3
 
@@ -152,7 +152,7 @@ class TaskPresentation:
             if events:
                 try:
                     if self._send is None:
-                        from ui.jarvis_widgets.backend import shell_call
+                        from widgets.backend import shell_call
                         send = shell_call
                     else:
                         send = self._send

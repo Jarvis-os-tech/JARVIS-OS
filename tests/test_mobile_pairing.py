@@ -3,9 +3,9 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
-from jarvis_control.mobile_pairing import open_pairing_qr
-from jarvis_control.tools import tools_for
-from jarvis_control.config import Config
+from control.mobile_pairing import open_pairing_qr
+from control.tools import tools_for
+from control.config import Config
 from scripts import pairing_window_state as state
 
 
@@ -17,8 +17,8 @@ def test_pairing_tool_uses_own_widget_without_returning_private_output(tmp_path,
         elif '-o' in command:
             Path(command[command.index('-o') + 1]).write_bytes(b'private-qr')
         return subprocess.CompletedProcess([], 0, stdout='private-key-never-returned', stderr='')
-    with patch('jarvis_control.mobile_pairing.subprocess.run', side_effect=generate) as run, \
-         patch('ui.jarvis_widgets.backend.shell_call') as mock_shell:
+    with patch('control.mobile_pairing.subprocess.run', side_effect=generate) as run, \
+         patch('widgets.backend.shell_call') as mock_shell:
         mock_shell.return_value = {"ok": True, "id": "jarvis-pairing-qr"}
         response = open_pairing_qr()
     assert 'private-key-never-returned' not in response
@@ -30,7 +30,7 @@ def test_pairing_tool_uses_own_widget_without_returning_private_output(tmp_path,
     assert mock_shell.call_args.args[0] == "present"
     assert mock_shell.call_args.args[1]["id"] == "jarvis-pairing-qr"
     assert mock_shell.call_args.args[1]["kind"] == "qr"
-    from jarvis_control import to_gemini_tools
+    from control import to_gemini_tools
     schemas = to_gemini_tools(tools_for(Config()))[0]['function_declarations']
     assert any(tool['name'] == 'phone_pair' for tool in schemas)
 
@@ -64,7 +64,7 @@ async def request(port, token, session):
 
 def test_bridge_acknowledgement_requires_pairing_token_and_live_session(tmp_path, monkeypatch):
     import asyncio
-    from jarvis_control.device_bridge import DeviceBridge
+    from control.device_bridge import DeviceBridge
     monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
     async def check():
         session = state.create()

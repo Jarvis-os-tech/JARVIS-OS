@@ -8,7 +8,7 @@ import stat
 import time
 from pathlib import Path
 from typing import Callable, Optional
-from core.ipc import start_control_server, unlink_owned_socket
+from kernel.ipc import start_control_server, unlink_owned_socket
 
 from .config import RUNTIME_DIR, SOCKET_PATH
 

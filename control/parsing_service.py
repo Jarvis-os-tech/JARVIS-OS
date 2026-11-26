@@ -8,7 +8,7 @@ import sys
 import tempfile
 
 from connectors.calendar_time import DEFAULT_ZONE, calendar_zone
-from jarvis_control.command_values import MAX_TEXT
+from control.command_values import MAX_TEXT
 
 
 async def parse_command_values(text, language='en-US', include_temporal=True,
@@ -29,7 +29,7 @@ async def parse_command_values(text, language='en-US', include_temporal=True,
         env.update(HOME=directory, XDG_CONFIG_HOME=directory, XDG_DATA_HOME=directory,
                    XDG_CACHE_HOME=directory, PYTHONPATH=str(Path(__file__).resolve().parents[1]))
         process = await asyncio.create_subprocess_exec(
-            sys.executable, '-m', 'jarvis_control.parsing_worker',
+            sys.executable, '-m', 'control.parsing_worker',
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL, env=env,
         )

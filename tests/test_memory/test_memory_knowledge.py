@@ -6,7 +6,7 @@ import stat
 import tempfile
 import unittest
 
-from jarvis_memory.knowledge import KnowledgeStore
+from memory.knowledge import KnowledgeStore
 
 
 class KnowledgeStoreTests(unittest.TestCase):

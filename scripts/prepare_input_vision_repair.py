@@ -60,9 +60,9 @@ def prepare(destination):
     path.write_text(json.dumps(metadata, indent=2) + '\n')
     check = """
 import inspect
-from voice_layer import daemon
+from voice import daemon
 from skills.skills import DesktopSkills
-from orchestration.tool_tiers import CORE_TOOLS
+from harness.tool_tiers import CORE_TOOLS
 assert daemon.shutil.which and daemon.subprocess.Popen
 source = inspect.getsource(DesktopSkills._adapter_open_input_bar)
 assert 'self.test_bar.start()' in source and "shell_call, 'input'" not in source
@@ -82,7 +82,7 @@ def activate(staged):
     before = status()
     if before.get('tools_in_flight') or before.get('vision_mode', 'off') != 'off':
         raise RuntimeError('Wait for active tools/vision to stop before restarting the runtime')
-    from orchestration.release_manager import ReleaseManager
+    from harness.release_manager import ReleaseManager
     manager = ReleaseManager(RUNTIME)
     name = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '-input-vision-repair'
     installed = manager.install_prepared_release(

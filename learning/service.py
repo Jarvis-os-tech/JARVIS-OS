@@ -24,7 +24,7 @@ class LearningService:
                 'artifacts': {}}
 
     def prepare_refinement(self, feedback_ids):
-        from orchestration.model_routes import ROUTES
+        from harness.model_routes import ROUTES
         if (not isinstance(feedback_ids, list) or not 1 <= len(feedback_ids) <= 5 or
                 any(not isinstance(item, str) for item in feedback_ids) or
                 len(set(feedback_ids)) != len(feedback_ids)):

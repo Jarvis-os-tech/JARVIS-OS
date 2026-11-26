@@ -1,4 +1,4 @@
-from orchestration.task_names import task_name
+from harness.task_names import task_name
 
 
 def test_task_titles_describe_work_and_are_bounded():

@@ -4,15 +4,15 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from departments.cli_agent import AGENTS, CLIAgentDepartment
+from department_agents.cli_agent import AGENTS, CLIAgentDepartment
 
 
 def test_nim_plan_uses_primary_model_and_preserves_desktop_target(monkeypatch):
     from importlib import import_module
     from types import SimpleNamespace
 
-    from departments.cli_agent.planning import plan_connection
-    client_module = import_module('departments.linkedin.nim_client')
+    from department_agents.cli_agent.planning import plan_connection
+    client_module = import_module('department_agents.linkedin.nim_client')
 
     seen = []
 
@@ -50,8 +50,8 @@ async def test_jarvis_lists_cli_agent_as_a_separate_department():
 async def test_failed_plan_stops_before_delegation(monkeypatch):
     from types import SimpleNamespace
 
-    from departments.cli_agent import service
-    from orchestration.evolution import EvolutionManager
+    from department_agents.cli_agent import service
+    from harness.evolution import EvolutionManager
 
     fail = AsyncMock(side_effect=ValueError('NIM unavailable'))
     monkeypatch.setattr(service, 'request', fail)
@@ -76,7 +76,7 @@ async def test_service_dispatches_a_plan_and_rejects_execution(monkeypatch):
     import asyncio
     from unittest.mock import Mock
 
-    from departments.cli_agent import service
+    from department_agents.cli_agent import service
 
     planner = Mock(return_value={'model': 'nano', 'output': 'Inspect desktop'})
     monkeypatch.setattr(service, 'plan_connection', planner)

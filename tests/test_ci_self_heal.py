@@ -36,7 +36,7 @@ E       AssertionError: assert 1 == 2
 
 tests/test_sample.py:12: AssertionError
 --------------------------------- Captured log ---------------------------------
-File "ui/jarvis_drone/main.js", line 29, in createWindow
+File "shell/drone/main.js", line 29, in createWindow
 File "scripts/sample.py", line 42, in helper
 =========================== short test summary info ============================
 FAILED tests/test_sample.py::test_fail - AssertionError: assert 1 == 2
@@ -47,7 +47,7 @@ FAILED tests/test_sample.py::test_fail - AssertionError: assert 1 == 2
     assert "tests/test_sample.py::test_fail" in parsed["failed_tests"]
     assert any("AssertionError" in err for err in parsed["error_messages"])
     files = [ref["file"] for ref in parsed["file_references"]]
-    assert any("ui/jarvis_drone/main.js" in f for f in files)
+    assert any("shell/drone/main.js" in f for f in files)
 
 
 def test_heuristic_healer_fixes_syntax_colon(tmp_path, monkeypatch):

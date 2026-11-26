@@ -8,7 +8,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from orchestration.release_manager import ReleaseManager
+from harness.release_manager import ReleaseManager
 from scripts.behavior_gate import ROOT, load_contract, main, source_digest
 
 
@@ -102,7 +102,7 @@ def test_empty_or_duplicate_contracts_are_rejected(tmp_path):
 
 def test_release_missing_gate_blocks_before_running_candidate(tmp_path, monkeypatch):
     run = Mock()
-    monkeypatch.setattr('orchestration.release_manager.subprocess.run', run)
+    monkeypatch.setattr('harness.release_manager.subprocess.run', run)
     with pytest.raises(RuntimeError, match='lacks the required'):
         ReleaseManager(tmp_path / 'runtime').verify_behavior(tmp_path, sys.executable)
     run.assert_not_called()
@@ -124,7 +124,7 @@ def test_release_requires_success_and_fresh_gate_evidence(tmp_path, monkeypatch,
             (tmp_path / 'behavior-gate.json').write_text(json.dumps(report))
         return subprocess.CompletedProcess([], exit_code, '', '')
 
-    monkeypatch.setattr('orchestration.release_manager.subprocess.run', run)
+    monkeypatch.setattr('harness.release_manager.subprocess.run', run)
     manager = ReleaseManager(tmp_path / 'runtime')
     if accepted:
         manager.verify_behavior(tmp_path, sys.executable)

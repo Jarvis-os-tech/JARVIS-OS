@@ -14,7 +14,7 @@ import signal
 import re
 import fcntl
 import tempfile
-from core.secret_env import sanitized_subprocess_env
+from kernel.secret_env import sanitized_subprocess_env
 
 
 class HermesBridgeError(ValueError):
@@ -151,7 +151,7 @@ class HermesBridge:
             raise HermesBridgeError('Use an isolated task Git checkout for Hermes work')
         options = {'workspace': str(root)}
         if title:
-            from orchestration.task_names import task_name
+            from harness.task_names import task_name
             options['title'] = task_name(title)
         result = await self._request('create', **options)
         session = result.get('session_id')

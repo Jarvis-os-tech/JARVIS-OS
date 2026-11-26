@@ -5,8 +5,8 @@ import re
 import subprocess
 
 from skills.errors import SkillError
-from ui.jarvis_widgets import backend
-from ui.jarvis_widgets.view_schema import describe
+from widgets import backend
+from widgets.view_schema import describe
 
 ADAPTERS = {
     "widgets.show": "_adapter_show_widget",

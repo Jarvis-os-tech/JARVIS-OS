@@ -1,6 +1,6 @@
 """Unit tests for JARVIS OS EventClassifier and spoken notification filtering."""
 import pytest
-from voice_layer.os_speaker import EventClassifier, SpeechClient, SpeechArbiter
+from voice.os_speaker import EventClassifier, SpeechClient, SpeechArbiter
 
 
 def test_classifier_rejects_routine_noise():

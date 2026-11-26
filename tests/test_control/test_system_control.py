@@ -3,8 +3,8 @@ import json
 from unittest.mock import Mock
 
 import pytest
-from jarvis_control.system_control import ACTIONS, SCHEMA, execute
-from jarvis_control.tools import Result
+from control.system_control import ACTIONS, SCHEMA, execute
+from control.tools import Result
 
 
 def shell_executor(*outputs):
@@ -142,12 +142,12 @@ def test_unknown_control_action_never_calls_native_commands():
     ('workspace_switch', {'workspace': '9' * 5000}),
 ])
 def test_dry_run_validation_rejects_bad_arguments_without_executor(action, kwargs):
-    from jarvis_control.system_control import validate
+    from control.system_control import validate
     assert validate(action, **kwargs)
 
 
 def test_dry_run_validation_accepts_supported_shapes_without_hardware():
-    from jarvis_control.system_control import validate
+    from control.system_control import validate
     assert validate('volume_adjust', value=-5) is None
     assert validate('mute_set', enabled=False) is None
     assert validate('workspace_switch', workspace='4') is None
@@ -181,8 +181,8 @@ def test_brightness_minimum_verification_does_not_accept_a_dark_display():
 
 
 def test_dry_run_still_reads_controls_but_never_sets_them(monkeypatch):
-    from jarvis_control.config import Config
-    from jarvis_control.tools import Executor
+    from control.config import Config
+    from control.tools import Executor
     executor = Executor(Config(dry_run=True))
     handler = Mock(return_value=Result(True, 'Output volume is 40%.'))
     monkeypatch.setattr(executor, '_tool_system_control', handler)

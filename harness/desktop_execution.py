@@ -9,8 +9,8 @@ import json
 from pathlib import Path
 import tempfile
 
-from core.secret_env import sanitized_subprocess_env
-from orchestration.executables import installed_path
+from kernel.secret_env import sanitized_subprocess_env
+from harness.executables import installed_path
 from .agent_orchestrator import AgentOrchestrator, OrchestrationError, now, validate_model, command_for
 
 

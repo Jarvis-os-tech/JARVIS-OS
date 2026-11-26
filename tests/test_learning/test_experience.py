@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 from google.genai import types
 
-from core.agent import LiveVoice
+from kernel.agent import LiveVoice
 from learning.bundles import BundleRegistry
 from learning.evidence import EpisodeCapture, EpisodeStore, sanitize
 from learning.experience import ExperienceLibrary, PROJECT
@@ -168,8 +168,8 @@ async def test_learning_tools_honestly_report_disabled():
 async def test_startup_wires_service_and_declares_voice_tools(tmp_path):
     import contextlib
     from unittest.mock import MagicMock, patch
-    from core import agent
-    from core.config import Config
+    from kernel import agent
+    from kernel.config import Config
     from learning.research import seed_bundle
     registry = BundleRegistry(tmp_path)
     bundle = registry.register(seed_bundle())

@@ -3,9 +3,9 @@ from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock
 
 import pytest
-from jarvis_control.evidence import requires_action_evidence
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
+from control.evidence import requires_action_evidence
+from voice.daemon import LiveVoice
+from voice.playback import Playback
 
 
 def fixture(result=None):

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from widget_engine import protocol, test_emit
+from widgets import protocol, test_emit
 
 
 @pytest.mark.parametrize("event", [

@@ -6,10 +6,10 @@ from unittest.mock import Mock
 import pytest
 from google.genai import types
 
-from voice_layer.daemon import build_instruction, live_config
-from voice_layer.persona import system_persona
-from orchestration.model_routes import ModelJobs
-from orchestration.tool_tiers import CORE_TOOLS
+from voice.daemon import build_instruction, live_config
+from voice.persona import system_persona
+from harness.model_routes import ModelJobs
+from harness.tool_tiers import CORE_TOOLS
 
 
 def test_widget_and_reasoning_routes_are_available_only_when_attached():

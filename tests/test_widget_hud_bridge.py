@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from widget_engine import bridge
+from widgets import bridge
 
 
 class TestWidgetHudBridge(unittest.TestCase):

@@ -5,7 +5,7 @@ from pathlib import Path
 import stat
 import tomllib
 
-from jarvis_memory.config import MemoryConfig, load_config as load_memory_config
+from memory.config import MemoryConfig, load_config as load_memory_config
 from .local_speech import LocalSpeechConfig
 
 CONFIG_HOME = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
@@ -237,9 +237,9 @@ def load() -> Config:
 
 def control_config(voice_config: Config):
     """One control configuration shared by the voice adapter and control CLI."""
-    from jarvis_control.config import from_mapping
-    from jarvis_control.tasks import validate_config as validate_tasks
-    from jarvis_control.vision import settings as vision_settings
+    from control.config import from_mapping
+    from control.tasks import validate_config as validate_tasks
+    from control.vision import settings as vision_settings
 
     if not isinstance(voice_config.control, dict):
         raise ValueError('control must be a table')

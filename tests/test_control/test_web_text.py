@@ -4,9 +4,9 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from jarvis_control import web_text
-from jarvis_control.tools import Executor, Result
-from jarvis_control.config import Config
+from control import web_text
+from control.tools import Executor, Result
+from control.config import Config
 
 
 def response(body, content_type='text/html'):
@@ -53,7 +53,7 @@ def test_fetch_rejects_oversize_binary_and_challenge_pages(monkeypatch, body, ki
 
 def test_short_valid_selection_is_preserved(monkeypatch):
     executor = Executor(Config())
-    monkeypatch.setattr('jarvis_control.tools.time.sleep', lambda _: None)
+    monkeypatch.setattr('control.tools.time.sleep', lambda _: None)
     monkeypatch.setattr(executor, '_exact_page_text', lambda target: Result(True, 'A short valid page'))
     assert executor._read_web_window({'address': '0xabc'}).output == 'A short valid page'
 

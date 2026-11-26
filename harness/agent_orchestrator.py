@@ -13,11 +13,11 @@ import time
 from typing import Optional
 import uuid
 
-from core.secret_env import sanitized_subprocess_env
-from orchestration.personas import PERSONAS, AGENT_FALLBACK_CANDIDATES, get_fallback_candidates
-from orchestration.harness2_adapter import Harness2Adapter
-from orchestration.executables import installed_executables, installed_path
-from orchestration.state_graph import TeamStateGraph, EdgeAction
+from kernel.secret_env import sanitized_subprocess_env
+from harness.personas import PERSONAS, AGENT_FALLBACK_CANDIDATES, get_fallback_candidates
+from harness.harness2_adapter import Harness2Adapter
+from harness.executables import installed_executables, installed_path
+from harness.state_graph import TeamStateGraph, EdgeAction
 
 AGENTS = ('codex', 'claude', 'opencode', 'gemini', 'hermes', 'omp', 'pi', 'crush', 'antigravity', 'api_agent')
 TERMINAL = frozenset({'completed', 'failed', 'cancelled', 'timed_out'})

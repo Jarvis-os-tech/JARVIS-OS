@@ -19,8 +19,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from core.secret_env import sanitized_subprocess_env
-from core.desktop_session import recover_desktop_environment
+from kernel.secret_env import sanitized_subprocess_env
+from kernel.desktop_session import recover_desktop_environment
 
 log = logging.getLogger(__name__)
 

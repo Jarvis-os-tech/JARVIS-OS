@@ -12,8 +12,8 @@ import math
 import tempfile
 import unittest
 
-from jarvis_memory.config import MemoryConfig
-from jarvis_memory.bridge import MemoryBridge
+from memory.config import MemoryConfig
+from memory.bridge import MemoryBridge
 
 
 CONCEPTS = (

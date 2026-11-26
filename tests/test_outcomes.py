@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from jarvis_control.outcomes import classify_result
+from control.outcomes import classify_result
 
 
 @pytest.mark.parametrize('value,status', [

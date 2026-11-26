@@ -4,7 +4,7 @@ from datetime import datetime
 import json
 import sys
 
-from jarvis_control.command_values import MAX_TEXT, parse_values
+from control.command_values import MAX_TEXT, parse_values
 
 
 def main():

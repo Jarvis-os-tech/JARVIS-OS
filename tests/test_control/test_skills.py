@@ -3,8 +3,8 @@ import asyncio
 import threading
 
 import pytest
-from jarvis_control.skills import ControlSkills, UnifiedSkills
-from jarvis_control.config import Config
+from control.skills import ControlSkills, UnifiedSkills
+from control.config import Config
 
 
 @pytest.mark.asyncio
@@ -69,7 +69,7 @@ async def test_unified_skills_delegation():
 
 @pytest.mark.asyncio
 async def test_control_adapter_accepts_voice_config_with_policy_defaults():
-    from voice_layer.config import Config as VoiceConfig
+    from voice.config import Config as VoiceConfig
     voice_config = VoiceConfig(allow_shell=False, dry_run=False, tasks_enabled=False, vision_enabled=False)
     skills = ControlSkills(voice_config)
     assert skills.config.deny_patterns
@@ -184,10 +184,11 @@ def test_direct_task_worker_imports_without_compatibility_shim(tmp_path):
     import subprocess
     import sys
     root = Path(__file__).resolve().parents[2]
-    shutil.copytree(root / 'jarvis_control', tmp_path / 'jarvis_control',
+    src_control = (root / 'control') if (root / 'control').exists() else (root / 'jarvis_control')
+    shutil.copytree(src_control, tmp_path / 'control',
                     ignore=shutil.ignore_patterns('__pycache__'))
     # Match systemd's direct-file launch; run_name avoids starting a real task.
-    code = "import runpy; runpy.run_path('jarvis_control/task_worker.py', run_name='worker_import_check')"
+    code = "import runpy; runpy.run_path('control/task_worker.py', run_name='worker_import_check')"
     env = dict(os.environ)
     env.pop('PYTHONPATH', None)
     result = subprocess.run([sys.executable, '-c', code], cwd=tmp_path, env=env,
@@ -202,7 +203,7 @@ async def test_control_skills_read_url(monkeypatch):
     assert "read_url" in tool_names
 
     monkeypatch.setattr(
-        'jarvis_control.web_text.bounded_page_text',
+        'control.web_text.bounded_page_text',
         lambda url, timeout=12: "Extracted article text for testing",
     )
 

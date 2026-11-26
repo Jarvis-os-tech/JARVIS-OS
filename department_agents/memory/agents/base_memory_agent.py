@@ -11,7 +11,7 @@ import re
 from tempfile import NamedTemporaryFile
 from typing import Any, Dict, List, Optional
 
-from core.secret_env import is_secret_name
+from kernel.secret_env import is_secret_name
 
 from ..config import config, MemoryConfig
 from ..db import MemoryDatabase

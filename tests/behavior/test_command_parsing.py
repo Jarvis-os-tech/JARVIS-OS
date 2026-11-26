@@ -9,10 +9,10 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from jarvis_control.command_values import number_slots, parse_values
-from jarvis_control.nlu import IntentCategory, NLUEngine
-from jarvis_control.parsing_service import parse_command_values
-from voice_layer.local_speech import command_for
+from control.command_values import number_slots, parse_values
+from control.nlu import IntentCategory, NLUEngine
+from control.parsing_service import parse_command_values
+from voice.local_speech import command_for
 
 CASES = json.loads(Path(__file__).with_name('parsing_cases.json').read_text())['cases']
 ANCHOR = datetime(2026, 11, 3, 23, 45, tzinfo=ZoneInfo('Asia/Kolkata'))
@@ -129,8 +129,8 @@ def test_relative_durations_count_elapsed_seconds_across_dst(anchor, expected):
 
 @pytest.mark.asyncio
 async def test_transcription_chunks_keep_verbatim_user_evidence():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     voice = LiveVoice(Playback('test'), skills=NS(declarations=[]))
     voice._reply_authorized = True
     chunks = ['Type "java ', ' forty" and open /tmp/java/forty.txt']
@@ -146,7 +146,7 @@ def test_unsupported_language_missing_dependency_and_no_match_differ(monkeypatch
     assert parse_values('tomorrow', include_temporal=True)['status'] == 'invalid_parse'
     def unavailable(*a, **kw):
         raise ImportError('synthetic missing dependency')
-    monkeypatch.setattr('jarvis_control.command_values.number_slots', unavailable)
+    monkeypatch.setattr('control.command_values.number_slots', unavailable)
     assert parse_values('forty')['status'] == 'dependency_unavailable'
 
 
@@ -205,8 +205,8 @@ async def test_invalid_anchor_is_rejected_before_starting_worker(monkeypatch):
 
 def test_parsing_tool_is_registered_read_only_and_not_action_evidence():
     from skills.skills import DesktopSkills
-    from orchestration.tool_tiers import CORE_TOOLS, META_TOOLS
-    from jarvis_control.evidence import META_TOOLS as EVIDENCE_META_TOOLS
+    from harness.tool_tiers import CORE_TOOLS, META_TOOLS
+    from control.evidence import META_TOOLS as EVIDENCE_META_TOOLS
     registry = DesktopSkills.__new__(DesktopSkills)
     registry.manifest_dirs = [Path(__file__).resolve().parents[2] / 'skill_manifests']
     specs = registry._load_manifests()

@@ -8,13 +8,13 @@ from unittest.mock import patch
 
 import pytest
 
-from proactive.verification import (
+from kernel.proactive.verification import (
     _check_command, _check_env, capture_workspace, completion_evidence, verify_workspace_changes,
 )
 
 
 def git(root, *arguments):
-    return subprocess.run(['/usr/bin/git', '-c', 'core.hooksPath=/dev/null', '-C', str(root),
+    return subprocess.run(['/usr/bin/git', '-c', 'kernel.hooksPath=/dev/null', '-C', str(root),
                            *arguments], check=True, capture_output=True, env=_check_env(), timeout=5)
 
 
@@ -142,7 +142,7 @@ async def test_cancelled_verifier_command_is_killed_and_reaped(tmp_path):
         spawned.set()
         return process
 
-    with patch('proactive.verification._verification_process', side_effect=launch):
+    with patch('kernel.proactive.verification._verification_process', side_effect=launch):
         worker = asyncio.create_task(_check_command([sys.executable, '-I', '-c',
                                                     'import time; time.sleep(30)']))
         await asyncio.wait_for(spawned.wait(), 2)

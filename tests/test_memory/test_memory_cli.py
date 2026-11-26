@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from jarvis_memory.__main__ import main
+from memory.__main__ import main
 
 
 class MemoryCLITests(unittest.TestCase):

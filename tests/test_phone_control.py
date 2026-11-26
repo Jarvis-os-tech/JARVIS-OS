@@ -3,9 +3,9 @@ import subprocess
 
 import pytest
 
-from jarvis_control.phone_control import PhoneController, save_link, launcher_components
-from jarvis_control.tools import Executor, tools_for
-from jarvis_control.config import Config
+from control.phone_control import PhoneController, save_link, launcher_components
+from control.tools import Executor, tools_for
+from control.config import Config
 
 
 def test_launcher_discovery_accepts_real_android_indented_output():

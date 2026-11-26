@@ -54,8 +54,8 @@ def prepare(destination):
         changed.append(str(path.relative_to(target)))
     check = """import json
 from importlib.metadata import version
-from voice_layer.standby import JarvisWakeDetector
-from voice_layer.daemon import live_config
+from voice.standby import JarvisWakeDetector
+from voice.daemon import live_config
 from google.genai import types
 d=JarvisWakeDetector()
 assert version('vosk')=='0.3.45'
@@ -79,7 +79,7 @@ def activate(staged):
     meta = json.loads((staged / 'release.json').read_text())['wake_extension']
     runtime = Path.home() / '.local/share/jarvis-runtime'
     sys.path.insert(0, str(SOURCE))
-    from orchestration.release_manager import ReleaseManager
+    from harness.release_manager import ReleaseManager
     name = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '-wake-repair'
     target = ReleaseManager(runtime).install_prepared_release(staged, name,
         expected_current=Path(meta['parent']), expected_hashes=meta['sha256'], timeout=20)

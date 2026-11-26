@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from jarvis_control.device_execution import SharedToolExecutor
-from jarvis_control.device_bridge import DeviceBridge
-from voice_layer.ipc import ControlServer
+from control.device_execution import SharedToolExecutor
+from control.device_bridge import DeviceBridge
+from voice.ipc import ControlServer
 
 
 @pytest.mark.asyncio

@@ -5,7 +5,7 @@ import asyncio
 import logging
 
 from skills import SkillError
-from jarvis_control.execution_policy import tool_timeout
+from control.execution_policy import tool_timeout
 
 log = logging.getLogger('gemini_voice')
 

@@ -4,9 +4,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from jarvis_memory.knowledge import KnowledgeStore
-from jarvis_memory.mcp_server import AuditLog, ClientPolicy, MCPMemoryError, UniversalMemoryMCP
-from jarvis_memory.service_facade import UniversalMemoryService
+from memory.knowledge import KnowledgeStore
+from memory.mcp_server import AuditLog, ClientPolicy, MCPMemoryError, UniversalMemoryMCP
+from memory.service_facade import UniversalMemoryService
 
 
 class UniversalMemoryMCPTests(unittest.TestCase):

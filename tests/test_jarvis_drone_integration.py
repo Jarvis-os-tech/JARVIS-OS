@@ -18,7 +18,7 @@ import socket
 from typing import List
 import pytest
 import websockets
-from ui.jarvis_drone.bridge import DroneBridge
+from shell.drone.bridge import DroneBridge
 
 
 def get_free_port() -> int:

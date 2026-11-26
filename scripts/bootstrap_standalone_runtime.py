@@ -14,7 +14,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from orchestration.release_manager import ReleaseManager, DEFAULT_REPO_URL, DEFAULT_BRANCH
+from harness.release_manager import ReleaseManager, DEFAULT_REPO_URL, DEFAULT_BRANCH
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s: %(message)s")
 log = logging.getLogger("jarvis.bootstrap")

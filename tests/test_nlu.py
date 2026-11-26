@@ -1,5 +1,5 @@
 import pytest
-from jarvis_control.nlu import NLUEngine, IntentCategory
+from control.nlu import NLUEngine, IntentCategory
 
 
 def test_phonetic_normalization():
@@ -305,7 +305,7 @@ def test_phonetic_misspellings_power_and_confirmation():
     assert "confirmation" in NLUEngine.normalize_text("with conformation")
 
 
-from jarvis_control.nlu import ConfirmationDecision
+from control.nlu import ConfirmationDecision
 
 
 @pytest.mark.parametrize("phrase", [

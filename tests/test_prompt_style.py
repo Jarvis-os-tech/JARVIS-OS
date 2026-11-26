@@ -1,10 +1,10 @@
 """Unit tests for JARVIS Prompt Style engine and DesktopSkill integration."""
 import pytest
 from pathlib import Path
-from orchestration.prompt_style import format_prompt, ROLE_GUIDELINES
-from orchestration.harness2_adapter import Harness2Adapter
-from orchestration.personas import software_assignments
-from jarvis_control.omarchy_skill import guide_sections
+from harness.prompt_style import format_prompt, ROLE_GUIDELINES
+from harness.harness2_adapter import Harness2Adapter
+from harness.personas import software_assignments
+from control.omarchy_skill import guide_sections
 from skills.skills import DesktopSkills
 
 

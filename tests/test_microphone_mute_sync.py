@@ -5,9 +5,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from voice_layer.echo import MonitorEchoCancellation
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
+from voice.echo import MonitorEchoCancellation
+from voice.daemon import LiveVoice
+from voice.playback import Playback
 
 
 def echo_for(previous):

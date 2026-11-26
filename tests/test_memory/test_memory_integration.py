@@ -7,12 +7,12 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from voice_layer.daemon import LiveVoice, live_config
-from jarvis_memory.config import Config
-from jarvis_memory.bridge import MemoryBridge
-from jarvis_memory.extractor import FactExtractor
-from jarvis_memory.service import MemoryService
-from jarvis_memory.skills import DesktopSkills, SkillError
+from voice.daemon import LiveVoice, live_config
+from memory.config import Config
+from memory.bridge import MemoryBridge
+from memory.extractor import FactExtractor
+from memory.service import MemoryService
+from memory.skills import DesktopSkills, SkillError
 
 
 class MemoryIntegrationTests(unittest.IsolatedAsyncioTestCase):

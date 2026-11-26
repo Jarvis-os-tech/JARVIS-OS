@@ -10,8 +10,8 @@ import sqlite3
 import time
 import uuid
 
-from core.secret_env import is_secret_name
-from core.workers import BoundedWorker
+from kernel.secret_env import is_secret_name
+from kernel.workers import BoundedWorker
 from .bundles import private_directory
 
 log = logging.getLogger(__name__)

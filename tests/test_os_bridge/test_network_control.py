@@ -3,7 +3,7 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from jarvis_os_bridge.network_control import NetworkController
+from control.bridge.network_control import NetworkController
 
 
 @pytest.mark.asyncio

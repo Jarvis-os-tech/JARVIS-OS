@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 import pytest
-from ui.jarvis_widgets.three_compiler import (
+from widgets.three_compiler import (
     find_three_live_cli,
     get_3d_runtime_dir,
     validate_script,
@@ -34,7 +34,7 @@ def test_find_three_live_cli_not_found(monkeypatch, tmp_path):
     monkeypatch.delenv("THREE_LIVE_CLI_BIN", raising=False)
     monkeypatch.setattr("shutil.which", lambda _: None)
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path / "nonexistent_home")
-    monkeypatch.setattr("ui.jarvis_widgets.three_compiler.REPO_CLI_CANDIDATE", tmp_path / "nonexistent.js")
+    monkeypatch.setattr("widgets.three_compiler.REPO_CLI_CANDIDATE", tmp_path / "nonexistent.js")
     with pytest.raises(FileNotFoundError):
         find_three_live_cli()
 

@@ -16,9 +16,9 @@ import re
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-INDEX_HTML = REPO_ROOT / "ui" / "jarvis_drone" / "index.html"
-MAIN_JS = REPO_ROOT / "ui" / "jarvis_drone" / "main.js"
-PRELOAD_JS = REPO_ROOT / "ui" / "jarvis_drone" / "preload.js"
+INDEX_HTML = REPO_ROOT / "shell" / "drone" / "index.html"
+MAIN_JS = REPO_ROOT / "shell" / "drone" / "main.js"
+PRELOAD_JS = REPO_ROOT / "shell" / "drone" / "preload.js"
 
 
 def test_autododge_and_patrol_are_completely_removed():
@@ -83,7 +83,7 @@ def test_compact_overlay_window_size():
     """Verify overlay window size is compact (96px) to eliminate transparent click-blocking zones."""
     main_content = MAIN_JS.read_text(encoding="utf-8")
     html_content = INDEX_HTML.read_text(encoding="utf-8")
-    launch_sh = (REPO_ROOT / "ui" / "jarvis_drone" / "launch.sh").read_text(encoding="utf-8")
+    launch_sh = (REPO_ROOT / "shell" / "drone" / "launch.sh").read_text(encoding="utf-8")
 
     assert "const WINDOW_SIZE = 96;" in main_content, "WINDOW_SIZE in main.js must be 96"
     assert ("width: 96px;" in html_content or "width: 100%;" in html_content), "stage width must be specified"
@@ -104,7 +104,7 @@ def test_drone_no_blur_no_clip_and_no_brightening():
     """Verify background blur suppression, drone scaling to avoid clipping, and no hover brightness flare."""
     html_content = INDEX_HTML.read_text(encoding="utf-8")
     main_content = MAIN_JS.read_text(encoding="utf-8")
-    launch_sh = (REPO_ROOT / "ui" / "jarvis_drone" / "launch.sh").read_text(encoding="utf-8")
+    launch_sh = (REPO_ROOT / "shell" / "drone" / "launch.sh").read_text(encoding="utf-8")
 
     # 1. No background blur or shadow in Hyprland window rules
     assert "noblur" in launch_sh

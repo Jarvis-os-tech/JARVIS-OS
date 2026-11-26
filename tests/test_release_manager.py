@@ -2,7 +2,7 @@ import json
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from orchestration.release_manager import ReleaseManager, DEFAULT_REPO_URL
+from harness.release_manager import ReleaseManager, DEFAULT_REPO_URL
 
 def test_check_remote_update_no_update(tmp_path):
     rm = ReleaseManager(root_dir=tmp_path)

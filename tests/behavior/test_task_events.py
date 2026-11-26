@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock
 import pytest
 from jsonschema import ValidationError
 
-from orchestration.task_events import CONTRACT, TaskEventStore, validate_event
-from orchestration.task_presentation import TaskPresentation, project
+from harness.task_events import CONTRACT, TaskEventStore, validate_event
+from harness.task_presentation import TaskPresentation, project
 from scripts.generate_task_event_contract import ROOT, generated
 
 
@@ -172,7 +172,7 @@ def test_only_one_presenter_can_reconcile_a_profile(tmp_path):
 @pytest.mark.asyncio
 async def test_real_file_task_status_card_and_notice_share_the_same_event(tmp_path, monkeypatch):
     from skills.skills import DesktopSkills
-    from jarvis_control.skills import UnifiedSkills
+    from control.skills import UnifiedSkills
     monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path / 'state'))
     desktop = DesktopSkills()
     deliveries = []
@@ -247,11 +247,11 @@ async def test_presentation_failure_cannot_turn_admission_into_a_retryable_failu
 
 
 def test_generated_consumer_schema_is_current():
-    assert (ROOT / 'ui/jarvis_widgets/TaskEventContract.js').read_text() == generated()
+    assert (ROOT / 'widgets/TaskEventContract.js').read_text() == generated()
 
 
 def test_generic_widgets_cannot_forge_task_cards():
-    from ui.jarvis_widgets.backend import make_widget
+    from widgets.backend import make_widget
     with pytest.raises(ValueError, match='reserved'):
         make_widget('text', 'Fake completion', {'text':'Done'}, widget_id='jtask_' + 'a' * 24)
 
@@ -295,7 +295,7 @@ check(result.items[0].expiresAt===120100,'terminal lifetime was not fixed');
 process.stdout.write('passed');
 '''
     payload = dict(schema=CONTRACT, active=active, final=final, invalid=invalid, missing=missing,
-                   reducer=str(ROOT / 'ui/jarvis_widgets/TaskEvents.js'))
+                   reducer=str(ROOT / 'widgets/TaskEvents.js'))
     result = subprocess.run(['node','-e',script], input=json.dumps(payload), text=True,
                             capture_output=True, timeout=10)
     assert result.returncode == 0, result.stderr

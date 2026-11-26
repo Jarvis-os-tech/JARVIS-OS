@@ -26,17 +26,17 @@ import sys
 import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from core.greeting import GreetingMemory, greeting_prompt
+from kernel.greeting import GreetingMemory, greeting_prompt
 
-from core.config import Config, load_config
-from core.connection import connect_live, ResumeRecovery, LiveSessionState, ToolCallConflict
-from core.audio_scheduler import AudioSendScheduler, SendStalled, VideoFrameDropped
-from core.response_metrics import ResponseMetrics
-from proactive.attention import AttentionPolicy
-from proactive.system_watch import SystemWatch, sample_system
-from core.harness_config import live_config
-from core.tool_dispatch import run_skill_call
-from voice_layer.echo import EchoCancellation
+from kernel.config import Config, load_config
+from kernel.connection import connect_live, ResumeRecovery, LiveSessionState, ToolCallConflict
+from kernel.audio_scheduler import AudioSendScheduler, SendStalled, VideoFrameDropped
+from kernel.response_metrics import ResponseMetrics
+from kernel.proactive.attention import AttentionPolicy
+from kernel.proactive.system_watch import SystemWatch, sample_system
+from kernel.harness_config import live_config
+from kernel.tool_dispatch import run_skill_call
+from voice.echo import EchoCancellation
 from skills import DesktopSkills, SkillError
 from audio.engine import NativeAudioEngine, StreamLostError
 from audio.downstream import DownstreamRouter
@@ -44,11 +44,11 @@ from audio.extension import ExtendedAudioEngine
 from audio.plugins.standby import StandbyController
 from audio.plugins.native_backend import NativeCompanionEngine
 from audio.plugins.pipewire_backend import PipeWireProcessEngine
-from orchestration.groq_tool_router import (
+from harness.groq_tool_router import (
     GroqToolRouter, ROUTER_DECLARATION, configured_groq_api_keys,
     partition_declarations_for_router, is_local_tool)
 try:
-    from core.ipc import JarvisIPCServer
+    from kernel.ipc import JarvisIPCServer
 except ImportError:
     from ipc import JarvisIPCServer
 
@@ -680,7 +680,7 @@ class LiveVoice:
         return None
 
     async def stream_vision(self, session):
-        from core.vision_stream import stream_video
+        from kernel.vision_stream import stream_video
         await stream_video(self, session, budget=VISION_SEND_BUDGET_SECONDS,
                            renew_exception=RenewConnection)
 

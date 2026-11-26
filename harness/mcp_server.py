@@ -17,17 +17,17 @@ import sqlite3
 import sys
 import uuid
 
-from core.secret_env import sanitized_subprocess_env
+from kernel.secret_env import sanitized_subprocess_env
 from learning.bundles import private_directory
 from learning.evidence import sanitize
-from orchestration.agent_orchestrator import AgentOrchestrator, AGENTS, TERMINAL
-from orchestration.tool_tiers import routed_arguments_match
-from orchestration.executables import installed_executables, installed_path
-from orchestration.task_names import task_name
+from harness.agent_orchestrator import AgentOrchestrator, AGENTS, TERMINAL
+from harness.tool_tiers import routed_arguments_match
+from harness.executables import installed_executables, installed_path
+from harness.task_names import task_name
 import stat
-from proactive.verification import capture_workspace, verify_workspace_changes
-from jarvis_control.config import load as load_control_config
-from jarvis_control.tasks import TaskManager, SCHEMAS as TASK_SCHEMAS
+from kernel.proactive.verification import capture_workspace, verify_workspace_changes
+from control.config import load as load_control_config
+from control.tasks import TaskManager, SCHEMAS as TASK_SCHEMAS
 
 WORKERS = tuple(agent for agent in AGENTS if agent != 'hermes')
 
@@ -120,7 +120,7 @@ class OrchestratorMCP:
         return [json.loads(row[0]) for row in self.db.execute('SELECT data FROM jobs ORDER BY rowid DESC LIMIT 200')]
 
     def _parent(self, identity, generation):
-        from orchestration.task_agents import JOB_ID
+        from harness.task_agents import JOB_ID
         if not isinstance(identity, str) or not JOB_ID.fullmatch(identity):
             raise ValueError('Invalid parent goal')
         path = self.root.parent / '.jarvis-learning/task-agents' / (identity + '.json')
@@ -193,7 +193,7 @@ class OrchestratorMCP:
         prompt = sanitize(prompt)['data']
         parent_workspace = None
         if parent_task_id:
-            from orchestration.task_agents import JOB_ID
+            from harness.task_agents import JOB_ID
             if not JOB_ID.fullmatch(parent_task_id):
                 raise ValueError('Invalid parent goal')
             parent_path = self.root.parent / '.jarvis-learning/task-agents' / (parent_task_id + '.json')
@@ -236,7 +236,7 @@ class OrchestratorMCP:
         self.db.commit()  # record identity before any external launch
         try:
             if parent_workspace:
-                from orchestration.goal_workspaces import project_workspace
+                from harness.goal_workspaces import project_workspace
                 target = self.root / 'workspaces' / job['id'] / 'worktree'
                 def snapshot():
                     fd = os.open(self.root / 'workspace-snapshots.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -441,7 +441,7 @@ class OrchestratorMCP:
             if request.get('operation') != 'cancel_parent':
                 raise ValueError('Unsupported control operation')
             parent, generation = request.get('parent_task_id'), request.get('owner_generation')
-            from orchestration.task_agents import JOB_ID
+            from harness.task_agents import JOB_ID
             if not isinstance(parent, str) or not JOB_ID.fullmatch(parent) or type(generation) is not int:
                 raise ValueError('Invalid parent identity')
             matching = [j for j in self._list() if j.get('parent_task_id') == parent

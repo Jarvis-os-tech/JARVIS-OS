@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell.Services.Pipewire
-import "../jarvis_widgets" as Widgets
+import "../widgets" as Widgets
 
 ColumnLayout {
     id: controls

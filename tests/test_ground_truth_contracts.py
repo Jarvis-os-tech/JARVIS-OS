@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from jarvis_control.outcomes import classify_result
-from jarvis_control.tools import Executor
-from jarvis_control.config import Config
+from control.outcomes import classify_result
+from control.tools import Executor
+from control.config import Config
 from skills import ground_truth
 from connectors import composio
 from skills.skills import DesktopSkills
@@ -58,9 +58,9 @@ async def test_inspection_failure_does_not_prove_process_stopped(monkeypatch):
 
 
 def test_native_clipboard_command_success_needs_exact_readback(monkeypatch):
-    monkeypatch.setattr('jarvis_control.tools.shutil.which', lambda _: '/bin/tool')
+    monkeypatch.setattr('control.tools.shutil.which', lambda _: '/bin/tool')
     run = Mock(side_effect=[NS(returncode=0), NS(returncode=0, stdout=b'only a prefix')])
-    monkeypatch.setattr('jarvis_control.tools.subprocess.run', run)
+    monkeypatch.setattr('control.tools.subprocess.run', run)
     result = Executor(Config()).call('clipboard', {'action':'write', 'text':'only a prefix and the required ending\n'})
     assert result.ok  # The write may have happened; do not silently replay it.
     assert not classify_result(result.as_tool_result()).completed

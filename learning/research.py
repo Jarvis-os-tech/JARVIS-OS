@@ -76,7 +76,7 @@ def seed_bundle():
 async def fixture_trial(root):
     """Exercise native config/dispatch/capture with scripted provider messages only."""
     from google.genai import types
-    from core.harness_config import live_config
+    from kernel.harness_config import live_config
     from .bundles import BundleRegistry
     from .evidence import EpisodeCapture, EpisodeStore
     from .research_runtime import execute_corpus_call

@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from voice_layer.config import Config
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
-from voice_layer.speech import GateFrame
+from voice.config import Config
+from voice.daemon import LiveVoice
+from voice.playback import Playback
+from voice.speech import GateFrame
 
 
 @pytest.mark.asyncio
@@ -20,7 +20,7 @@ async def test_long_narrative_backchannel_preserves_resumed_microphone_turn(monk
     speech = struct.pack('<320h', *([2000] * 320))
     frames = [speech] * 420 + [bytes(640)] * 20 + [speech] * 5 + [bytes(640)] * 60
     clock = [100.0]
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: clock[0])
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: clock[0])
 
     class Reader:
         index = 0
@@ -133,7 +133,7 @@ async def test_listening_cue_echo_is_filtered_without_becoming_user_speech(monke
     echo_frames = [echo[i:i + 640] for i in range(0, len(echo), 640)]
     frames = [speech] * 420 + [bytes(640)] * 20 + echo_frames + [bytes(640)] * 60
     clock = [100.0]
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: clock[0])
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: clock[0])
 
     class Reader:
         index = 0

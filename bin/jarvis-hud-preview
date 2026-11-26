@@ -1,10 +1,1 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-if [[ "$(stat -Lc '%u:%a' -- "$XDG_RUNTIME_DIR")" != "$(id -u):700" ]]; then
-    echo "JARVIS HUD requires a private runtime directory owned by your user." >&2
-    exit 1
-fi
-exec qs --no-duplicate --path "${JARVIS_DE_HUD_ENTRY:-$repo_dir/ui/JarvisHudPreview.qml}" "$@"
+hud-preview

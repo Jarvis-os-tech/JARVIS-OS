@@ -13,10 +13,10 @@ import time
 import unittest
 from unittest.mock import patch
 
-from departments.memory.config import MemoryConfig
-from departments.memory.db import MemoryDatabase
-from departments.memory.department import MemoryDepartment
-from departments.memory.agents import (
+from department_agents.memory.config import MemoryConfig
+from department_agents.memory.db import MemoryDatabase
+from department_agents.memory.department import MemoryDepartment
+from department_agents.memory.agents import (
     ExtractorGatekeeperAgent,
     ConsolidationAgent,
     ReflectionAgent,
@@ -315,7 +315,7 @@ class TestMemoryDepartment(unittest.TestCase):
                          ("Schedule the test review", (datetime.now() - timedelta(days=1)).timestamp()))
             conn.execute("INSERT INTO session_messages VALUES (2, 'assistant', ?, ?)",
                          ("The review is pending", datetime.now().timestamp()))
-        from departments.memory.agents.base_memory_agent import write_private_text
+        from department_agents.memory.agents.base_memory_agent import write_private_text
 
         def fail_note_only(path, content):
             if path.suffix == ".md":
@@ -337,7 +337,7 @@ class TestMemoryDepartment(unittest.TestCase):
         self.assertEqual(today.read_text().count("The review is pending"), 1)
 
     def test_sync_recovers_when_legacy_cursor_exceeds_migration_high_water(self):
-        from jarvis_memory.session import SessionStore
+        from memory.session import SessionStore
 
         sessions = self.temp_dir / "sessions.db"
         with sqlite3.connect(sessions) as conn:
@@ -373,8 +373,8 @@ class TestMemoryDepartment(unittest.TestCase):
             store.close()
 
     def test_bridge_uses_selected_vault_and_respects_recording_setting(self):
-        from jarvis_memory.bridge import MemoryBridge
-        from jarvis_memory.config import MemoryConfig as BridgeConfig
+        from memory.bridge import MemoryBridge
+        from memory.config import MemoryConfig as BridgeConfig
 
         configured = self.vault_path / "default"
         selected = self.vault_path / "selected"

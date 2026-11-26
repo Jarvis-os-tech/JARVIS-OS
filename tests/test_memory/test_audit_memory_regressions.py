@@ -4,9 +4,9 @@ import tempfile
 import time
 import unittest
 
-from jarvis_memory.knowledge import KnowledgeStore
-from jarvis_memory.mcp_server import AuditLog, ClientPolicy, UniversalMemoryMCP
-from jarvis_memory.service_facade import UniversalMemoryService
+from memory.knowledge import KnowledgeStore
+from memory.mcp_server import AuditLog, ClientPolicy, UniversalMemoryMCP
+from memory.service_facade import UniversalMemoryService
 
 
 class MemoryAuditRegressionTests(unittest.TestCase):

@@ -7,7 +7,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from core.workers import BoundedWorker, WorkerBusyError
+from kernel.workers import BoundedWorker, WorkerBusyError
 
 from .bridge import MemoryBridge, MemoryError as BridgeMemoryError
 from .config import Config, MemoryConfig

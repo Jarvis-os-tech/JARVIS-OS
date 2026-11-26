@@ -3,9 +3,9 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import url2pathname
-from ui.jarvis_widgets.backend import make_widget
-from ui.jarvis_widgets.inspector_launcher import handle_widget_action
-from ui.jarvis_widgets.three_compiler import is_three_live_available
+from widgets.backend import make_widget
+from widgets.inspector_launcher import handle_widget_action
+from widgets.three_compiler import is_three_live_available
 
 pytestmark = pytest.mark.skipif(not is_three_live_available(), reason="three-live-cli not installed")
 
@@ -14,7 +14,7 @@ pytestmark = pytest.mark.skipif(not is_three_live_available(), reason="three-liv
 def test_e2e_create_and_export_3d_widget(tmp_path, monkeypatch):
     """Full lifecycle test for 3D widget: creation, compilation, export, and inspector launch."""
     # Resolve three-live-cli before isolating HOME so the cached binary remains available
-    from ui.jarvis_widgets.three_compiler import find_three_live_cli
+    from widgets.three_compiler import find_three_live_cli
     cli_bin = find_three_live_cli()
 
     # 1. Isolate HOME to tmp_path

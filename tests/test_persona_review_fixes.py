@@ -8,10 +8,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from jarvis_control.skills import UnifiedSkills
-from voice_layer.background import deliver_once
-from orchestration.model_routes import ModelJobs
-from orchestration.release_manager import ReleaseManager
+from control.skills import UnifiedSkills
+from voice.background import deliver_once
+from harness.model_routes import ModelJobs
+from harness.release_manager import ReleaseManager
 import scripts.prepare_persona_release as deploy
 
 
@@ -80,10 +80,16 @@ def test_reprepare_replaces_an_existing_reasoning_prompt(tmp_path, monkeypatch):
                      'skill_manifests/standby.json'):
         src = source / relative
         src.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(repo / relative, src)
-        installed = parent / relative.replace('voice_layer/', 'voice_layer/')
+        real_source = repo / relative
+        if not real_source.exists():
+            for old_p, new_p in [('voice_layer/', 'voice/'), ('core/', 'kernel/'), ('orchestration/', 'harness/'), ('jarvis_control/', 'control/')]:
+                if relative.startswith(old_p) and (repo / (new_p + relative[len(old_p):])).exists():
+                    real_source = repo / (new_p + relative[len(old_p):])
+                    break
+        shutil.copyfile(real_source, src)
+        installed = parent / relative
         installed.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(repo / relative, installed)
+        shutil.copyfile(real_source, installed)
     (parent / 'release.json').write_text('{}')
     (runtime / 'current').symlink_to(parent)
     prompt = source / 'orchestration/model_routes.py'

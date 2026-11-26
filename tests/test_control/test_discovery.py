@@ -2,7 +2,7 @@
 import json
 import shutil
 import pytest
-from jarvis_control.discovery import TOPICS, lookup
+from control.discovery import TOPICS, lookup
 
 
 @pytest.fixture(autouse=True)
@@ -28,7 +28,7 @@ def mock_omarchy_if_missing(monkeypatch):
                 }
             ]
         })
-        from jarvis_control import capabilities as cap
+        from control import capabilities as cap
         orig_run = cap._run
         monkeypatch.setattr(cap, "_run", lambda cmd, **kwargs: sample_commands if list(cmd[:2]) == ["omarchy", "commands"] else orig_run(cmd, **kwargs))
 
@@ -66,14 +66,14 @@ def test_bundled_omarchy_skill_guide_search():
 
 
 def test_omarchy_skill_topic_is_exposed_to_provider():
-    from jarvis_control import tools_for, Config
+    from control import tools_for, Config
     schema = next(tool for tool in tools_for(Config()) if tool['name'] == 'omarchy_help')
     assert 'skills' in schema['input_schema']['properties']['topic']['enum']
     assert 'required' not in schema['input_schema'] or 'query' not in schema['input_schema']['required']
 
 
 def test_omarchy_help_tool_execution_without_query():
-    from jarvis_control.tools import Executor, Config
+    from control.tools import Executor, Config
     executor = Executor(Config())
     res = executor.call("omarchy_help", {"topic": "commands", "limit": 5})
     assert res.ok is True

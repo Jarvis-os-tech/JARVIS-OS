@@ -21,15 +21,15 @@ import time
 import uuid
 import threading
 
-from core.secret_env import sanitized_subprocess_env
+from kernel.secret_env import sanitized_subprocess_env
 from learning.evidence import sanitize
 from learning.bundles import private_directory
-from orchestration.hermes_bridge import HermesBridge
-from orchestration.task_agents import TaskAgents, JOB_ID, TERMINAL
-from orchestration.task_names import task_name
-from proactive.verification import capture_workspace, verify_workspace_changes, completion_evidence, verify_files
-from jarvis_control.tasks import read_text
-from orchestration.integration_paths import locations
+from harness.hermes_bridge import HermesBridge
+from harness.task_agents import TaskAgents, JOB_ID, TERMINAL
+from harness.task_names import task_name
+from kernel.proactive.verification import capture_workspace, verify_workspace_changes, completion_evidence, verify_files
+from control.tasks import read_text
+from harness.integration_paths import locations
 
 
 class GoalSupervisor:
@@ -53,7 +53,7 @@ class DurableHermes(TaskAgents):
         self.supervisor = supervisor or GoalSupervisor()
         self._refresh_lock = asyncio.Lock()
         super().__init__(root, events, bridge=bridge or HermesBridge(ownership_path=root / 'owned-sessions.json'))
-        from orchestration.hermes_notices import NativeNotices
+        from harness.hermes_notices import NativeNotices
         self.native_notices = NativeNotices(self.root, self.bridge)
 
     @contextmanager
@@ -96,7 +96,7 @@ class DurableHermes(TaskAgents):
         role = self._text(role, 'role', 160)
         if type(timeout_seconds) is not int or not 10 <= timeout_seconds <= 86400:
             raise ValueError('Use a goal deadline from 10 to 86400 seconds')
-        from proactive.verification import validate_checks
+        from kernel.proactive.verification import validate_checks
         checks = validate_checks(acceptance_checks)
         input_paths = input_paths or []
         if workspace_id not in {'scratch', 'jarvis-os'} or not isinstance(input_paths, list) or len(input_paths) > 16:
@@ -209,7 +209,7 @@ class DurableHermes(TaskAgents):
 
     def _workspace(self, job):
         if job.get('workspace_id') == 'jarvis-os':
-            from orchestration.goal_workspaces import project_workspace
+            from harness.goal_workspaces import project_workspace
             path = self.root / 'workspaces' / job['id'] / 'worktree'
             workspace, _revision = project_workspace(path, locations()['project_root'], job.get('input_paths', []))
             return workspace

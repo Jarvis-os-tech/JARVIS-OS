@@ -1,6 +1,6 @@
 import unittest
-from ui.jarvis_widgets import backend
-from ui.jarvis_widgets.view_schema import validate_view
+from widgets import backend
+from widgets.view_schema import validate_view
 
 
 class WorkspaceTests(unittest.TestCase):

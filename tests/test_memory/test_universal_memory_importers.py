@@ -4,9 +4,9 @@ import sqlite3
 import tempfile
 import unittest
 
-from jarvis_memory.importers import SessionImportError, SessionSource, SiblingSessionImporter
-from jarvis_memory.knowledge import KnowledgeStore
-from jarvis_memory.service_facade import UniversalMemoryService
+from memory.importers import SessionImportError, SessionSource, SiblingSessionImporter
+from memory.knowledge import KnowledgeStore
+from memory.service_facade import UniversalMemoryService
 
 
 class SiblingSessionImporterTests(unittest.TestCase):

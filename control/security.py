@@ -90,7 +90,7 @@ def child_env():
     env = {name:value for name,value in os.environ.items()
            if not sensitive_name(name) and not _CREDENTIAL.fullmatch(value)}
     try:
-        from core.desktop_session import recover_desktop_environment
+        from kernel.desktop_session import recover_desktop_environment
         env.update(recover_desktop_environment(env))
     except Exception:
         pass

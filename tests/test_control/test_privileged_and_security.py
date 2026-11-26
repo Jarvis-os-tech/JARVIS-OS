@@ -4,15 +4,15 @@ and full-range system tools.
 import subprocess
 import pytest
 from unittest.mock import patch, MagicMock
-from jarvis_control.security import (
+from control.security import (
     is_protected_package,
     check_package_removal,
     validate_package_removal,
     ProtectedPackageError,
     CORE_PROTECTED_PACKAGES
 )
-from jarvis_control.package_manager import uninstall_package
-from jarvis_control.privileged import (
+from control.package_manager import uninstall_package
+from control.privileged import (
     build_btrfs_snapshot_command,
     run_privileged_action,
     execute_manage_packages,
@@ -20,8 +20,8 @@ from jarvis_control.privileged import (
     execute_modify_system_config,
     execute_general_command
 )
-from jarvis_control.skills import ControlSkills, UnifiedSkills
-from jarvis_control.config import Config
+from control.skills import ControlSkills, UnifiedSkills
+from control.config import Config
 
 
 # --- 1. Denylist Protection Tests ---
@@ -72,9 +72,9 @@ def test_build_btrfs_snapshot_command():
     assert "pacman -Rns --noconfirm vlc" in wrapped[2]
 
 
-@patch("jarvis_control.privileged.subprocess.run")
-@patch("jarvis_control.privileged.set_voice_listening_paused")
-@patch("jarvis_control.privileged.speak_explanation")
+@patch("control.privileged.subprocess.run")
+@patch("control.privileged.set_voice_listening_paused")
+@patch("control.privileged.speak_explanation")
 def test_run_privileged_action_normal(mock_speak, mock_pause, mock_run):
     mock_run.return_value = MagicMock(returncode=0, stdout="Success output", stderr="")
     
@@ -93,9 +93,9 @@ def test_run_privileged_action_normal(mock_speak, mock_pause, mock_run):
     mock_pause.assert_any_call(False)
 
 
-@patch("jarvis_control.privileged.subprocess.run")
-@patch("jarvis_control.privileged.set_voice_listening_paused")
-@patch("jarvis_control.privileged.speak_explanation")
+@patch("control.privileged.subprocess.run")
+@patch("control.privileged.set_voice_listening_paused")
+@patch("control.privileged.speak_explanation")
 def test_run_privileged_action_destructive_triggers_snapshot(mock_speak, mock_pause, mock_run):
     mock_run.return_value = MagicMock(returncode=0, stdout="Uninstalled", stderr="")
     
@@ -121,8 +121,8 @@ def test_execute_manage_packages_blocks_denylist():
     assert "critical OS package" in res["output"]
 
 
-@patch("jarvis_control.privileged.subprocess.run")
-@patch("jarvis_control.privileged.shutil.which")
+@patch("control.privileged.subprocess.run")
+@patch("control.privileged.shutil.which")
 def test_execute_manage_packages_remove_mise(mock_which, mock_run):
     mock_which.side_effect = lambda cmd: f"/usr/bin/{cmd}"
     # mise which returns 0 (installed), mise unuse returns 0, mise uninstall returns 0
@@ -133,9 +133,9 @@ def test_execute_manage_packages_remove_mise(mock_which, mock_run):
     assert "Successfully uninstalled claude from mise" in res["output"]
 
 
-@patch("jarvis_control.privileged.subprocess.run")
-@patch("jarvis_control.privileged.shutil.which")
-@patch("jarvis_control.privileged.run_privileged_action")
+@patch("control.privileged.subprocess.run")
+@patch("control.privileged.shutil.which")
+@patch("control.privileged.run_privileged_action")
 def test_execute_manage_packages_remove_pacman(mock_priv, mock_which, mock_run):
     mock_which.side_effect = lambda cmd: f"/usr/bin/{cmd}"
     # mise which fails (not in mise), flatpak fails (not in flatpak), pacman -Q succeeds (in pacman)
@@ -154,9 +154,9 @@ def test_execute_manage_packages_remove_pacman(mock_priv, mock_which, mock_run):
     assert mock_priv.call_args[1]["destructive"] is True
 
 
-@patch("jarvis_control.privileged.subprocess.run")
-@patch("jarvis_control.privileged.shutil.which")
-@patch("jarvis_control.privileged.run_privileged_action")
+@patch("control.privileged.subprocess.run")
+@patch("control.privileged.shutil.which")
+@patch("control.privileged.run_privileged_action")
 def test_execute_manage_packages_remove_nonexistent_no_sudo(mock_priv, mock_which, mock_run):
     mock_which.side_effect = lambda cmd: f"/usr/bin/{cmd}"
     # All queries return returncode=1 (not found anywhere)
@@ -170,7 +170,7 @@ def test_execute_manage_packages_remove_nonexistent_no_sudo(mock_priv, mock_whic
 
 
 def test_close_app_executor_call():
-    from jarvis_control.tools import Executor
+    from control.tools import Executor
     executor = Executor(Config(dry_run=False, allow_shell=True))
     with patch.object(executor, "_query_json", return_value=[
         {"class": "foot", "initialClass": "foot", "title": "Claude session", "address": "0x1234abcd"}
@@ -179,14 +179,14 @@ def test_close_app_executor_call():
         assert res.ok is True
         assert "0x1234abcd" in res.output
         executor._tool_hypr_dispatch.return_value = MagicMock(ok=False)
-        with patch("jarvis_control.tools.os.kill") as kill:
+        with patch("control.tools.os.kill") as kill:
             assert not executor.call("close_app", {"app": "claude"}).ok
             kill.assert_not_called()
 
 
-@patch("jarvis_control.privileged.subprocess.run")
-@patch("jarvis_control.privileged.shutil.which", side_effect=lambda cmd: f"/usr/bin/{cmd}")
-@patch("jarvis_control.privileged.run_privileged_action")
+@patch("control.privileged.subprocess.run")
+@patch("control.privileged.shutil.which", side_effect=lambda cmd: f"/usr/bin/{cmd}")
+@patch("control.privileged.run_privileged_action")
 def test_mixed_package_removal_reports_mise_failure(mock_priv, _mock_which, mock_run):
     def run(cmd, **kwargs):
         command = cmd[0].rsplit("/", 1)[-1]
@@ -211,15 +211,15 @@ def test_mixed_removal_preserves_success_after_later_timeout():
                    or cmd == ["/usr/bin/flatpak", "info", "example.app"])
         return subprocess.CompletedProcess(cmd, 0 if success else 1, "", "")
 
-    with patch("jarvis_control.privileged.shutil.which", side_effect=lambda name: f"/usr/bin/{name}"), \
-         patch("jarvis_control.privileged.subprocess.run", side_effect=run):
+    with patch("control.privileged.shutil.which", side_effect=lambda name: f"/usr/bin/{name}"), \
+         patch("control.privileged.subprocess.run", side_effect=run):
         result = execute_manage_packages("remove", ["claude", "example.app"])
     assert result["code"] == 124 and not result["ok"]
     assert "Successfully uninstalled claude" in result["output"]
     assert "example.app" in result["output"] and "outcome unknown" in result["output"]
 
 
-@patch("jarvis_control.privileged.run_privileged_action")
+@patch("control.privileged.run_privileged_action")
 def test_execute_manage_packages_install(mock_priv):
     mock_priv.return_value = {"ok": True, "output": "installed", "code": 0}
     res = execute_manage_packages("install", ["vlc"])
@@ -228,7 +228,7 @@ def test_execute_manage_packages_install(mock_priv):
     assert mock_priv.call_args[1]["destructive"] is False
 
 
-@patch("jarvis_control.privileged.subprocess.run")
+@patch("control.privileged.subprocess.run")
 def test_execute_manage_system_service_user_scope(mock_run):
     mock_run.return_value = MagicMock(returncode=0, stdout="active", stderr="")
     res = execute_manage_system_service("jarvis-voice", "status", scope="user")
@@ -236,7 +236,7 @@ def test_execute_manage_system_service_user_scope(mock_run):
     mock_run.assert_called_with(["systemctl", "--user", "status", "jarvis-voice.service"], capture_output=True, text=True, timeout=30)
 
 
-@patch("jarvis_control.privileged.run_privileged_action")
+@patch("control.privileged.run_privileged_action")
 def test_execute_manage_system_service_system_scope_restart(mock_priv):
     mock_priv.return_value = {"ok": True, "output": "restarted", "code": 0}
     res = execute_manage_system_service("docker", "restart", scope="system")
@@ -268,7 +268,7 @@ async def test_unified_skills_package_denylist_execution():
 # --- 5. Multi-Angle Hardening Tests ---
 
 def test_normalize_package_name_and_prefix_family_blocking():
-    from jarvis_control.security import normalize_package_name
+    from control.security import normalize_package_name
 
     # Normalization tests
     assert normalize_package_name("extra/hyprland") == "hyprland"
@@ -333,7 +333,7 @@ def test_critical_system_services_protection():
         assert "protected core system service" in res["output"]
 
     # Allowed safe inspection or restart on services
-    with patch("jarvis_control.privileged.subprocess.run") as mock_run:
+    with patch("control.privileged.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="active", stderr="")
         res_status = execute_manage_system_service("pipewire", "status", scope="user")
         assert res_status["ok"] is True
@@ -346,9 +346,9 @@ def test_execute_manage_packages_install_flag_filtering_and_yay_fallback():
     assert "No valid package names provided" in res_flags["output"]
 
     # When pacman fails with 'target not found', fallback to unprivileged yay with SUDO_ASKPASS
-    with patch("jarvis_control.privileged.run_privileged_action") as mock_pacman, \
-         patch("jarvis_control.privileged.subprocess.run") as mock_yay, \
-         patch("jarvis_control.privileged.set_voice_listening_paused") as mock_pause:
+    with patch("control.privileged.run_privileged_action") as mock_pacman, \
+         patch("control.privileged.subprocess.run") as mock_yay, \
+         patch("control.privileged.set_voice_listening_paused") as mock_pause:
         
         mock_pacman.return_value = {"ok": False, "output": "error: target not found: custom-aur-pkg", "code": 1}
         mock_yay.return_value = MagicMock(returncode=0, stdout="Installed from AUR", stderr="")
@@ -365,7 +365,7 @@ def test_execute_manage_packages_install_flag_filtering_and_yay_fallback():
 
 
 def test_execute_modify_system_config_batches_privileged_commands():
-    with patch("jarvis_control.privileged.run_privileged_action") as mock_priv:
+    with patch("control.privileged.run_privileged_action") as mock_priv:
         mock_priv.return_value = {"ok": True, "output": "Updated", "code": 0}
         
         res = execute_modify_system_config(

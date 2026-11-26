@@ -8,13 +8,13 @@ import pytest
 
 
 def test_daemon_imports():
-    from voice_layer.daemon import LiveVoice, live_config
+    from voice.daemon import LiveVoice, live_config
     assert LiveVoice is not None
     assert callable(live_config)
 
 
 def test_live_config_produces_valid_dict():
-    from voice_layer.daemon import live_config
+    from voice.daemon import live_config
     config = live_config(voice='Aoede')
     assert config['response_modalities'] == ['AUDIO']
     assert 'system_instruction' in config
@@ -30,7 +30,7 @@ def test_live_config_produces_valid_dict():
 
 
 def test_live_config_dynamic_capabilities_with_tools():
-    from voice_layer.daemon import live_config
+    from voice.daemon import live_config
     tools = [{'function_declarations': [{'name': 'set_volume'}, {'name': 'tile_window'}]}]
     config = live_config(voice='Puck', tools=tools)
     assert config['tools'] == tools
@@ -39,8 +39,8 @@ def test_live_config_dynamic_capabilities_with_tools():
 
 
 def test_live_voice_status():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     player = Playback(sink='default')
     voice = LiveVoice(player)
@@ -53,8 +53,8 @@ def test_live_voice_status():
 
 
 def test_live_voice_mute_and_interrupt():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     player = Playback(sink='default')
     voice = LiveVoice(player)
@@ -71,8 +71,8 @@ def test_live_voice_mute_and_interrupt():
 
 @pytest.mark.asyncio
 async def test_live_voice_handle_audio_and_turn():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     player = Playback(sink='default')
     voice = LiveVoice(player)
@@ -126,8 +126,8 @@ async def test_live_voice_handle_audio_and_turn():
 @pytest.mark.asyncio
 async def test_live_voice_send_greeting():
     """send_greeting triggers an initial user turn prompt on session start."""
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     player = Playback(sink='default')
     voice = LiveVoice(player, greet_on_start=True)
@@ -151,7 +151,7 @@ async def test_live_voice_send_greeting():
 
 @pytest.mark.asyncio
 async def test_supervise_cleans_workers_after_failure():
-    from voice_layer.daemon import supervise
+    from voice.daemon import supervise
 
     started, stopped = asyncio.Event(), asyncio.Event()
 
@@ -173,7 +173,7 @@ async def test_supervise_cleans_workers_after_failure():
 
 @pytest.mark.asyncio
 async def test_supervise_cancellation_awaits_workers():
-    from voice_layer.daemon import supervise
+    from voice.daemon import supervise
 
     started, stopped = asyncio.Event(), asyncio.Event()
 
@@ -194,8 +194,8 @@ async def test_supervise_cancellation_awaits_workers():
 
 @pytest.mark.asyncio
 async def test_microphone_eof_reaches_session_without_hanging():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     voice = LiveVoice(Playback('default'))
     reader = asyncio.StreamReader()
@@ -207,9 +207,9 @@ async def test_microphone_eof_reaches_session_without_hanging():
 
 @pytest.mark.asyncio
 async def test_capture_overflow_does_not_drop_turn_boundary():
-    from voice_layer.daemon import LiveVoice, INPUT_BYTES
-    from voice_layer.playback import Playback, MicrophoneBacklogError
-    from voice_layer.speech import GateFrame
+    from voice.daemon import LiveVoice, INPUT_BYTES
+    from voice.playback import Playback, MicrophoneBacklogError
+    from voice.speech import GateFrame
 
     gate = MagicMock(active=True, tail_seconds=.45)
     gate.process.return_value = GateFrame(bytes(INPUT_BYTES), opened=True)
@@ -224,9 +224,9 @@ async def test_capture_overflow_does_not_drop_turn_boundary():
 
 @pytest.mark.asyncio
 async def test_turn_audio_sent_in_order_with_explicit_boundaries():
-    from voice_layer.daemon import LiveVoice, INPUT_BYTES, supervise
-    from voice_layer.playback import Playback
-    from voice_layer.speech import GateFrame
+    from voice.daemon import LiveVoice, INPUT_BYTES, supervise
+    from voice.playback import Playback
+    from voice.speech import GateFrame
 
     voice = LiveVoice(Playback('default'), config=SimpleNamespace(
         auto_vad=False, local_speech=SimpleNamespace(enabled=False)))
@@ -250,9 +250,9 @@ async def test_turn_audio_sent_in_order_with_explicit_boundaries():
 
 @pytest.mark.asyncio
 async def test_turn_audio_sent_auto_vad_flushes_when_capture_pauses():
-    from voice_layer.daemon import LiveVoice, INPUT_BYTES, supervise
-    from voice_layer.playback import Playback
-    from voice_layer.speech import GateFrame
+    from voice.daemon import LiveVoice, INPUT_BYTES, supervise
+    from voice.playback import Playback
+    from voice.speech import GateFrame
 
     voice = LiveVoice(Playback('default'), config=SimpleNamespace(auto_vad=True, local_speech=SimpleNamespace(enabled=False)))
     queue = asyncio.Queue()
@@ -275,9 +275,9 @@ async def test_turn_audio_sent_auto_vad_flushes_when_capture_pauses():
 
 @pytest.mark.asyncio
 async def test_audio_stream_end_sent_when_standby_engaged():
-    from voice_layer.daemon import LiveVoice, INPUT_BYTES, supervise
-    from voice_layer.playback import Playback
-    from voice_layer.speech import GateFrame
+    from voice.daemon import LiveVoice, INPUT_BYTES, supervise
+    from voice.playback import Playback
+    from voice.speech import GateFrame
 
     voice = LiveVoice(Playback('default'), config=SimpleNamespace(auto_vad=True, local_speech=SimpleNamespace(enabled=False)))
     queue = asyncio.Queue()
@@ -301,25 +301,25 @@ async def test_audio_stream_end_sent_when_standby_engaged():
 
 @pytest.mark.asyncio
 async def test_first_audio_latency_stays_fixed_across_response_chunks(monkeypatch):
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     voice = LiveVoice(Playback('default'))
     voice._reply_authorized = True
     voice._speech_closed_at = 10.0
     event = SimpleNamespace(server_content=SimpleNamespace(model_turn=SimpleNamespace(
         parts=[SimpleNamespace(inline_data=SimpleNamespace(data=bytes(960)))])))
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: 10.25)
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: 10.25)
     await voice.handle(event)
     assert voice.status()['latency']['speech_end_to_first_audio_ms'] == 250
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: 10.5)
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: 10.5)
     await voice.handle(event)
     assert voice.status()['latency']['speech_end_to_first_audio_ms'] == 250
 
 
 def test_default_turn_wait_preserves_thinking_pauses_and_closes_after_1_2s():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     import struct
 
     voice = LiveVoice(Playback('default'))
@@ -338,8 +338,8 @@ def test_default_turn_wait_preserves_thinking_pauses_and_closes_after_1_2s():
 
 @pytest.mark.asyncio
 async def test_provider_latency_measured_from_actual_activity_end(monkeypatch):
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     voice = LiveVoice(Playback('default'))
     voice._reply_authorized = True
@@ -347,21 +347,21 @@ async def test_provider_latency_measured_from_actual_activity_end(monkeypatch):
     voice.activity_end_sent_at = 10.2
     event = SimpleNamespace(server_content=SimpleNamespace(model_turn=SimpleNamespace(
         parts=[SimpleNamespace(inline_data=SimpleNamespace(data=bytes(960)))])))
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: 10.5)
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: 10.5)
     await voice.handle(event)
     assert voice.status()['latency']['activity_end_to_first_audio_ms'] == 300
     assert voice.status()['latency']['speech_end_to_first_audio_ms'] == 500
 
 
 def test_standard_live_model_uses_its_native_reasoning_profile():
-    from voice_layer.daemon import live_config
+    from voice.daemon import live_config
     assert 'thinking_config' not in live_config()
 
 
 @pytest.mark.asyncio
 async def test_delayed_audio_still_plays_after_warning(monkeypatch):
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     voice = LiveVoice(Playback('default'))
     voice._reply_authorized = voice._waiting = True
     voice._last_progress = 10.0
@@ -371,8 +371,8 @@ async def test_delayed_audio_still_plays_after_warning(monkeypatch):
         calls += 1
         if calls > 1:
             raise asyncio.CancelledError
-    monkeypatch.setattr('voice_layer.daemon.asyncio.sleep', one_cycle)
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: 26.0)
+    monkeypatch.setattr('voice.daemon.asyncio.sleep', one_cycle)
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: 26.0)
     with pytest.raises(asyncio.CancelledError):
         await voice.monitor_response()
     assert voice.response_delayed
@@ -385,14 +385,14 @@ async def test_delayed_audio_still_plays_after_warning(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_stalled_provider_reconnects_without_resuming_old_answer(monkeypatch):
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     voice = LiveVoice(Playback('default'))
     voice._reply_authorized = True
     voice._last_progress = 10.0
     voice.resume_handle = 'old-session'
-    monkeypatch.setattr('voice_layer.daemon.asyncio.sleep', AsyncMock())
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: 56.0)
+    monkeypatch.setattr('voice.daemon.asyncio.sleep', AsyncMock())
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: 56.0)
     with pytest.raises(ConnectionError, match='Please repeat'):
         await voice.monitor_response()
     assert voice.resume_handle is None
@@ -400,8 +400,8 @@ async def test_stalled_provider_reconnects_without_resuming_old_answer(monkeypat
 
 @pytest.mark.asyncio
 async def test_stalled_transcribed_turn_requests_one_reply_without_filler(monkeypatch):
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     voice = LiveVoice(Playback('default'))
     voice.connected = voice._reply_authorized = True
@@ -411,8 +411,8 @@ async def test_stalled_transcribed_turn_requests_one_reply_without_filler(monkey
     voice._session = SimpleNamespace(send_client_content=AsyncMock())
     filler = MagicMock()
     monkeypatch.setattr(voice, '_play_filler_reflex', filler)
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: 100)
-    monkeypatch.setattr('voice_layer.daemon.asyncio.sleep', AsyncMock(side_effect=[None, None, asyncio.CancelledError]))
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: 100)
+    monkeypatch.setattr('voice.daemon.asyncio.sleep', AsyncMock(side_effect=[None, None, asyncio.CancelledError]))
 
     with pytest.raises(asyncio.CancelledError):
         await voice.monitor_response()
@@ -424,10 +424,10 @@ async def test_stalled_transcribed_turn_requests_one_reply_without_filler(monkey
 @pytest.mark.asyncio
 async def test_production_setup_attaches_memory_and_drains_on_exit(tmp_path, monkeypatch):
     from google.genai import types
-    from jarvis_memory.bridge import MemoryBridge
-    from voice_layer import config as voice_config, daemon
-    from voice_layer.config import Config
-    from voice_layer.echo import MonitorEchoCancellation
+    from memory.bridge import MemoryBridge
+    from voice import config as voice_config, daemon
+    from voice.config import Config
+    from voice.echo import MonitorEchoCancellation
 
     monkeypatch.setattr(voice_config, "STATE_HOME", tmp_path)
     monkeypatch.setattr(MonitorEchoCancellation, "start", AsyncMock(return_value=False))
@@ -474,10 +474,10 @@ async def test_production_setup_attaches_memory_and_drains_on_exit(tmp_path, mon
 
 @pytest.mark.asyncio
 async def test_provider_memory_tool_roundtrip_and_unknown_tool(tmp_path):
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.config import Config
-    from voice_layer.playback import Playback
-    from jarvis_memory.skills import MemorySkills
+    from voice.daemon import LiveVoice
+    from voice.config import Config
+    from voice.playback import Playback
+    from memory.skills import MemorySkills
     config = Config()
     config.memory.path = str(tmp_path)
     skills = MemorySkills(config)
@@ -508,8 +508,8 @@ async def test_provider_memory_tool_roundtrip_and_unknown_tool(tmp_path):
 
 @pytest.mark.asyncio
 async def test_completed_turn_clears_delay_warning():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     voice = LiveVoice(Playback('default'))
     voice.response_delayed = True
     voice.last_error = 'The response is taking longer than expected.'
@@ -519,8 +519,8 @@ async def test_completed_turn_clears_delay_warning():
 
 
 def test_idle_connected_microphone_reports_listening():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     voice = LiveVoice(Playback('default'))
     voice.connected = True
     assert voice.status()['listening']
@@ -534,9 +534,9 @@ def test_idle_connected_microphone_reports_listening():
     (False, 0, 'microphone_silent', 'Microphone volume is zero.'),
 ])
 def test_system_microphone_block_cannot_report_listening(muted, volume, state, issue):
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
-    from voice_layer.ipc import ControlServer
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
+    from voice.ipc import ControlServer
     voice = LiveVoice(Playback('default'))
     voice.connected = True
     voice.microphone_state = dict(source='actual-input', muted=muted,
@@ -554,8 +554,8 @@ def test_system_microphone_block_cannot_report_listening(muted, volume, state, i
 
 @pytest.mark.asyncio
 async def test_microphone_monitor_recovers_when_system_unmutes(monkeypatch):
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     voice = LiveVoice(Playback('default'))
     voice.connected = True
     snapshots = [dict(source='actual-input', muted=True, volume_percent=42,
@@ -568,8 +568,8 @@ async def test_microphone_monitor_recovers_when_system_unmutes(monkeypatch):
         observed.append(voice.status())
         if not snapshots:
             raise asyncio.CancelledError
-    monkeypatch.setattr('voice_layer.daemon.read_microphone_state', health)
-    monkeypatch.setattr('voice_layer.daemon.asyncio.sleep', cycle)
+    monkeypatch.setattr('voice.daemon.read_microphone_state', health)
+    monkeypatch.setattr('voice.daemon.asyncio.sleep', cycle)
     with pytest.raises(asyncio.CancelledError):
         await voice.monitor_microphone()
     assert not observed[0]['listening']
@@ -578,8 +578,8 @@ async def test_microphone_monitor_recovers_when_system_unmutes(monkeypatch):
 
 
 def test_unknown_microphone_health_does_not_invent_mute():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     voice = LiveVoice(Playback('default'))
     voice.connected = True
     voice.microphone_state = dict(source='', muted=None, volume_percent=None,
@@ -590,8 +590,8 @@ def test_unknown_microphone_health_does_not_invent_mute():
 
 @pytest.mark.asyncio
 async def test_response_watchdog_does_not_reconnect_during_tool(monkeypatch):
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     voice = LiveVoice(Playback('default'))
     voice._reply_authorized = True
     voice._tools_in_flight = 1
@@ -602,8 +602,8 @@ async def test_response_watchdog_does_not_reconnect_during_tool(monkeypatch):
         count += 1
         if count > 1:
             raise asyncio.CancelledError
-    monkeypatch.setattr('voice_layer.daemon.asyncio.sleep', cycles)
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: 100.0)
+    monkeypatch.setattr('voice.daemon.asyncio.sleep', cycles)
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: 100.0)
     with pytest.raises(asyncio.CancelledError):
         await voice.monitor_response()
     assert voice._reply_authorized
@@ -611,8 +611,8 @@ async def test_response_watchdog_does_not_reconnect_during_tool(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_tool_call_id_deduplicates_control_effect():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     skills = SimpleNamespace(declarations=[{'name': 'test_action'}], execute=AsyncMock(return_value='done'))
     voice = LiveVoice(Playback('default'), skills=skills)
     voice._reply_authorized = True
@@ -626,9 +626,9 @@ async def test_tool_call_id_deduplicates_control_effect():
 
 @pytest.mark.asyncio
 async def test_voice_can_answer_another_turn_while_linkedin_draft_runs(monkeypatch):
-    from jarvis_control.skills import UnifiedSkills
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from control.skills import UnifiedSkills
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     from skills.skills import DesktopSkills
     from skills.domains.linkedin import linkedin_dept
 
@@ -677,8 +677,8 @@ async def test_voice_can_answer_another_turn_while_linkedin_draft_runs(monkeypat
 
 @pytest.mark.asyncio
 async def test_spoken_confirmation_needs_real_new_turn():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     skills = SimpleNamespace(declarations=[{'name': 'confirm_last'}], execute=AsyncMock(return_value='done'))
     voice = LiveVoice(Playback('default'), skills=skills)
     voice._reply_authorized = True
@@ -693,15 +693,15 @@ async def test_spoken_confirmation_needs_real_new_turn():
 
 
 def test_omarchy_routing_only_when_attached():
-    from voice_layer.daemon import build_instruction, live_config
+    from voice.daemon import build_instruction, live_config
     assert 'OMARCHY DESKTOP SKILL' in build_instruction([{'function_declarations': [{'name': 'omarchy_help'}]}])
     assert 'OMARCHY DESKTOP SKILL' not in build_instruction()
     assert live_config()['session_resumption'] == {}
 
 
 def test_standby_status_and_confirm_wake():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     voice = LiveVoice(Playback('default'))
     assert voice.status()['standby'] is False
     assert voice.status()['state'] != 'standby'
@@ -718,8 +718,8 @@ def test_standby_status_and_confirm_wake():
 
 @pytest.mark.asyncio
 async def test_monitor_standby_raises_enter_standby():
-    from voice_layer.daemon import LiveVoice, EnterStandby
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice, EnterStandby
+    from voice.playback import Playback
     voice = LiveVoice(Playback('default'))
     await voice.standby.request()
     with pytest.raises(EnterStandby):
@@ -727,9 +727,9 @@ async def test_monitor_standby_raises_enter_standby():
 
 
 def test_long_command_turn_silence_threshold():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
-    from voice_layer.config import Config
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
+    from voice.config import Config
     import struct
 
     cfg = Config(turn_silence_frames=35)
@@ -749,9 +749,9 @@ def test_long_command_turn_silence_threshold():
 
 @pytest.mark.asyncio
 async def test_send_greeting_skipped_if_already_greeted_or_user_speaking(tmp_path, monkeypatch):
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
-    from voice_layer.config import Config
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
+    from voice.config import Config
 
     monkeypatch.setenv('XDG_RUNTIME_DIR', str(tmp_path))
     cfg = Config(greet_on_start=True)
@@ -776,8 +776,8 @@ async def test_send_greeting_skipped_if_already_greeted_or_user_speaking(tmp_pat
 
 @pytest.mark.asyncio
 async def test_interrupted_while_gate_active_preserves_authorization():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     voice = LiveVoice(Playback('default'))
     voice.connected = True
@@ -798,8 +798,8 @@ async def test_interrupted_while_gate_active_preserves_authorization():
 
 @pytest.mark.asyncio
 async def test_tool_turn_complete_without_audio_does_not_hang():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     voice = LiveVoice(Playback('default'))
     voice.connected = True
@@ -826,8 +826,8 @@ async def test_tool_turn_complete_without_audio_does_not_hang():
 
 @pytest.mark.asyncio
 async def test_send_inputs_forwards_user_text_and_test_bar():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     from skills.input_bar import TestBar
 
     class FakeSkills:
@@ -875,8 +875,8 @@ async def test_send_inputs_forwards_user_text_and_test_bar():
 
 @pytest.mark.asyncio
 async def test_interruption_does_not_drop_subsequent_model_response():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     voice = LiveVoice(Playback('default'))
     voice._model_active = True
@@ -921,12 +921,12 @@ async def test_interruption_does_not_drop_subsequent_model_response():
 
 @pytest.mark.asyncio
 async def test_send_inputs_prefetches_urls_and_attaches_web_content(monkeypatch):
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     from skills.input_bar import TestBar
 
     monkeypatch.setattr(
-        'jarvis_control.web_text.bounded_page_text',
+        'control.web_text.bounded_page_text',
         lambda url, timeout=12: f"Mock page text for {url}",
     )
 
@@ -961,8 +961,8 @@ async def test_send_inputs_prefetches_urls_and_attaches_web_content(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_send_inputs_formats_code_and_image_attachments():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
     from skills.input_bar import TestBar
 
     class FakeSkills:
@@ -1019,8 +1019,8 @@ async def test_send_inputs_formats_code_and_image_attachments():
 
 @pytest.mark.asyncio
 async def test_nlu_gate_intercepts_unwanted_pairing_and_intrusive_tools():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     skills = SimpleNamespace(
         declarations=[{'name': 'phone_pair'}, {'name': 'phone_list_contacts'}],
@@ -1050,7 +1050,7 @@ async def test_nlu_gate_intercepts_unwanted_pairing_and_intrusive_tools():
 
 
 def test_hyprland_monitor_and_session_context_ring_buffer_and_deictic():
-    from voice_layer.hypr_monitor import HyprlandMonitor, SessionContext
+    from voice.hypr_monitor import HyprlandMonitor, SessionContext
 
     ctx = SessionContext(maxlen=10)
     mon = HyprlandMonitor(context=ctx)
@@ -1099,9 +1099,9 @@ def test_hyprland_monitor_and_session_context_ring_buffer_and_deictic():
 
 @pytest.mark.asyncio
 async def test_desktop_context_injected_into_voice_and_text_turns():
-    from voice_layer.daemon import LiveVoice, INPUT_BYTES, supervise
-    from voice_layer.playback import Playback
-    from voice_layer.speech import GateFrame
+    from voice.daemon import LiveVoice, INPUT_BYTES, supervise
+    from voice.playback import Playback
+    from voice.speech import GateFrame
 
     voice = LiveVoice(Playback('default'), config=SimpleNamespace(
         auto_vad=False, local_speech=SimpleNamespace(enabled=False)))
@@ -1155,10 +1155,10 @@ async def test_desktop_context_injected_into_voice_and_text_turns():
 
 @pytest.mark.asyncio
 async def test_unified_dictation_mode_isolates_mic_and_streams_text():
-    from voice_layer.daemon import LiveVoice, INPUT_BYTES, supervise
-    from voice_layer.local_speech import LocalSpeechConfig
-    from voice_layer.playback import Playback
-    from voice_layer.speech import GateFrame
+    from voice.daemon import LiveVoice, INPUT_BYTES, supervise
+    from voice.local_speech import LocalSpeechConfig
+    from voice.playback import Playback
+    from voice.speech import GateFrame
 
     emitted = []
     voice = LiveVoice(
@@ -1217,8 +1217,8 @@ async def test_unified_dictation_mode_isolates_mic_and_streams_text():
 
 @pytest.mark.asyncio
 async def test_unified_dictation_cancel_discards_unflushed_buffer_and_restores_mute():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.playback import Playback
 
     emitted = []
     voice = LiveVoice(Playback('default'))
@@ -1242,9 +1242,9 @@ async def test_unified_dictation_cancel_discards_unflushed_buffer_and_restores_m
 
 @pytest.mark.asyncio
 async def test_local_needs_confirmation_suppresses_local_tts_when_cloud_speaks():
-    from voice_layer.daemon import LiveVoice
-    from voice_layer.local_speech import LocalSpeechConfig
-    from voice_layer.playback import Playback
+    from voice.daemon import LiveVoice
+    from voice.local_speech import LocalSpeechConfig
+    from voice.playback import Playback
 
     skills = SimpleNamespace(
         execute=AsyncMock(return_value='{"status":"needs_confirmation","action":"lock_screen"}'),

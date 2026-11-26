@@ -10,8 +10,8 @@ from urllib.request import Request, urlopen
 import pytest
 
 from skills.input_bar import TestBar as InputBar
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
+from voice.daemon import LiveVoice
+from voice.playback import Playback
 
 
 @pytest.mark.asyncio

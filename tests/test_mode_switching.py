@@ -107,8 +107,8 @@ def test_regular_file_is_preserved(mode_paths):
 
 
 def test_voice_control_tool_schedules_switch(mode_paths):
-    from jarvis_control.config import Config
-    from jarvis_control.tools import Executor
+    from control.config import Config
+    from control.tools import Executor
     with patch.object(jm, 'schedule_mode_switch', return_value={'message': 'Switch scheduled'}) as schedule:
         result = Executor(Config()).call('switch_jarvis_mode', {'mode': 'test'})
     assert result.ok

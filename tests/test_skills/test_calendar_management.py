@@ -20,7 +20,7 @@ class CalendarManagementTests(unittest.IsolatedAsyncioTestCase):
 
     def test_new_calendar_tools_are_valid_voice_declarations(self):
         from google.genai import types
-        from core.agent import live_config
+        from kernel.agent import live_config
         config = types.LiveConnectConfig.model_validate(live_config('Aoede', skills=self.skills))
         names = {item.name for item in config.tools[0].function_declarations}
         self.assertTrue({'calendar_current_time', 'calendar_update_event',

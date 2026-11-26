@@ -13,8 +13,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from jarvis_memory.config import MemoryConfig
-from jarvis_memory.bridge import MemoryBridge
+from memory.config import MemoryConfig
+from memory.bridge import MemoryBridge
 
 
 class MemoryStrengthTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class MemoryStrengthTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name) / 'memory'
         # Fail closed if an integration accidentally invokes model extraction.
-        network = patch('jarvis_memory.bridge.OllamaExtractorEngine.generate',
+        network = patch('memory.bridge.OllamaExtractorEngine.generate',
                         side_effect=AssertionError('acceptance tests must remain offline'))
         network.start()
         self.addCleanup(network.stop)

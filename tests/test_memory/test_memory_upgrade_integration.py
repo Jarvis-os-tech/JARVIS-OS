@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from jarvis_memory.config import Config, MemoryConfig
-from jarvis_memory.bridge import MemoryBridge, MemoryError, rank_all
-from jarvis_memory.skills import DesktopSkills
+from memory.config import Config, MemoryConfig
+from memory.bridge import MemoryBridge, MemoryError, rank_all
+from memory.skills import DesktopSkills
 
 
 class MemoryUpgradeTests(unittest.TestCase):

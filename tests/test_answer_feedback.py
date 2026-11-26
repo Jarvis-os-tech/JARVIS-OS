@@ -3,8 +3,8 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
+from voice.daemon import LiveVoice
+from voice.playback import Playback
 
 
 async def cycle(instance, monkeypatch, now):
@@ -16,8 +16,8 @@ async def cycle(instance, monkeypatch, now):
         if count > 1:
             raise asyncio.CancelledError
 
-    monkeypatch.setattr('voice_layer.daemon.asyncio.sleep', sleep)
-    monkeypatch.setattr('voice_layer.daemon.time.monotonic', lambda: now)
+    monkeypatch.setattr('voice.daemon.asyncio.sleep', sleep)
+    monkeypatch.setattr('voice.daemon.time.monotonic', lambda: now)
     with pytest.raises(asyncio.CancelledError):
         await instance.monitor_response()
 

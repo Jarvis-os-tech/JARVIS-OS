@@ -202,7 +202,7 @@ def migrate_knowledge():
     conn.close()
     log.info("Central knowledge.db contains %d entries", len(rows))
 
-    from jarvis_memory.knowledge import KnowledgeStore
+    from memory.knowledge import KnowledgeStore
 
     pc_store = KnowledgeStore(PC_DIR / "knowledge.db")
     mobile_store = KnowledgeStore(MOBILE_DIR / "knowledge.db")

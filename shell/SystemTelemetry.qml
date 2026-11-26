@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell.Io
 import Quickshell.Networking
-import "../omarchy-jarvis-island/ReactiveModel.js" as Reactive
+import "./island/ReactiveModel.js" as Reactive
 
 Item {
     id: telemetry

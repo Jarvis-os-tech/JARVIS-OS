@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from jarvis_control.device_execution import SharedToolExecutor
-from jarvis_control.outcomes import classify_result
-from voice_layer.daemon import LiveVoice
-from voice_layer.playback import Playback
-from jarvis_control.execution_policy import tool_timeout
-from jarvis_control.nlu import NLUEngine
+from control.device_execution import SharedToolExecutor
+from control.outcomes import classify_result
+from voice.daemon import LiveVoice
+from voice.playback import Playback
+from control.execution_policy import tool_timeout
+from control.nlu import NLUEngine
 import asyncio
 
 
@@ -48,7 +48,7 @@ async def test_verified_workflow_continues_past_five_tool_calls():
 
 @pytest.mark.asyncio
 async def test_runaway_limit_reports_unfinished_work_without_executing_more(monkeypatch):
-    monkeypatch.setattr('voice_layer.daemon.MAX_TOOL_CALLS_PER_TURN', 2)
+    monkeypatch.setattr('voice.daemon.MAX_TOOL_CALLS_PER_TURN', 2)
     execute = AsyncMock(return_value={'status': 'success', 'verified': True})
     voice = LiveVoice(Playback('test'), skills=NS(declarations=[{'name': 'system_query'}], execute=execute))
     voice._reply_authorized = True
@@ -90,7 +90,7 @@ def test_all_phone_adapters_require_a_current_phone_target(name):
 
 @pytest.mark.asyncio
 async def test_timed_out_shared_execution_returns_pending_and_keeps_admission_slot(tmp_path, monkeypatch):
-    monkeypatch.setattr('jarvis_control.device_execution.tool_timeout', lambda *_: .01)
+    monkeypatch.setattr('control.device_execution.tool_timeout', lambda *_: .01)
     started, release = asyncio.Event(), asyncio.Event()
 
     async def blocked(*_):

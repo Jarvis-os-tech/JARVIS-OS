@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from jarvis_control.config import Config
-from jarvis_control.tools import Executor, Result, NeedsConfirmation
+from control.config import Config
+from control.tools import Executor, Result, NeedsConfirmation
 
 
 class SystemPowerControlTests(unittest.TestCase):

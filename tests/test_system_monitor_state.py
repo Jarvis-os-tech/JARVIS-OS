@@ -1,7 +1,7 @@
 import time
 import pytest
 
-from core.system_monitor import (
+from kernel.system_monitor import (
     AlertAction,
     AlertStateManager,
     ProbeResult,

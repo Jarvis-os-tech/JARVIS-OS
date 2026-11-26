@@ -488,8 +488,8 @@ class AutoHealer:
     ) -> List[HealResult]:
         """Scan long-term memory facts for temporal staleness and auto-heal them."""
         try:
-            from jarvis_memory.store import LocalFactStore
-            from jarvis_memory.staleness_detector import (
+            from memory.store import LocalFactStore
+            from memory.staleness_detector import (
                 scan_memory_staleness,
                 add_pending_clarification,
                 ClarificationRequest,
@@ -646,7 +646,7 @@ class AutoHealer:
                                 f"Job state {job.get('state')}"
                             )
                             try:
-                                from orchestration.personas import get_fallback_candidates
+                                from harness.personas import get_fallback_candidates
                                 fallbacks = get_fallback_candidates(agent)
                                 rec_target = next((f for f in fallbacks if f != agent), "opencode")
                             except Exception:
@@ -681,7 +681,7 @@ class AutoHealer:
                     agent = ojob.get("agent")
                     out = ojob.get("output", "")
                     try:
-                        from orchestration.agent_orchestrator import detect_failover_reason
+                        from harness.agent_orchestrator import detect_failover_reason
                         reason = detect_failover_reason(out, ojob.get("exit_code"))
                     except Exception:
                         reason = None

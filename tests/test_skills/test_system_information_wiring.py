@@ -5,8 +5,8 @@ from pathlib import Path
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from core.agent import live_config
-from core.config import Config, AgentConfig
+from kernel.agent import live_config
+from kernel.config import Config, AgentConfig
 from skills import DesktopSkills, SkillError
 
 

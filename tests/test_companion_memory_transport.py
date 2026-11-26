@@ -3,8 +3,8 @@ import json
 from unittest.mock import AsyncMock
 
 import pytest
-from voice_layer.ipc import ControlServer
-from jarvis_control.device_bridge import DeviceBridge
+from voice.ipc import ControlServer
+from control.device_bridge import DeviceBridge
 
 
 @pytest.mark.asyncio

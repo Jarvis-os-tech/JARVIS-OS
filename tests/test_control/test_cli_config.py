@@ -3,8 +3,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from jarvis_control import __main__ as cli
-from jarvis_control.tools import Result
+from control import __main__ as cli
+from control.tools import Result
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ model = "synthetic-camera-model"
 ''')
     client = Mock()
     client.return_value.call.return_value = {'ok': True, 'active': False}
-    monkeypatch.setattr('jarvis_control.vision.VisionClient', client)
+    monkeypatch.setattr('control.vision.VisionClient', client)
     assert cli.main(['vision', 'inspect', 'this', 'connector', '--region', '0', '0', '500', '500']) == 0
     assert client.call_args.args[0].vision_model == 'synthetic-camera-model'
     client.return_value.call.assert_called_once_with('inspect', 'this connector', [0, 0, 500, 500])
@@ -68,7 +68,7 @@ model = "synthetic-camera-model"
 
 def test_task_submit_is_blocked_when_disabled(config_file, monkeypatch, tmp_path):
     submit = Mock()
-    monkeypatch.setattr('jarvis_control.cli.cmd_task', submit)
+    monkeypatch.setattr('control.cli.cmd_task', submit)
     assert cli.main(['task', 'submit', str(tmp_path / 'spec.json')]) == 1
     submit.assert_not_called()
 
@@ -80,8 +80,8 @@ model = "synthetic-worker-model"
 ''')
     task = Mock(return_value=0)
     say = Mock(return_value=0)
-    monkeypatch.setattr('jarvis_control.cli.cmd_task', task)
-    monkeypatch.setattr('jarvis_control.cli.cmd_say', say)
+    monkeypatch.setattr('control.cli.cmd_task', task)
+    monkeypatch.setattr('control.cli.cmd_say', say)
     assert cli.main(['task', '--dry-run', 'resume', 'synthetic', '--guidance', 'continue checks']) == 0
     args, config = task.call_args.args
     assert args.guidance == 'continue checks' and config.dry_run
@@ -93,7 +93,7 @@ model = "synthetic-worker-model"
 
 def test_doctor_checks_jarvis_settings_without_disclosing_credentials(config_file, monkeypatch, capsys):
     import json
-    from jarvis_control import diagnostics
+    from control import diagnostics
     config_file.write_text('''api_key_env = "SYNTHETIC_VOICE_KEY"
 tasks_enabled = false
 vision_enabled = false

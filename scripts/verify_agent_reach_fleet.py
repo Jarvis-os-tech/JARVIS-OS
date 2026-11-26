@@ -140,7 +140,7 @@ def check_agent_configs():
 
 def check_jarvis_tools():
     import asyncio
-    from jarvis_control.tools import Executor, Config
+    from control.tools import Executor, Config
     e = Executor(Config())
     res = e.call("reach_search", {"channel": "github", "query": "agent-reach", "limit": 1})
     if res.ok and "Panniantong" in res.output:

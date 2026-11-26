@@ -3,7 +3,7 @@ import asyncio
 import pytest
 import time
 
-from core.background_tasks import (
+from kernel.background_tasks import (
     BackgroundTaskManager,
     BackgroundTask,
     get_background_task_manager,

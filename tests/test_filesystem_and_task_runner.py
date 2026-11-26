@@ -684,8 +684,8 @@ async def test_recent_files_downloads_alias_extension_and_sorting(tmp_path: Path
     finally:
         await skills.close_agent_jobs()
 
-    from jarvis_control.config import Config
-    from jarvis_control.tools import Executor
+    from control.config import Config
+    from control.tools import Executor
     exec_res = Executor(Config()).call("file_operation", {
         "action": "recent",
         "path": str(downloads),

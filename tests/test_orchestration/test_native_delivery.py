@@ -7,10 +7,10 @@ import json
 
 import pytest
 
-from orchestration.hermes_notices import NativeNotices
-from orchestration.hermes_bridge import HermesBridge
-from orchestration.durable_hermes import DurableHermes
-from jarvis_control.skills import UnifiedSkills
+from harness.hermes_notices import NativeNotices
+from harness.hermes_bridge import HermesBridge
+from harness.durable_hermes import DurableHermes
+from control.skills import UnifiedSkills
 try:
     from tests.test_orchestration.test_durable_hermes import Bridge, Supervisor, GoalWorker
 except ImportError:

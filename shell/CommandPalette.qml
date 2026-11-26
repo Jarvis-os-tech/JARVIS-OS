@@ -4,7 +4,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
-import "../jarvis_widgets" as Widgets
+import "../widgets" as Widgets
 
 PanelWindow {
     id: root

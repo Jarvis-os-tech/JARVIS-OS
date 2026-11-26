@@ -3,7 +3,7 @@ import asyncio
 import json
 import socket
 import websockets
-from ui.jarvis_drone.bridge import DroneBridge
+from shell.drone.bridge import DroneBridge
 
 def get_free_port() -> int:
     """Dynamically allocate an ephemeral port to prevent address collision."""
@@ -233,7 +233,7 @@ async def test_bridge_relays_client_visibility_command():
         # Client 1: Drone overlay listener
         async with websockets.connect(f"ws://127.0.0.1:{port}") as overlay_ws:
             # Client 2: CLI sender sending disappear
-            from ui.jarvis_drone.bridge import _client_send
+            from shell.drone.bridge import _client_send
             await _client_send(port, {"version": "1.0", "type": "VISIBILITY", "action": "disappear"})
 
             # Overlay should receive the relayed visibility command
@@ -254,7 +254,7 @@ async def test_bridge_relays_client_visibility_command():
 
 @pytest.mark.asyncio
 async def test_unified_skills_drone_control(monkeypatch):
-    from jarvis_control.skills import UnifiedSkills
+    from control.skills import UnifiedSkills
     import subprocess
 
     calls = []

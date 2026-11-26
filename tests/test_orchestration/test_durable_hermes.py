@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from orchestration.durable_hermes import DurableHermes, GoalWorker
-from orchestration.hermes_bridge import HermesBridge
+from harness.durable_hermes import DurableHermes, GoalWorker
+from harness.hermes_bridge import HermesBridge
 
 
 class Supervisor:
@@ -144,7 +144,7 @@ async def test_worktree_failure_does_not_submit_a_native_prompt(tmp_path, monkey
 
 @pytest.mark.asyncio
 async def test_old_owner_cannot_finalize_after_generation_handoff(tmp_path):
-    from orchestration.durable_hermes import OwnershipChanged
+    from harness.durable_hermes import OwnershipChanged
     bridge=Bridge();client=DurableHermes(tmp_path,bridge=bridge,supervisor=Supervisor())
     item=client.start('Review the task');worker=GoalWorker(tmp_path,item['id'],bridge=bridge)
     await worker.step()

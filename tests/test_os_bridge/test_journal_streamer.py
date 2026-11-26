@@ -1,7 +1,7 @@
 """Unit tests for JournalStreamer pattern matching and deduplication."""
 import pytest
 import time
-from jarvis_os_bridge.journal_streamer import (
+from control.bridge.journal_streamer import (
     JournalStreamer,
     PATTERN_OOM,
     PATTERN_SEGFAULT,
@@ -9,7 +9,7 @@ from jarvis_os_bridge.journal_streamer import (
     PATTERN_DISK_ERROR,
     PATTERN_SERVICE_FAIL,
 )
-from jarvis_os_bridge.constants import EVENT_JOURNAL_OOM_KILL
+from control.bridge.constants import EVENT_JOURNAL_OOM_KILL
 
 
 def test_journal_streamer_patterns():

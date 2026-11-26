@@ -3,7 +3,7 @@ from pathlib import Path
 import socket
 import pytest
 
-from core.system_monitor import (
+from kernel.system_monitor import (
     AlertAction,
     AlertStateManager,
     JarvisVoiceSpeaker,

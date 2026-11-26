@@ -11,7 +11,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from core.config import Config
+from kernel.config import Config
 from skills import DesktopSkills, SkillError
 
 
@@ -198,7 +198,7 @@ class CapabilityStartupRecoveryTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(os.access(skills._commands['vision_ctrl'], os.X_OK))
 
     async def test_groq_router_refreshes_schemas_before_selecting_a_command(self):
-        from core.agent import LiveVoice
+        from kernel.agent import LiveVoice
 
         skills = self.skills()
         voice = LiveVoice(None, skills=skills, config=Config())
@@ -260,7 +260,7 @@ class DesktopStartupEnvironmentTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('GROQ_API_KEY', env)
 
     def test_desktop_wait_observes_identifiers_that_arrive_after_first_probe(self):
-        from core import desktop_session
+        from kernel import desktop_session
 
         clock = [0.0]
         recovered = {'WAYLAND_DISPLAY': 'wayland-ready', 'HYPRLAND_INSTANCE_SIGNATURE': 'ready-instance'}
@@ -290,7 +290,7 @@ class DesktopStartupEnvironmentTests(unittest.IsolatedAsyncioTestCase):
             python = scripts / 'python'
             interpreter = '/usr/bin/python3' if ' ' in sys.executable else sys.executable
             python.write_text(f'#!{interpreter}\n' + '''import json, os, shutil, sys
-if sys.argv[1:3] == ['-m', 'core.desktop_session']:
+if sys.argv[1:3] == ['-m', 'kernel.desktop_session']:
     args = sys.argv[3:]
     wait = args[1] if len(args) == 2 and args[0] == '--wait-seconds' else '0'
     print('export JARVIS_TEST_WAIT=' + wait)

@@ -3,11 +3,11 @@
 from copy import copy
 import os
 
-from core.secret_env import is_secret_name
+from kernel.secret_env import is_secret_name
 
 
 def plan_connection(request: str) -> dict[str, str]:
-    from departments.linkedin.nim_client import NIMClient, nim_client
+    from department_agents.linkedin.nim_client import NIMClient, nim_client
 
     config = copy(nim_client.cfg)
     if not config.api_key:

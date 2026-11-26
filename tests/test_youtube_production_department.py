@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from departments.youtube_production import AGENT_NAMES, YouTubeProductionDepartment, YouTubeProductionError
+from department_agents.youtube_production import AGENT_NAMES, YouTubeProductionDepartment, YouTubeProductionError
 from skills import DesktopSkills
-from orchestration.model_routes import ModelJobs
+from harness.model_routes import ModelJobs
 
 
 def _draft(department, episode_id, suffix="one"):

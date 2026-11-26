@@ -3,8 +3,8 @@ import json
 import unittest
 from unittest.mock import patch
 from skills.domains.widgets import WidgetsDomain
-from ui.jarvis_widgets import backend
-from ui.jarvis_widgets.view_schema import describe, validate_view
+from widgets import backend
+from widgets.view_schema import describe, validate_view
 
 
 class NativeCardTests(unittest.TestCase):

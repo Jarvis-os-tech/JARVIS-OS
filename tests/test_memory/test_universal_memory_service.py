@@ -3,8 +3,8 @@ import tempfile
 import time
 import unittest
 
-from jarvis_memory.knowledge import KnowledgeStore
-from jarvis_memory.service_facade import MemoryServiceError, UniversalMemoryService
+from memory.knowledge import KnowledgeStore
+from memory.service_facade import MemoryServiceError, UniversalMemoryService
 
 
 class UniversalMemoryServiceTests(unittest.TestCase):

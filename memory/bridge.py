@@ -178,7 +178,7 @@ class MemoryBridge:
         self._require()
         if operation == 'sync_sessions_to_vault' and not self.config.record_sessions:
             return {'status': 'RECORDING_DISABLED', 'messages_synced': 0}
-        from departments.memory.department import MemoryDepartment
+        from department_agents.memory.department import MemoryDepartment
         department = MemoryDepartment.for_bridge(self, vault_dir=vault_dir)
         if operation == 'sync_sessions_to_vault':
             kwargs['sessions_db_path'] = self.root / 'sessions.db'

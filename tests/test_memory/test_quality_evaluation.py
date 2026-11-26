@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from jarvis_memory.evaluation import compare_baseline, evaluate, grade, load_suite, reciprocal_rank_fusion
+from memory.evaluation import compare_baseline, evaluate, grade, load_suite, reciprocal_rank_fusion
 
 ROOT = Path(__file__).resolve().parents[2]
 SUITE = ROOT / 'tests/fixtures/memory_quality/cases.json'

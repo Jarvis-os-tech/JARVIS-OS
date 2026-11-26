@@ -4,7 +4,7 @@ import subprocess
 import wave
 import pytest
 
-from core.system_monitor import AlertAudioEngine, DesktopNotifier, SUPPORTED_ALERTS
+from kernel.system_monitor import AlertAudioEngine, DesktopNotifier, SUPPORTED_ALERTS
 
 
 def test_supported_alerts_list():

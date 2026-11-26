@@ -12,7 +12,7 @@ import time
 import uuid
 import weakref
 
-from core.secret_env import sanitized_subprocess_env
+from kernel.secret_env import sanitized_subprocess_env
 from .bundles import BundleRegistry, private_directory
 from .refinement import require_upstream, UPSTREAM_REVISION
 

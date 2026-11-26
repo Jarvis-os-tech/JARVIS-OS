@@ -3,7 +3,7 @@ import pytest
 import asyncio
 from unittest.mock import patch, AsyncMock
 
-from jarvis_os_bridge.bluetooth_control import BluetoothController
+from control.bridge.bluetooth_control import BluetoothController
 
 
 @pytest.mark.asyncio

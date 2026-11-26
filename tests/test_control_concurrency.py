@@ -1,8 +1,8 @@
 import asyncio
 import unittest
 from unittest.mock import MagicMock
-from jarvis_control.skills import ControlSkills
-from jarvis_control.config import Config
+from control.skills import ControlSkills
+from control.config import Config
 import time
 
 class TestControlConcurrency(unittest.IsolatedAsyncioTestCase):

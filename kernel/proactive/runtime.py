@@ -7,7 +7,7 @@ from pathlib import Path
 import time
 import hashlib
 
-from core.workers import BoundedWorker
+from kernel.workers import BoundedWorker
 
 from .control import AutonomyControl
 from .events import EventBus, EventStatus

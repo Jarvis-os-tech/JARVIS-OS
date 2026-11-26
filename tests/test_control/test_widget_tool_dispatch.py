@@ -2,8 +2,8 @@
 import json
 from unittest.mock import patch, MagicMock
 
-from jarvis_control import Config, tools_for
-from jarvis_control.tools import Executor, SHOW_WIDGET_SCHEMA, MANAGE_WIDGET_SCHEMA
+from control import Config, tools_for
+from control.tools import Executor, SHOW_WIDGET_SCHEMA, MANAGE_WIDGET_SCHEMA
 
 
 def test_widget_tool_schemas_present():
@@ -23,7 +23,7 @@ def test_executor_show_widget_success():
     config = Config()
     executor = Executor(config)
 
-    with patch("ui.jarvis_widgets.backend.shell_call") as mock_shell_call:
+    with patch("widgets.backend.shell_call") as mock_shell_call:
         mock_shell_call.return_value = {"ok": True, "id": "test-w1"}
         res = executor.call("show_widget", {
             "kind": "text",
@@ -45,7 +45,7 @@ def test_executor_show_widget_handles_invalid_json():
     config = Config()
     executor = Executor(config)
 
-    with patch("ui.jarvis_widgets.backend.shell_call") as mock_shell_call:
+    with patch("widgets.backend.shell_call") as mock_shell_call:
         mock_shell_call.side_effect = RuntimeError("Invalid JSON payload")
         res = executor.call("show_widget", {
             "kind": "text",
@@ -60,7 +60,7 @@ def test_executor_manage_widget_dismiss():
     config = Config()
     executor = Executor(config)
 
-    with patch("ui.jarvis_widgets.backend.shell_call") as mock_shell_call:
+    with patch("widgets.backend.shell_call") as mock_shell_call:
         mock_shell_call.return_value = {"ok": True}
         res = executor.call("manage_widget", {"action": "dismiss", "widget_id": "test-w1"})
         assert res.ok is True
@@ -71,7 +71,7 @@ def test_executor_manage_widget_clear_all():
     config = Config()
     executor = Executor(config)
 
-    with patch("ui.jarvis_widgets.backend.shell_call") as mock_shell_call:
+    with patch("widgets.backend.shell_call") as mock_shell_call:
         mock_shell_call.return_value = {"ok": True, "retained": 0}
         res = executor.call("manage_widget", {"action": "clear_all"})
         assert res.ok is True
@@ -85,7 +85,7 @@ def test_executor_capture_vision_widget_screen():
 
     with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
         with patch.object(executor, "_capture_screen_image", return_value=tmp.name) as mock_cap, \
-             patch("ui.jarvis_widgets.backend.shell_call") as mock_shell_call:
+             patch("widgets.backend.shell_call") as mock_shell_call:
             mock_shell_call.return_value = {"ok": True, "id": "vision-screen-1"}
             res = executor.call("capture_vision_widget", {
                 "source": "screen",
@@ -108,7 +108,7 @@ def test_executor_capture_vision_widget_camera():
 
     with tempfile.NamedTemporaryFile(suffix=".jpg") as tmp:
         with patch.object(executor, "_capture_camera_frame", return_value=tmp.name) as mock_cam, \
-             patch("ui.jarvis_widgets.backend.shell_call") as mock_shell_call:
+             patch("widgets.backend.shell_call") as mock_shell_call:
             mock_shell_call.return_value = {"ok": True, "id": "vision-cam-1"}
             res = executor.call("capture_vision_widget", {
                 "source": "camera",

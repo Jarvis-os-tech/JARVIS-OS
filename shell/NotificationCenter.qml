@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Services.Notifications
-import "../jarvis_widgets" as Widgets
+import "../widgets" as Widgets
 
 Scope {
     id: center

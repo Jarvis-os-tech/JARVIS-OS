@@ -4186,8 +4186,8 @@ class Executor:
 
     # -- sovereign memory department tools ----------------------------------
     def _memory_tool(self, method: str, **kwargs) -> Result:
-        from jarvis_memory.bridge import MemoryBridge
-        from jarvis_memory.config import load_config
+        from memory.bridge import MemoryBridge
+        from memory.config import load_config
 
         config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
         bridge = MemoryBridge(load_config(config_home / "jarvis-voice" / "config.toml").memory)
@@ -4581,7 +4581,7 @@ class Executor:
 
     def _tool_system_update(self, action: str = "check") -> Result:
         try:
-            from orchestration.release_manager import ReleaseManager
+            from harness.release_manager import ReleaseManager
             rm = ReleaseManager()
             if action in ("check", "status"):
                 res = rm.check_remote_update()
@@ -4671,7 +4671,7 @@ class Executor:
 
     def _tool_show_widget(self, kind: str, title: str, data_json: str, widget_id: str = "",
                            presentation: str = "floating", expires_seconds: int = 60, revision: int = 0, reopen: bool = False) -> Result:
-        from ui.jarvis_widgets import backend
+        from widgets import backend
         try:
             data = json.loads(data_json) if isinstance(data_json, str) else data_json
             widget = backend.make_widget(kind, title, data, widget_id=widget_id,
@@ -4682,7 +4682,7 @@ class Executor:
             return Result(False, f"Failed to show widget: {e}")
 
     def _tool_manage_widget(self, action: str, widget_id: str = "") -> Result:
-        from ui.jarvis_widgets import backend
+        from widgets import backend
         try:
             if action in ("clear", "clear_all"):
                 res = backend.shell_call("clearAll" if action == "clear_all" else "clear")
@@ -4758,7 +4758,7 @@ class Executor:
     def _tool_capture_vision_widget(self, source: str = "screen", title: str = "",
                                     caption: str = "", presentation: str = "floating",
                                     expires_seconds: int = 60) -> Result:
-        from ui.jarvis_widgets import backend
+        from widgets import backend
         try:
             source = (source or "screen").strip().lower()
             if source == "camera":
