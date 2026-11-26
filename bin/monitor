@@ -1,1 +1,28 @@
-../kernel/system_monitor.py
+#!/usr/bin/env bash
+# bin/monitor — System Health & Alert Monitor CLI
+set -euo pipefail
+SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+
+if [[ -f "${SCRIPT_DIR}/.env" ]]; then
+    set -a
+    source "${SCRIPT_DIR}/.env"
+    set +a
+fi
+
+if [[ -x "${SCRIPT_DIR}/.venv/bin/python" ]]; then
+    PYTHON="${SCRIPT_DIR}/.venv/bin/python"
+elif [[ -x "${HOME}/.local/share/jarvis-runtime/venv/bin/python" ]]; then
+    PYTHON="${HOME}/.local/share/jarvis-runtime/venv/bin/python"
+else
+    PYTHON="python3"
+fi
+
+export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH:-}"
+if [[ -f "${SCRIPT_DIR}/scripts/system_monitor.py" ]]; then
+    exec "$PYTHON" "${SCRIPT_DIR}/scripts/system_monitor.py" "$@"
+elif [[ -f "${SCRIPT_DIR}/kernel/system_monitor.py" ]]; then
+    exec "$PYTHON" "${SCRIPT_DIR}/kernel/system_monitor.py" "$@"
+else
+    exec "$PYTHON" "${SCRIPT_DIR}/core/system_monitor.py" "$@"
+fi
