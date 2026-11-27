@@ -14,7 +14,6 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ADA_DIR = REPO_ROOT / "shell" / "ada"
 FRONTEND_DIR = ADA_DIR / "frontend"
-CONSTELLATION_DIR = REPO_ROOT / "shell" / "constellation"
 
 
 def test_complete_frontend_assets_present():

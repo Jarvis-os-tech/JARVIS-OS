@@ -157,8 +157,7 @@ def validate_prediction(result, text, apps, minimum_confidence=.8):
             return 'move_window_to_workspace', {'workspace': value}
     if name == 'close_window' and not args:
         if (re.search(r'\bclose\b', text)
-                and re.search(r'\b(window|this|that|it|active|current)\b', text)
-                and 'drone' not in text):
+                and re.search(r'\b(window|this|that|it|active|current)\b', text)):
             return 'system_control', {'action': 'window_close'}
     if name == 'fullscreen_window' and not args:
         if re.search(r'\b(fullscreen|full screen|maximize)\b', text):

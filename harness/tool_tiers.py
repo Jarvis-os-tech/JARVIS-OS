@@ -37,7 +37,7 @@ META_TOOLS = frozenset({'discover_domain_tools', 'execute_domain_tool', 'parse_c
 CANONICAL_VOICE_TOOLS = frozenset({
     # Meta, standby, companion & confirmation
     'discover_domain_tools', 'execute_domain_tool', 'parse_command_values',
-    'enter_standby', 'drone_control', 'confirm_system_action', 'cancel_system_action',
+    'enter_standby', 'confirm_system_action', 'cancel_system_action',
     # System control, hardware, audio, display, power & capture
     'system_control', 'audio_list_devices', 'audio_set_device', 'control_display',
     'control_wifi', 'control_bluetooth', 'control_notifications', 'control_night_light',

@@ -238,8 +238,7 @@ class TestSelfHealer(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(res.subsystem, "voice")
                     self.assertIn("Terminated 1 hanging audio process", res.action_taken)
 
-    def test_heal_runaway_processes_terminates_high_cpu(self):
-        # ps returns a runaway python process at 98.5% CPU
+    def test_heal_runaway_processes_reports_high_cpu_without_terminating(self):
         ps_output = (
             " 88881      1  98.5 python3         python3 -m runaway_loop\n"
             " 12345      1   2.1 pipewire        pipewire\n"
@@ -247,11 +246,12 @@ class TestSelfHealer(unittest.IsolatedAsyncioTestCase):
         with patch.object(AutoHealer, "_run_cmd", return_value=(0, ps_output, "")):
             with patch("os.kill") as mock_kill:
                 res = AutoHealer.heal_runaway_processes(cpu_threshold=80.0)
-                self.assertTrue(res.success)
+                self.assertFalse(res.success)
                 self.assertEqual(res.subsystem, "cpu")
-                self.assertIn("Terminated 1 runaway process", res.action_taken)
-                self.assertIn("88881", res.action_taken)
-                mock_kill.assert_any_call(88881, 15)  # SIGTERM
+                self.assertIn("Reported 1 high-CPU process", res.action_taken)
+                self.assertIn("no process terminated", res.action_taken)
+                self.assertIn("88881", res.details)
+                mock_kill.assert_not_called()
 
     def test_heal_runaway_processes_protects_system_and_self(self):
         import os

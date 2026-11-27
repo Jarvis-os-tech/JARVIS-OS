@@ -295,11 +295,12 @@ class AutoHealer:
 
     @classmethod
     def heal_runaway_processes(cls, cpu_threshold: float = 80.0) -> HealResult:
-        """Detect and terminate runaway or frozen processes consuming excessive CPU."""
+        """Report high-CPU processes without terminating legitimate workloads."""
         my_pid = os.getpid()
         my_ppid = os.getppid()
 
-        # Critical system process names that must NEVER be terminated
+        # Critical system process names that should not be reported as candidate
+        # user workloads.
         PROTECTED_COMM = {
             "systemd", "init", "kthreadd", "dbus-daemon", "pipewire",
             "wireplumber", "pulseaudio", "sshd", "login", "agetty",
@@ -320,7 +321,7 @@ class AutoHealer:
                 details=err,
             )
 
-        terminated: List[Dict[str, Any]] = []
+        candidates: List[Dict[str, Any]] = []
 
         for line in out.splitlines():
             parts = line.strip().split(None, 4)
@@ -336,37 +337,32 @@ class AutoHealer:
                 continue
 
             if cpu_pct < cpu_threshold:
-                # Output is sorted descending by %cpu; subsequent entries are below threshold
                 break
-
-            # Never kill protected system processes, init, or ourselves/parents
             if pid in (0, 1, 2, my_pid, my_ppid):
                 continue
             if comm in PROTECTED_COMM or comm.startswith("kworker/"):
                 continue
 
-            # Terminate runaway process safely
-            try:
-                os.kill(pid, signal.SIGTERM)
-                time.sleep(0.05)
-                try:
-                    os.kill(pid, 0)
-                    os.kill(pid, signal.SIGKILL)
-                except OSError:
-                    pass
-                terminated.append({"pid": pid, "comm": comm, "cpu": cpu_pct})
-                log.warning("AutoHealer: Terminated runaway process %s (PID %d, CPU %.1f%%)", comm, pid, cpu_pct)
-            except OSError as exc:
-                log.debug("AutoHealer: Could not terminate PID %d (%s): %s", pid, comm, exc)
+            candidates.append({"pid": pid, "comm": comm, "cpu": cpu_pct, "args": args})
 
-        if terminated:
-            summary = ", ".join(f"{t['comm']}[PID {t['pid']}, {t['cpu']}% CPU]" for t in terminated)
+        if candidates:
+            summary = ", ".join(
+                f"{candidate['comm']}[PID {candidate['pid']}, {candidate['cpu']}% CPU]"
+                for candidate in candidates
+            )
+            log.warning(
+                "AutoHealer: High-CPU process(es) observed but not terminated: %s",
+                summary,
+            )
             return HealResult(
-                success=True,
+                success=False,
                 subsystem="cpu",
-                issue=f"Runaway process(es) exceeded {cpu_threshold}% CPU threshold",
-                action_taken=f"Terminated {len(terminated)} runaway process(es): {summary}",
-                details=json.dumps(terminated),
+                issue=f"Process(es) exceeded {cpu_threshold}% CPU threshold",
+                action_taken=(
+                    f"Reported {len(candidates)} high-CPU process(es); no process terminated "
+                    "because CPU usage alone does not prove a runaway"
+                ),
+                details=json.dumps(candidates),
             )
 
         return HealResult(

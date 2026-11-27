@@ -49,11 +49,6 @@ class Chunk:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-def _count_tokens(text: str) -> int:
-    """Approximate token count via whitespace split."""
-    return len(text.split())
-
-
 def chunk_text(
     text: str,
     *,

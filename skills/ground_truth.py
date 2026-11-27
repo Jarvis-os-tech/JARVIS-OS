@@ -68,21 +68,6 @@ def resolve_window_target(windows: list, query: str) -> dict | None:
     return None
 
 
-def accessibility_fingerprint(state: Any) -> str | None:
-    """Hash meaningful bounded AX state; ephemeral tokens/snapshot IDs do not count."""
-    if not isinstance(state, dict) or state.get('degraded') or not isinstance(state.get('elements'), list):
-        return None
-    keys = ('role', 'label', 'name', 'value', 'text', 'description', 'enabled',
-            'selected', 'checked', 'focused', 'bounds', 'states')
-    elements = [{key: item[key] for key in keys if key in item}
-                for item in state['elements'][:100] if isinstance(item, dict)]
-    elements = [item for item in elements if item]
-    if not elements:
-        return None
-    raw = json.dumps(elements, sort_keys=True, ensure_ascii=False, default=str)[:131072]
-    return hashlib.sha256(raw.encode('utf-8')).hexdigest()
-
-
 async def prepare_action_target(arguments: dict, gui=None) -> dict[str, Any]:
     """Bind one foreground target and heal focus once before any mutation."""
     from skills import system_control, modal_healing

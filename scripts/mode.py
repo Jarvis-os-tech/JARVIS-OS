@@ -161,9 +161,11 @@ def switch_mode(mode: str, *, restart: bool = True, sync: bool = False) -> dict[
     mode = _normalize(mode)
     root = TEST_ROOT if mode == 'test' else PRODUCTION_ROOT
     python = TEST_ROOT / '.venv/bin/python' if mode == 'test' else PRODUCTION_ROOT.parent / 'venv/bin/python'
-    for required in (root / 'bin/jarvis-voice', root / 'voice_layer', python):
+    for required in (root / 'bin/jarvis-voice', python):
         if not required.exists():
             raise RuntimeError(f'Mode target is incomplete: {required}')
+    if not ((root / 'voice').exists() or (root / 'voice_layer').exists()):
+        raise RuntimeError(f'Mode target is incomplete: {root / "voice"}')
     with _mode_lock():
         paths = (DROPIN, BRIDGE_DROPIN)
         files = {p: p.read_bytes() if p.exists() else None for p in paths}
@@ -177,7 +179,8 @@ def switch_mode(mode: str, *, restart: bool = True, sync: bool = False) -> dict[
                 DROPIN.parent.mkdir(parents=True, exist_ok=True)
                 BRIDGE_DROPIN.parent.mkdir(parents=True, exist_ok=True)
                 DROPIN.write_text(_dropin(root, root / 'bin/jarvis-voice', 'run'))
-                BRIDGE_DROPIN.write_text(_dropin(root, python, '-m jarvis_control.device_bridge'))
+                bridge_mod = 'control.device_bridge' if (root / 'control/device_bridge.py').is_file() else 'jarvis_control.device_bridge'
+                BRIDGE_DROPIN.write_text(_dropin(root, python, f'-m {bridge_mod}'))
             else:
                 for path in paths:
                     path.unlink(missing_ok=True)

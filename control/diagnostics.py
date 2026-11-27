@@ -598,7 +598,7 @@ def check_and_fix_state_directories(project_root: Path, fix: bool = True) -> Tup
         Path(f"/run/user/{uid}/jarvis_webcam"),
         project_root / ".jarvis-learning",
         project_root / ".jarvis-orchestration",
-        project_root / "jarvis_memory",
+        project_root / "memory",
     ]
 
     for d in dirs:
@@ -721,6 +721,14 @@ def report(voice, control, fix: bool = False, temp_only: bool = False, long_only
     long_issues.extend(i)
     i, _ = check_and_fix_state_directories(project_root, fix=False)
     long_issues.extend(i)
+
+    from kernel import jarvis_dev
+    k_access = jarvis_dev.device_access_status()
+    if k_access["device_exists"] and not k_access["accessible"]:
+        long_issues.append({
+            "type": "kernel_dev_permission",
+            "detail": f"/dev/jarvis blocked ({k_access['error']}); run: sudo usermod -aG jarvis $USER and relogin",
+        })
 
     # 3. Standard checks dictionary (preserves backward compatibility with existing tests)
     checks = {}

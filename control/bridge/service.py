@@ -39,6 +39,7 @@ from .dbus_listener import DBusEventListener
 from .device_watcher import DeviceWatcher
 from .fs_watcher import FsWatcher
 from .journal_streamer import JournalStreamer
+from kernel import jarvis_dev
 
 log = logging.getLogger("jarvis.bridge.service")
 
@@ -99,6 +100,14 @@ class BridgeService:
         # 4. inotify filesystem watcher
         self.fs_watcher.start(loop=self._loop)
 
+        # 5. linux-jarvisos kernel driver status registration (best-effort)
+        access = jarvis_dev.device_access_status()
+        if access["accessible"]:
+            jarvis_dev.set_daemon_state(jarvis_dev.JARVIS_STATE_IDLE)
+            log.info("Registered daemon IDLE state with /dev/jarvis kernel driver")
+        elif access["device_exists"]:
+            log.warning("/dev/jarvis present but not accessible (%s); run: sudo usermod -aG jarvis $USER", access["error"])
+
         log.info("All JARVIS OS Bridge subsystems operational")
 
     async def stop(self) -> None:
@@ -106,6 +115,7 @@ class BridgeService:
         self._running = False
         log.info("Stopping JARVIS OS Bridge...")
 
+        jarvis_dev.set_daemon_state(jarvis_dev.JARVIS_STATE_OFFLINE)
         self.fs_watcher.close()
         self.device_watcher.close()
         await self.journal_streamer.close()

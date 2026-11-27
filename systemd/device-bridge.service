@@ -5,7 +5,7 @@ Wants=jarvis-voice.service
 
 [Service]
 WorkingDirectory=%h/.local/share/jarvis-runtime/current
-ExecStart=%h/.local/share/jarvis-runtime/venv/bin/python -m jarvis_control.device_bridge
+ExecStart=%h/.local/share/jarvis-runtime/venv/bin/python -m control.device_bridge
 Environment=PYTHONPATH=%h/.local/share/jarvis-runtime/current
 Environment=XDG_RUNTIME_DIR=%t
 Restart=on-failure

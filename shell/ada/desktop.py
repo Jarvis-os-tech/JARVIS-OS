@@ -35,10 +35,6 @@ TOKEN = secrets.token_urlsafe(32)
 PENDING_VOICE_ACTIONS: list[dict] = []
 
 
-class DesktopRequest:
-    pass
-
-
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 

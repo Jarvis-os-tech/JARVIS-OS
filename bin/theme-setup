@@ -11,10 +11,10 @@ link_missing() {
     fi
 }
 link_missing "$root/bin/jarvis-de" "$HOME/.local/bin/jarvis-de"
-link_missing "$root/ui/jarvis_shell/launch.sh" "$HOME/.local/bin/jarvis-shell"
+link_missing "$root/shell/launch.sh" "$HOME/.local/bin/jarvis-shell"
 link_missing "$root/config/omarchy/themes/jarvis" "$native/themes/jarvis"
 link_missing "$root/config/omarchy/plugins/omarchy-dynamic-island" "$native/plugins/omarchy-dynamic-island"
-link_missing "$root/ui/jarvis_widgets" "$native/plugins/jarvis.widgets"
+link_missing "$root/widgets" "$native/plugins/jarvis.widgets"
 link_missing "$root/config/omarchy/hooks/theme-set.d/20-jarvis-shell-theme.sh" "$native/hooks/theme-set.d/20-jarvis-shell-theme.sh"
 if [[ ! -e "$native/shell.json" ]]; then
     install -Dm600 "$root/config/omarchy/shell.json" "$native/shell.json"

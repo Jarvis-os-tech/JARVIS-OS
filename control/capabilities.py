@@ -218,13 +218,6 @@ def rank_rows(query: str, rows: list[tuple[str, str]]) -> list[tuple[str, str]]:
     return [(title, summary) for _, _, title, summary in sorted(scored)]
 
 
-def search_commands(query: str, limit: int = 12) -> list[str]:
-    if not query.strip():
-        return []
-    return [f"  {sig}" + (f"  — {summ}" if summ else "")
-            for sig, summ in rank_rows(query, command_index())[:limit]]
-
-
 def installed_apps(limit: int = 28) -> str:
     """Desktop entries, so the model launches things that actually exist."""
     from .discovery import applications
@@ -549,5 +542,3 @@ def manifest(refresh: bool = False) -> str:
     return text
 
 
-def missing_tools() -> list[str]:
-    return [t for t in ("hyprctl", "omarchy", "wtype", "pw-record") if not shutil.which(t)]

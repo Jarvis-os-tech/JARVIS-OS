@@ -43,7 +43,6 @@ def test_grounded_offline_commands(name, args, text, expected):
     ('switch_audio_device', {'device': 'speakers', 'kind': 'output'}, 'switch audio output to headphones'),
     ('switch_audio_device', {'device': 'blue yeti', 'kind': 'input'}, 'switch audio output to blue yeti'),
     ('media_play', {}, 'play bohemian rhapsody'),
-    ('close_window', {}, 'close the drone'),
     ('lock_screen', {}, 'lock screen on my phone'),
     ('take_screenshot', {'region': 'active'}, 'take a full screenshot'),
 ])

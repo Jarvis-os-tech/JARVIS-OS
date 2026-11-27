@@ -92,25 +92,6 @@ def command_for(text, apps):
             return ('system_control', {'action': noun + '_adjust', 'value': 5})
         if text in (f'{noun} down', f'decrease {noun}', f'turn down the {noun}'):
             return ('system_control', {'action': noun + '_adjust', 'value': -5})
-    if (text in ('disappear', 'disapper', 'vanish')
-            or text in ('disappear the drone', 'disappear drone', 'drone disappear',
-                        'disapper the drone', 'disapper drone', 'drone disapper',
-                        'hide the drone', 'hide drone', 'drone hide',
-                        'close the drone', 'close drone', 'drone close',
-                        'make the drone disappear', 'cloak the drone', 'cloak drone',
-                        'dismiss the drone', 'dismiss drone', 'vanish the drone', 'drone vanish')
-            or (re.search(r'\b(?:disappear|disapper|hide|cloak|vanish|dismiss)\b', text) and 'drone' in text)):
-        return ('drone_control', {'action': 'disappear'})
-    if (text in ('appear',)
-            or text in ('appear the drone', 'appear drone', 'drone appear',
-                        'show the drone', 'show drone', 'drone show',
-                        'open the drone', 'open drone', 'drone open',
-                        'make the drone appear', 'bring back the drone', 'bring the drone back',
-                        'deploy the drone', 'deploy drone', 'uncloak the drone', 'uncloak drone')
-            or (re.search(r'\b(?:appear|show|uncloak|deploy)\b', text) and 'drone' in text)):
-        return ('drone_control', {'action': 'appear'})
-    if text in ('toggle the drone', 'toggle drone', 'drone toggle') or (re.search(r'\btoggle\b', text) and 'drone' in text):
-        return ('drone_control', {'action': 'toggle'})
     if text in ('lock screen', 'lock the screen', 'lock pc', 'lock the pc',
                 'lock computer', 'lock the computer', 'lock session', 'lock my screen', 'screen lock'):
         return ('lock_screen', {})
@@ -219,8 +200,7 @@ def could_be_command(text):
         'open', 'launch', 'start', 'volume', 'brightness', 'set', 'increase',
         'decrease', 'turn', 'switch', 'change', 'workspace', 'go', 'stop', 'be',
         'standby', 'stand', 'mute', 'unmute', 'navigate', 'previous', 'prev', 'last',
-        'drone', 'disappear', 'disapper', 'appear', 'hide', 'show', 'cloak', 'uncloak',
-        'deploy', 'dismiss', 'toggle', 'vanish', 'make', 'bring', 'close', 'fullscreen',
+        'hide', 'show', 'toggle', 'make', 'bring', 'close', 'fullscreen',
         'full', 'minimize', 'minimise', 'focus', 'activate', 'move', 'send', 'put',
         'take', 'capture', 'screenshot', 'lock', 'screen', 'play', 'pause', 'resume',
         'skip', 'next', 'audio', 'sound', 'media', 'music', 'window'})

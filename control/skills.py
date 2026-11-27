@@ -301,24 +301,6 @@ class UnifiedSkills:
                 },
             })
 
-        if not any(d.get("name") == "drone_control" for d in self.declarations):
-            self.declarations.append({
-                "name": "drone_control",
-                "description": "Control the visual holographic drone companion overlay. Can make the drone appear (show), disappear (hide/cloak), or toggle visibility.",
-                "parameters_json_schema": {
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["appear", "disappear", "show", "hide", "toggle"],
-                            "description": "Visibility action to perform on the drone companion",
-                        }
-                    },
-                    "required": ["action"],
-                    "additionalProperties": False,
-                },
-            })
-
         # Ensure full-range OS control tools are present in declarations
         from .tools import (
             MANAGE_PACKAGES_SCHEMA,
@@ -340,7 +322,7 @@ class UnifiedSkills:
             return self.declarations
         names = {item['name'] for item in self._live_declarations}
         return [*self._live_declarations, *[item for item in self.declarations
-                if item['name'] in ('enter_standby', 'drone_control') and item['name'] not in names]]
+                if item['name'] == 'enter_standby' and item['name'] not in names]]
 
     @property
     def _closed(self) -> bool:
@@ -393,25 +375,6 @@ class UnifiedSkills:
                 except Exception as err:
                     return json.dumps({'error': str(err)})
             return json.dumps({'error': 'standby mode is unavailable'})
-        if name == 'drone_control':
-            action = str(args.get('action', 'toggle')).strip().lower()
-            if action in ('disappear', 'hide', 'cloak', 'dismiss'):
-                subcmd = 'disappear'
-            elif action in ('appear', 'show', 'uncloak', 'deploy'):
-                subcmd = 'appear'
-            else:
-                subcmd = 'toggle'
-            script = Path(__file__).resolve().parents[1] / 'bin/jarvis-drone'
-            try:
-                proc = subprocess.run([str(script), subcmd], capture_output=True, text=True, timeout=5)
-                return json.dumps({
-                    'ok': proc.returncode == 0,
-                    'action': subcmd,
-                    'status': f'drone {subcmd} executed',
-                    'output': proc.stdout.strip()
-                })
-            except Exception as exc:
-                return json.dumps({'ok': False, 'action': subcmd, 'error': str(exc)})
         if name in ('confirm_system_action', 'confirm_last'):
             control_exec = getattr(self.control, 'executor', None)
             if self.control and control_exec and control_exec.pending_approval():
